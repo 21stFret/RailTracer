@@ -1,0 +1,49 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c6140eb9f8f6cf24baac40b374167fcd, type: 3}
+  m_Name: BloodKit
+  m_EditorClassIdentifier: Assembly-CSharp::RailTracer.BloodKit
+  splashes:
+  - {fileID: 8007369982305464528, guid: 4ae5d2ab9b8c5444498df728275352c8, type: 3}
+  - {fileID: 8007369982305464528, guid: 85efed574c74bb24181b819f88da97b5, type: 3}
+  - {fileID: 6550804457596160986, guid: c2ff9a62d0009a64a81cc1a4bba59fd5, type: 3}
+  - {fileID: 4055846304957825616, guid: 700b4d22453a6ef438be63e4c5c37167, type: 3}
+  - {fileID: 4055846304957825616, guid: e855d12d7bfdb464b94ef1f1d20cf814, type: 3}
+  goreSplashes:
+  - {fileID: 2834077435049808890, guid: 6ec93a81790f8b0479992e9d8f328aad, type: 3}
+  gutBursts:
+  - {fileID: 6566124603468126256, guid: ee56b17165c39c94e97d562c857ebf22, type: 3}
+  - {fileID: 6566124603468126256, guid: 3b8acefd2c7b77f4db86eddf5a64400f, type: 3}
+  screens:
+  - {fileID: 1402706851800528695, guid: dd7bb5bb91029b842ba57c1cb7d5f39f, type: 3}
+  - {fileID: 2522698530386925695, guid: bae363cc7e07249459a6f7ecfd175548, type: 3}
+  - {fileID: 3493845412631430668, guid: 32394758b072bca4e965a5518a8cfcfc, type: 3}
+  splashLife: 4
+  screenLife: 1.5
+  decals:
+  - {fileID: 2461062505677081030, guid: 92b05d809d88a334dad0fee227c13708, type: 3}
+  - {fileID: 8707850840964112949, guid: b1fde64c2a4cb1f4e98ccc1e0ac392f1, type: 3}
+  - {fileID: 8904036615139785200, guid: d1891c25adf84284abd4e2a61bacc365, type: 3}
+  - {fileID: 6456721277854630355, guid: b454b56a85bd2524b96c3ed4479015f6, type: 3}
+  poolScale: 1.2
+  spatterScale: 0.8
+  smearScale: 1
+  dripScale: 0.7
+  brutalRays: 12
+  shotRays: 7
+  railRays: 7
+  quietRays: 5
+  sprayReach: 2
+  sprayAway: 0
+  sprayMaxRise: 0.51
+  sprayAlongRay: 0.357
+  projectDepth: 0.5

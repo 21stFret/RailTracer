@@ -1,0 +1,174 @@
+{
+  "kit": "RailTracerProps",
+  "style": "pbr",
+  "materials": [
+    {
+      "name": "Trn_Wood",
+      "color": [
+        0.45,
+        0.24,
+        0.12
+      ],
+      "metallic": 0.0,
+      "roughness": 0.6,
+      "tile": 2.0,
+      "albedo": "Trn_Wood_albedo.png",
+      "normal": "Trn_Wood_normal.png",
+      "mask": "Trn_Wood_mask.png"
+    },
+    {
+      "name": "Trn_WoodDark",
+      "color": [
+        0.2,
+        0.1,
+        0.05
+      ],
+      "metallic": 0.0,
+      "roughness": 0.6,
+      "tile": 1.0,
+      "albedo": "Trn_WoodDark_albedo.png",
+      "normal": "Trn_WoodDark_normal.png",
+      "mask": "Trn_WoodDark_mask.png"
+    },
+    {
+      "name": "Trn_Brass",
+      "color": [
+        0.95,
+        0.7,
+        0.25
+      ],
+      "metallic": 1.0,
+      "roughness": 0.3,
+      "tile": 0.5,
+      "albedo": "Trn_Brass_albedo.png",
+      "normal": "Trn_Brass_normal.png",
+      "mask": "Trn_Brass_mask.png"
+    },
+    {
+      "name": "Trn_Cream",
+      "color": [
+        0.9,
+        0.84,
+        0.68
+      ],
+      "metallic": 0.0,
+      "roughness": 0.8,
+      "tile": 2.0,
+      "albedo": "Trn_Cream_albedo.png",
+      "normal": "Trn_Cream_normal.png",
+      "mask": "Trn_Cream_mask.png"
+    },
+    {
+      "name": "Trn_Velvet",
+      "color": [
+        0.45,
+        0.07,
+        0.1
+      ],
+      "metallic": 0.0,
+      "roughness": 0.9,
+      "tile": 0.5,
+      "albedo": "Trn_Velvet_albedo.png",
+      "normal": "Trn_Velvet_normal.png",
+      "mask": "Trn_Velvet_mask.png"
+    },
+    {
+      "name": "Trn_Leather",
+      "color": [
+        0.4,
+        0.22,
+        0.1
+      ],
+      "metallic": 0.0,
+      "roughness": 0.7,
+      "tile": 0.5,
+      "albedo": "Trn_Leather_albedo.png",
+      "normal": "Trn_Leather_normal.png",
+      "mask": "Trn_Leather_mask.png"
+    },
+    {
+      "name": "Trn_Iron",
+      "color": [
+        0.18,
+        0.2,
+        0.22
+      ],
+      "metallic": 0.6,
+      "roughness": 0.5,
+      "tile": 2.0,
+      "albedo": "Trn_Iron_albedo.png",
+      "normal": "Trn_Iron_normal.png",
+      "mask": "Trn_Iron_mask.png"
+    },
+    {
+      "name": "Trn_Felt",
+      "color": [
+        0.07,
+        0.06,
+        0.055
+      ],
+      "metallic": 0.0,
+      "roughness": 0.95,
+      "tile": 0.25,
+      "albedo": "Trn_Felt_albedo.png",
+      "normal": "Trn_Felt_normal.png",
+      "mask": "Trn_Felt_mask.png"
+    },
+    {
+      "name": "Trn_BlackCloth",
+      "color": [
+        0.012,
+        0.012,
+        0.015
+      ],
+      "metallic": 0.0,
+      "roughness": 0.85,
+      "tile": 0.25,
+      "albedo": "Trn_BlackCloth_albedo.png",
+      "normal": "Trn_BlackCloth_normal.png",
+      "mask": "Trn_BlackCloth_mask.png"
+    },
+    {
+      "name": "Trn_Newsprint",
+      "color": [
+        0.74,
+        0.71,
+        0.63
+      ],
+      "metallic": 0.0,
+      "roughness": 0.9,
+      "tile": 0.25,
+      "albedo": "Trn_Newsprint_albedo.png",
+      "normal": "Trn_Newsprint_normal.png",
+      "mask": "Trn_Newsprint_mask.png"
+    },
+    {
+      "name": "Trn_Tobacco",
+      "color": [
+        0.22,
+        0.11,
+        0.05
+      ],
+      "metallic": 0.0,
+      "roughness": 0.8,
+      "tile": 0.1,
+      "albedo": "Trn_Tobacco_albedo.png",
+      "normal": "Trn_Tobacco_normal.png",
+      "mask": "Trn_Tobacco_mask.png"
+    },
+    {
+      "name": "Trn_Ember",
+      "color": [
+        1.0,
+        0.32,
+        0.05
+      ],
+      "metallic": 0.0,
+      "roughness": 0.6,
+      "tile": 0.1,
+      "albedo": "Trn_Ember_albedo.png",
+      "normal": "Trn_Ember_normal.png",
+      "mask": "Trn_Ember_mask.png"
+    }
+  ]
+}

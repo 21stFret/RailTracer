@@ -1,0 +1,2117 @@
+using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
+using UnityEngine.InputSystem;
+using UnityEngine.Rendering;
+
+namespace RailTracer
+{
+    // White-box view of one carriage: primitives built at runtime, Unity UI for the HUD (Hud.cs).
+    public class Game : MonoBehaviour
+    {
+        public Tuning tuning = new Tuning();
+        public SkillTable skillTable; // empty = Resources/SkillTable
+        public int seed; // 0 = random each run
+        public float enemyStepDelay = 0.4f;
+        public bool useTrainKit = true;      // off = the white-box carriage
+        public bool cutawayNearWall = true;  // camera-side wall casts shadows but isn't drawn
+
+        [Header("Seat lamps (kit carriage only)")]
+        public float lampHeight = 2.1f;   // just above head height
+        public float lampInset = 0.3f;    // in from the wall, so the light isn't inside it
+        public Color lampColor = new Color(1f, 0.78f, 0.5f);
+        public float lampIntensity = 3f, lampRange = 4.5f, lampAngle = 80f;
+        [Range(0f, 90f)] public float lampTilt = 80f; // degrees below horizontal: 90 = straight down
+        public bool lampShadows = true;        public string lampModule = "Lamp_Wall"; // placed at each lamp once the train kit has a module by this name
+
+        [Header("Characters")]
+        public string[] tintedParts = { "Suit", "Pants" }; // meshes dressed in Resources/Materials/Fabric, tinted per character (Mixamo Ch33 parts)
+        public Color conductorSuitColor = new Color(0.66f, 0.56f, 0.42f); // the player's tintedParts: the conductor's beige
+        public Color weakSuitColor = new Color(0.035f, 0.035f, 0.04f);     // enemy suits by type: basic gunmen in black
+        public Color strongSuitColor = new Color(0.5f, 0.05f, 0.06f);      // tough ones in red, to stand out
+        public Color brokenColor = new Color(0.22f, 0.22f, 0.22f);      // anyone broken and begging
+        public string[] skinParts = { "Body" };                        // meshes that take the skin tone
+        public Color skinColor = new Color(0.78f, 0.58f, 0.45f);        // multiplied over the skin texture
+        Material fabric;
+        public Color shoesColor = new Color(0.03f, 0.03f, 0.03f);       // everyone (multiplied over the texture)
+        public Color hairColor = new Color(0.4f, 0.24f, 0.12f);         // everyone (multiplied over the texture)
+        public Color bloodOverlayColor = new Color(0.45f, 0.03f, 0.03f); // multiplied over the player as the legend fills
+        public float bloodPatternScale = 6f, bloodSpreadSpeed = 0.5f;
+        Material bloodOverlay;
+        float shownBlood;
+        Light sun;
+
+        // The hand-made first carriage; New train swaps in a generated one (TrainGen).
+        static readonly string[] FirstMap =
+        {
+            "..S..S..S..S.WS..SL.S..SL.",
+            "..S..S..S..S.WS..S..S..S..",
+            "P.........................",
+            "..S..S..S..S.WS..S..S..S..",
+            "..S..S.LS..S.WS..S.LS..S..",
+        };
+
+        // x, y, facing x, facing y, (unused: was the family), tough (1 = wide long cone, closes in to melee, killable once Shaken)
+        static readonly int[][] FirstSpawns =
+        {
+            new[] { 3, 0, 0, 1, 0, 0 }, new[] { 6, 2, 1, 0, 0, 0 }, new[] { 9, 3, 0, -1, 1, 0 },
+            new[] { 10, 2, -1, 0, 1, 0 }, new[] { 12, 0, 0, 1, 0, 0 }, new[] { 15, 4, 0, -1, 1, 0 },
+            new[] { 18, 2, -1, 0, 0, 1 }, new[] { 21, 1, 0, 1, 1, 0 }, new[] { 24, 3, 0, -1, 0, 1 },
+        };
+
+        // Patrol routes by spawn index (waypoints walked in a loop); everyone else guards their spot, turning now and then.
+        static readonly Dictionary<int, Cell[]> FirstPatrols = new Dictionary<int, Cell[]>
+        {
+            [3] = new[] { new Cell(10, 2), new Cell(12, 2) },
+            [6] = new[] { new Cell(18, 2), new Cell(23, 2) },
+        };
+
+        static readonly Color Floor = new Color(0.45f, 0.45f, 0.45f);
+        static readonly Color SightCol = new Color(1f, 0.75f, 0.1f), HearCol = new Color(0.6f, 0.2f, 0.9f), ReactCol = new Color(0.9f, 0.15f, 0.1f), BloodEdge = new Color(1f, 0.12f, 0.08f);
+        // The HUD palette on the floor: bone white for you and your targets, blood red for danger.
+        static readonly Color Bone = new Color(0.949f, 0.937f, 0.918f), DangerRed = new Color(0.784f, 0.063f, 0.18f);
+
+        Carriage c;
+        Camera cam;
+        Transform root;
+        Renderer[,] tiles;
+        Renderer playerBody;
+        readonly Dictionary<Enemy, (Renderer body, Renderer nose, Renderer react)> views = new Dictionary<Enemy, (Renderer, Renderer, Renderer)>();
+        SkillId? selected; // hotkeys 1-8; no kill selected = clicking an enemy does nothing
+        bool busy, showAllSenses, leaping, hopping, throwing, endShown;
+        SkillHud hud;
+        string[] Map = FirstMap;
+        int[][] Spawns = FirstSpawns;
+        Dictionary<int, Cell[]> Patrols = FirstPatrols;
+        int carriageNo = 1;
+        readonly Tutorial tut = new Tutorial();
+        bool walkQueued;          // the opening walkthrough has had its chance this level
+        Cell? reactTile;          // a reaction-fire tile on the current path preview (the Reaction fire card)
+        readonly List<Enemy> taken = new List<Enemy>(); // tickets, in the order taken
+        readonly Dictionary<Enemy, RectTransform> chips = new Dictionary<Enemy, RectTransform>();
+        int hudSlot = -1;   // skill box under the mouse
+        // The last-seen ghost: a see-through you, frozen in the pose you were in when last seen (one at a time).
+        Transform ghost;
+        Renderer[] ghostRenderers;
+        Cell? ghostCell, pendingGhost;
+        readonly HashSet<Enemy> gone = new HashSet<Enemy>(); // fled enemies who have reached the door
+        LineRenderer ghostBody; // kill preview: where the body lands
+        [Header("Debug (Play mode: edit to set the live values)")]
+        [Range(0, 100)] public int debugLegend;
+        public int debugLeapWait, debugRailWait, debugThrowWait;
+        bool debugDirty;
+        public bool followCamera = true; // cut to each enemy as it acts
+        Vector3? camTarget;
+        Material lineMat;
+        readonly Dictionary<Enemy, (LineRenderer route, LineRenderer arrow)> marks = new Dictionary<Enemy, (LineRenderer, LineRenderer)>();
+        readonly HashSet<Cell> decaled = new HashSet<Cell>(); // stained tiles that already have a blood decal
+        public bool bloodOutlines;                              // red outlines on stained tiles too (B toggles; off by default)
+        LineRenderer[,] bloodEdges;
+        readonly HashSet<Body> flying = new HashSet<Body>();   // thrown bodies still in the air
+        readonly HashSet<Animator> armed = new HashSet<Animator>(); // controllers with the "Armed" bool
+        readonly Dictionary<Enemy, (float start, float yaw, float next)> idleLook = new Dictionary<Enemy, (float, float, float)>();
+        readonly Dictionary<Body, Cell> bodyCell = new Dictionary<Body, Cell>();
+        readonly Dictionary<Enemy, Vector3> bodyOffset = new Dictionary<Enemy, Vector3>();
+        Vector3 focus; // camera looks at this point on the floor
+        float camDistance = 12f;
+        public float panSpeed = 1.2f, zoomSpeed = 0.001f; // scroll is ~120 per wheel notch on Windows
+        Cell? hover;
+
+        // Mixamo characters, loaded from Resources/Anim. Falls back to capsules if any are missing.
+        public float characterScale = 0.6f, unitSpeed = 2.5f; // tiles/sec; raise for snappier turns, lower if feet slide
+        // Controllers are generated by Editor/AnimationSetup.cs and are yours to edit.
+        public float flipLength = 1.1f; // how long the reveal leap takes to cross the floor
+        public float stylishFlipLength = 1.4f; // the same for the "StylishFlip": a bloodied leap past the normal range
+        float flipTime;
+        readonly HashSet<Enemy> begging = new HashSet<Enemy>(); // broken enemies who have dropped to their knees
+        GameObject characterModel;
+        RuntimeAnimatorController enemyController, playerController;
+        bool HasModels => characterModel && enemyController && playerController;
+        float FigureHeight => playerAnim ? 1.8f * characterScale : 1f; // Mixamo characters are ~1.8 m at scale 1
+        Animator playerAnim;
+        readonly Dictionary<Enemy, Animator> anims = new Dictionary<Enemy, Animator>();
+        readonly Dictionary<Animator, Color> tints = new Dictionary<Animator, Color>();
+        readonly Dictionary<Enemy, Vector3> shown = new Dictionary<Enemy, Vector3>();
+        // Walking: characters follow the tiles they actually walked, with the stride matched to the speed.
+        readonly Queue<Vector3> playerRoute = new Queue<Vector3>();
+        readonly Dictionary<Enemy, Queue<Vector3>> routes = new Dictionary<Enemy, Queue<Vector3>>();
+        readonly Dictionary<Animator, Vector3> gaits = new Dictionary<Animator, Vector3>(); // walk, run, crouch m/s from the controller
+        Vector3 playerShown, playerFacing = Vector3.right, flipFrom;
+        float flipT = -1f; // >= 0 while the reveal leap is crossing
+        bool wasLeaped, wasHopped;
+        // Window hop: each kit sash with its row and the game x it spans; the hop climbs out of one and in the next.
+        readonly List<(SlidingWindow sash, int row, float x, float half)> sashes = new List<(SlidingWindow, int, float, float)>();
+        bool hopRunning, hopMoving;
+        public float endTurnHold = 0.5f; // seconds Space must be held to end the turn
+        float spaceHeld = -1f;
+        public float hopClimbTime = 0.45f, hopWalkSpeed = 3f;
+        // Brutal kill: player and victim play their "Takedown" states facing each other, locked to the tiles.
+        public float takedownHold = 0.5f; // the corpse lingers this long after the clip
+        // How far onto the victim's tile the player is (0..1) through the clip (0..1). Shape it in the Inspector:
+        // the flat start and end are the window where the player stands still.
+        public AnimationCurve takedownMove = AnimationCurve.EaseInOut(0.15f, 0f, 0.45f, 1f);
+        Enemy takedownVictim;             // dead in the rules, still on screen while this is set
+        readonly HashSet<Enemy> corpses = new HashSet<Enemy>(), pairedKills = new HashSet<Enemy>();
+        // Quiet kill: the "StealthKill" pair. You stay on your tile in the rules, so you close in by up to
+        // quietKillReach of a tile (along quietKillMove, same idea as takedownMove), then step back.
+        public AnimationCurve quietKillMove = AnimationCurve.EaseInOut(0.05f, 0f, 0.3f, 1f);
+        [Range(0f, 1f)] public float quietKillReach = 0.5f;
+        public float quietKillBloodAt = 0.5f;
+        public bool quietVictimFacesAway = true; // grabbed from behind; untick if the clip expects them facing you
+        public float snatchTime = 0.25f;         // the snatch: the victim is yanked onto your tile this fast, then the stealth kill plays
+
+        // Blood: Resources/Blood/BloodKit (made by Editor/BloodSetup.cs). Stains are parented to the carriage,
+        // so they last the whole match and a restart starts the train clean.
+        public float takedownBloodAt = 0.45f; // point in the takedown clip (0..1) where the blood flies
+        BloodKit blood;
+        Canvas screenCanvas;
+        readonly Dictionary<Enemy, EnemyState> lastState = new Dictionary<Enemy, EnemyState>();
+        int lastHits;
+        Act? pendingAct; // what the player just did, so the next death knows how it happened (null = gunfire)
+
+        // The aimed move or leap: a line per tile (bone = unseen, red = seen), a see-through you where you'll land, and
+        // the enemies who'd fire on it (or on the aimed kill) with their hit chance.
+        readonly List<LineRenderer> pathLines = new List<LineRenderer>();
+        Transform previewGhost;
+        Renderer[] previewGhostRenderers;
+        readonly Dictionary<Enemy, int> threats = new Dictionary<Enemy, int>();
+        // "?" floor markers where searchers are going to look, one per spot.
+        readonly Dictionary<Cell, GameObject> clueMarks = new Dictionary<Cell, GameObject>();
+        // Rail grab: bent over the window sill, head and arms out over the track, legs inside.
+        readonly HashSet<Enemy> hung = new HashSet<Enemy>();
+        public float railSillHeight = 0.55f;  // where the hips rest (metres)
+        public float railLean = 80f;          // how far the body tips out (degrees from upright)
+        [Header("Shots")]
+        public float freeShotPause = 0.55f;   // the camera holds on each free-shooter this long before and after the shot
+        public Color muzzleColor = new Color(1f, 0.75f, 0.35f);
+
+        void Start()
+        {
+            characterModel = Resources.Load<GameObject>("Anim/Character");
+            enemyController = Resources.Load<RuntimeAnimatorController>("Anim/Enemy");
+            playerController = Resources.Load<RuntimeAnimatorController>("Anim/Player");
+            if (!HasModels) Debug.LogWarning("Rail Tracer: character or controllers missing from Resources/Anim (run Rail Tracer > Set Up Animations), using capsules.");
+            fabric = Resources.Load<Material>("Materials/Fabric");
+            if (!fabric) Debug.LogWarning("Rail Tracer: no Resources/Materials/Fabric (made by Editor/FabricSetup.cs); suits keep the model's material.");
+            blood = Resources.Load<BloodKit>("Blood/BloodKit");
+            if (!blood) Debug.LogWarning("Rail Tracer: no blood kit in Resources/Blood (run Rail Tracer > Set Up Blood).");
+            screenCanvas = new GameObject("Blood Screen").AddComponent<Canvas>();
+            screenCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            if (!skillTable) skillTable = Resources.Load<SkillTable>("SkillTable");
+            if (skillTable && skillTable.skills.Length == 8) tuning.skills = skillTable.skills;
+            else Debug.LogWarning("Rail Tracer: no 8-row SkillTable in Resources; using the built-in skill defaults.");
+            hud = new SkillHud();
+            hud.Build(tuning.skills, tuning.maxLegend, tuning.moveRange, tuning.shakenAt, tuning.panickedAt, tuning.brokenAt);
+
+            cam = Camera.main;
+            if (!cam) { cam = new GameObject("Camera").AddComponent<Camera>(); cam.tag = "MainCamera"; }
+            cam.clearFlags = CameraClearFlags.SolidColor;
+            cam.backgroundColor = new Color(0.025f, 0.022f, 0.028f); // outside the train: near black
+            cam.orthographic = false;
+            cam.fieldOfView = 50;
+            cam.transform.rotation = Quaternion.Euler(55, 0, 0);
+            focus = new Vector3(6, 0, -(Map.Length - 1) / 2f);
+            // The kit carriage is lit by its seat lamps; this sun is only for the white-box fallback (see Build).
+            if (!FindAnyObjectByType<Light>())
+            {
+                sun = new GameObject("Light").AddComponent<Light>();
+                sun.type = LightType.Directional;
+                sun.transform.rotation = Quaternion.Euler(50, -30, 0);
+            }
+            Build();
+        }
+
+        void Build()
+        {
+            if (root) Destroy(root.gameObject);
+            root = new GameObject("Carriage").transform;
+            views.Clear();
+            anims.Clear();
+            corpses.Clear();
+            pairedKills.Clear();
+            tints.Clear();
+            shown.Clear();
+            playerRoute.Clear();
+            routes.Clear();
+            gaits.Clear();
+            busy = false;
+            flipT = -1f;
+            wasLeaped = wasHopped = false;
+            marks.Clear();
+            sashes.Clear();
+            hopRunning = hopMoving = false;
+            armed.Clear();
+            idleLook.Clear();
+            begging.Clear();
+            bodyCell.Clear();
+            bodyOffset.Clear();
+            takedownVictim = null;
+            selected = null;
+            c = new Carriage(Map, tuning, seed != 0 ? seed : Random.Range(1, int.MaxValue));
+            for (int i = 0; i < Spawns.Length; i++)
+            {
+                var s = Spawns[i];
+                c.Spawn(s[0], s[1], s[2], s[3], s[4], s[5] == 1, Patrols.TryGetValue(i, out var route) ? route.ToList() : null);
+            }
+            c.NameEnemies();
+            hud.ShowCard($"Carriage {carriageNo}", "A carriage full of gunmen.", "Break their nerve.", null, 3f, true);
+            endShown = false;
+            walkQueued = false;
+            taken.Clear();
+            tut.Clear();
+            if (hud.TutorialUp) hud.HideTutorial();
+            hud.ShowPause(false);
+            if (hud.LogOpen) hud.HideLog();
+            Time.timeScale = 1f;
+            lastState.Clear();
+            foreach (var e in c.enemies) lastState[e] = e.state;
+            lastHits = 0;
+            pendingAct = null;
+
+            // Tile colours are transparent overlays just above whatever floor is there.
+            tiles = new Renderer[c.W, c.H];
+            var overlay = OverlayMaterial();
+            for (int x = 0; x < c.W; x++)
+                for (int y = 0; y < c.H; y++)
+                {
+                    var quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                    Destroy(quad.GetComponent<Collider>());
+                    quad.transform.SetParent(root);
+                    quad.transform.localPosition = new Vector3(x, 0.03f, -y); // above the kit's velvet runner (0.015)
+                    quad.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+                    quad.transform.localScale = Vector3.one; // the rim shader insets itself
+                    tiles[x, y] = quad.GetComponent<Renderer>();
+                    tiles[x, y].sharedMaterial = overlay;
+                }
+            decaled.Clear();
+            bloodEdges = new LineRenderer[c.W, c.H];
+            flying.Clear();
+            foreach (var e in c.enemies)
+            {
+                var route = Line(Fill(DangerRed, 0.7f), 0.04f);
+                if (e.route != null)
+                {
+                    route.loop = true;
+                    route.positionCount = e.route.Count;
+                    for (int i = 0; i < e.route.Count; i++) route.SetPosition(i, World(e.route[i]) + Vector3.up * 0.06f);
+                }
+                marks[e] = (route, Line(Color.white, 0.05f));
+            }
+            bool kitBuilt = useTrainKit && BuildKitCarriage(Resources.Load<TrainKit>("Kit/TrainKit"));
+            if (!kitBuilt) BuildWhitebox();
+            if (sun) sun.enabled = !kitBuilt;
+            // Something for flying guts to land on (the tiles themselves have no colliders).
+            var floor = new GameObject("Floor").AddComponent<BoxCollider>();
+            floor.transform.SetParent(root);
+            floor.center = new Vector3((c.W - 1) / 2f, -0.05f, -(c.H - 1) / 2f);
+            floor.size = new Vector3(c.W + 2, 0.1f, c.H + 2);
+
+            playerBody = Box(Vector3.zero, new Vector3(0.6f, 0.5f, 0.6f), Color.white, PrimitiveType.Capsule);
+            foreach (var e in c.enemies)
+                views[e] = (Box(Vector3.zero, new Vector3(0.6f, 0.5f, 0.6f), SuitColor(e), PrimitiveType.Capsule),
+                            Box(Vector3.zero, new Vector3(0.15f, 0.15f, 0.3f), Color.black),
+                            Box(Vector3.zero, new Vector3(0.25f, 0.25f, 0.25f), ReactCol, PrimitiveType.Sphere));
+
+            playerShown = new Vector3(c.player.x, 0, -c.player.y);
+            focus = playerShown; // a new game or restart starts on you
+            camTarget = null;
+            foreach (var e in c.enemies) shown[e] = new Vector3(e.pos.x, 0, -e.pos.y);
+            pathLines.Clear();
+            previewGhost = null;
+            previewGhostRenderers = null;
+            threats.Clear();
+            clueMarks.Clear();
+            hung.Clear();
+            ghostBody = Line(BloodEdge, 0.06f);
+            ghostBody.loop = true;
+            ghost = null;
+            ghostRenderers = null;
+            ghostCell = pendingGhost = null;
+            gone.Clear();
+            if (!HasModels) return;
+            playerBody.enabled = false;
+            playerAnim = Character(characterModel, playerController);
+            Colour(playerAnim, tintedParts, conductorSuitColor);
+            AddBloodOverlay(playerAnim);
+            shownBlood = 0f;
+            foreach (var e in c.enemies)
+            {
+                views[e].body.enabled = views[e].nose.enabled = false;
+                var a = anims[e] = Character(characterModel, enemyController);
+                a.Play(0, 0, Random.value); // out of sync so they don't bob together
+                if (a.parameters.Any(p => p.name == "Armed")) armed.Add(a);
+            }
+        }
+
+        Animator Character(GameObject model, RuntimeAnimatorController controller)
+        {
+            var go = Instantiate(model, root);
+            var a = go.GetComponent<Animator>();
+            if (!a) a = go.AddComponent<Animator>();
+            a.runtimeAnimatorController = controller;
+            a.applyRootMotion = false; // the game owns position; clips stay on the tile
+            Colour(a, new[] { "Shoes" }, shoesColor);
+            Colour(a, new[] { "Hair" }, hairColor);
+            Colour(a, skinParts, skinColor);
+            if (fabric)
+                foreach (var r in a.GetComponentsInChildren<Renderer>())
+                    if (System.Array.Exists(tintedParts, p => r.name.IndexOf(p, System.StringComparison.OrdinalIgnoreCase) >= 0))
+                        r.materials = r.sharedMaterials.Select(_ => new Material(fabric)).ToArray();
+            return a;
+        }
+
+        // Colour multiplied onto the meshes whose names contain one of the parts (Mixamo Ch33_Suit, Ch33_Hair...).
+        static void Colour(Animator a, string[] parts, Color col)
+        {
+            foreach (var r in a.GetComponentsInChildren<Renderer>())
+                if (System.Array.Exists(parts, p => r.name.IndexOf(p, System.StringComparison.OrdinalIgnoreCase) >= 0))
+                    foreach (var m in r.materials) m.color = col;
+        }
+
+        Color SuitColor(Enemy e) => e.state == EnemyState.Broken ? brokenColor : e.tough ? strongSuitColor : weakSuitColor;
+
+        // Type colour on the clothing parts only (meshes named in tintedParts); skin etc. keep their textures.
+        void Tint(Animator a, Color col)
+        {
+            if (tints.TryGetValue(a, out var old) && old == col) return;
+            tints[a] = col;
+            Colour(a, tintedParts, col);
+        }
+
+        // The legend shows as blood soaking over the player's own materials (Resources/Shaders/BloodOverlay):
+        // one shared overlay material appended to every renderer, so one value drives the whole body.
+        void AddBloodOverlay(Animator a)
+        {
+            var shader = Resources.Load<Shader>("Shaders/BloodOverlay");
+            if (!shader) { Debug.LogWarning("Rail Tracer: Resources/Shaders/BloodOverlay missing; no blood on the player."); return; }
+            bloodOverlay = new Material(shader);
+            bloodOverlay.SetColor("_BloodColor", bloodOverlayColor);
+            bloodOverlay.SetFloat("_Scale", bloodPatternScale);
+            foreach (var r in a.GetComponentsInChildren<Renderer>())
+                r.sharedMaterials = r.sharedMaterials.Append(bloodOverlay).ToArray();
+        }
+
+        // The carriage from the RailTracer train kit (Assets/RailTracer/Train Assets), laid out on the game grid the
+        // way TrainCarBuilder does: modules run along the shell's local +Z (walls from z = 0.5, end caps outside),
+        // side A on local -X. The shell is turned so local +Z runs along the game's +X: cell (x, y) is at local
+        // (y - 2, 0, x + 1). Checked z-fighting-free with the kit's joint_check (partition on a joint, racks clear).
+        bool BuildKitCarriage(TrainKit kit)
+        {
+            if (!kit || c.H != 5) return false; // the kit's interior is exactly 5 m (rows) wide
+            var missing = new[] { "EndCap_Door", "Floor_1m", "Wall_1m_Solid", "Wall_1m_Pilaster", "Wall_1m_WindowSmall",
+                "Wall_2m_Window", "Partition_Door", "Seat_Double", "LuggageRack_Full_A", "LuggageRack_Full_B", "LuggageRack_Full_C" }
+                .Where(n => !kit.Get(n)).ToArray();
+            if (missing.Length > 0) { Debug.LogWarning("Rail Tracer: train kit is missing " + string.Join(", ", missing) + "; using white-box."); return false; }
+
+            var shell = new GameObject("Train Car").transform;
+            shell.SetParent(root, false);
+            shell.localPosition = new Vector3(-1f, 0f, -(c.H - 1) / 2f);
+            shell.localRotation = Quaternion.Euler(0f, 90f, 0f);
+            GameObject Place(string module, float x, float z, float rotY)
+            {
+                var go = Instantiate(kit.Get(module), shell);
+                go.transform.localPosition = new Vector3(x, 0f, z);
+                go.transform.localRotation = Quaternion.Euler(0f, rotY, 0f);
+                return go;
+            }
+
+            Place("EndCap_Door", 0f, 0.25f, 0f);
+            Place("EndCap_Door", 0f, c.W + 0.75f, 180f);
+            PlaceWalls(0, 0f, false);
+            PlaceWalls(c.H - 1, 180f, cutawayNearWall);
+            void PlaceWalls(int row, float rot, bool shadowOnly)
+            {
+                // Seat columns get pilasters, the partition column a solid wall, every run of bay tiles windows.
+                float s = 0.5f;
+                int run = 0;
+                void Flush()
+                {
+                    for (; run >= 2; run -= 2, s += 2f) { Panel(Place("Wall_2m_Window", 0f, s + 1f, rot)); Sash("Window_Sash_Large", s + 1f); }
+                    if (run == 1) { Panel(Place("Wall_1m_WindowSmall", 0f, s + 0.5f, rot)); Sash("Window_Sash_Small", s + 0.5f); s += 1f; run = 0; }
+                }
+                void Sash(string module, float z) // the glass in that window, on the wall's own transform
+                {
+                    if (!kit.Get(module)) return; // older kit export without sashes: open windows
+                    var sash = Place(module, 0f, z, rot);
+                    sashes.Add((sash.AddComponent<SlidingWindow>(), row, z - 1f, module.EndsWith("Large") ? 1f : 0.5f)); // shell z = game x + 1
+                    Panel(sash);
+                }
+                void Panel(GameObject wall)
+                {
+                    if (!shadowOnly) return; // the camera side: still casts shadows, but you can see in
+                    foreach (var r in wall.GetComponentsInChildren<Renderer>()) r.shadowCastingMode = ShadowCastingMode.ShadowsOnly;
+                }
+                for (int x = 0; x < c.W; x++)
+                {
+                    var at = new Cell(x, row);
+                    string solo = c.IsSeat(at) ? "Wall_1m_Pilaster" : IsPartition(x) || c.BlankWall(at) ? "Wall_1m_Solid" : null;
+                    if (solo == null) { run++; continue; }
+                    Flush();
+                    Panel(Place(solo, 0f, s + 0.5f, rot));
+                    s += 1f;
+                }
+                Flush();
+            }
+
+            // The camera-side wall is drawn only as shadow, so its windows get a pale glass-blue line along the floor
+            // at the wall's foot, one per window opening.
+            foreach (var (_, row, x, half) in sashes)
+            {
+                if (row != c.H - 1) continue;
+                var line = Line(new Color(0.65f, 0.82f, 1f, 0.22f), 0.04f); // faint: a hint, not a give-away
+                float z = -(c.H - 1) - 0.42f;
+                line.positionCount = 2;
+                line.SetPosition(0, new Vector3(x - half + 0.08f, 0.05f, z));
+                line.SetPosition(1, new Vector3(x + half - 0.08f, 0.05f, z));
+            }
+
+            var seatColumns = Enumerable.Range(0, c.W).Where(x => Enumerable.Range(0, c.H).Any(y => c.IsSeat(new Cell(x, y)))).ToList();
+            var seats = new List<Transform>();
+            string[] racks = { "LuggageRack_Full_A", "LuggageRack_Full_B", "LuggageRack_Full_C" };
+            for (int x = 0; x < c.W; x++)
+            {
+                float z = x + 1f;
+                Place("Floor_1m", 0f, z, 0f);
+                if (IsPartition(x)) Place("Partition_Door", 0f, z + 0.5f, 0f); // on the joint after its tile
+                for (int y = 0; y < c.H; y++)
+                {
+                    if (!c.IsSolid(new Cell(x, y))) continue;
+                    // Luggage, and racks filling the partition's tile, set back clear of its trims and the window jambs.
+                    float inset = IsPartition(x) ? 0.03f : 0f, setBack = IsPartition(x) ? 0.16f : 0f;
+                    bool sideA = y < c.H / 2;
+                    Place(racks[(x * 7 + y) % 3], y - 2f + (sideA ? inset : -inset), z - setBack, sideA ? -90f : 90f); // open towards the aisle
+                }
+                int pair = seatColumns.IndexOf(x);
+                if (pair < 0) continue;
+                // Seat banks two rows wide, facing each other in pairs of columns (back at the FBX's local +Z).
+                float rot = pair % 2 == 0 ? 180f : 0f;
+                if (c.IsSeat(new Cell(x, 0)) && c.IsSeat(new Cell(x, 1))) { seats.Add(Place("Seat_Double", -1.45f, z, rot).transform); Lamp(x, true); }
+                if (c.IsSeat(new Cell(x, c.H - 2)) && c.IsSeat(new Cell(x, c.H - 1))) { seats.Add(Place("Seat_Double", 1.45f, z, rot).transform); Lamp(x, false); }
+            }
+            ScatterProps(kit, seats);
+            return true;
+
+            // A wall lamp over a seat bank: a warm spotlight just above head height, set in from the wall and aimed
+            // at the seat, plus the kit's lamp model if it has one (module name in lampModule).
+            void Lamp(int x, bool sideA)
+            {
+                float wall = sideA ? 0.5f : -(c.H - 1) - 0.5f;     // inner face of that side's wall (world z)
+                float inward = sideA ? -1f : 1f;
+                var model = kit.Get(lampModule);
+                // With the kit's Lamp_Wall: mounted on the pilaster face (4 cm proud of the wall), light inside its
+                // shade (24 cm out, a little below the mount). Without it: a bare light lampInset from the wall.
+                var mount = new Vector3(x, lampHeight, wall + inward * 0.04f);
+                var pos = model ? mount + new Vector3(0f, -0.05f, inward * 0.24f) : new Vector3(x, lampHeight, wall + inward * lampInset);
+                var light = new GameObject("Seat Lamp").AddComponent<Light>();
+                light.transform.SetParent(root, false);
+                light.transform.localPosition = pos;
+                light.transform.localRotation = Quaternion.Euler(lampTilt, sideA ? 180f : 0f, 0f); // tipped down, facing into the car
+                light.type = LightType.Spot;
+                light.color = lampColor;
+                light.intensity = lampIntensity;
+                light.range = lampRange;
+                light.spotAngle = lampAngle;
+                light.innerSpotAngle = lampAngle * 0.5f;
+                light.shadows = lampShadows ? LightShadows.Soft : LightShadows.None;
+                if (!model) return;
+                var lamp = Instantiate(model, root);
+                lamp.transform.localPosition = mount;
+                lamp.transform.localRotation = Quaternion.LookRotation(new Vector3(0f, 0f, inward)); // facing into the car
+                foreach (var r in lamp.GetComponentsInChildren<Renderer>()) r.shadowCastingMode = ShadowCastingMode.Off; // don't block its own light
+            }
+        }
+
+        // Decoration from the props kit (Train Assets/Props), the same for every run of the same carriage:
+        // hat hooks on the end walls beside the doors, umbrellas in the end corners and against the side walls
+        // beside the seats, briefcases standing by the seats, a steamer trunk in an end corner, ashtrays on seat
+        // arms, newspapers on seats or arms. None blocks a tile; none goes on a tile someone starts on.
+        void ScatterProps(TrainKit kit, List<Transform> seats)
+        {
+            var rng = new System.Random(Map.Aggregate(17, (h, row) => row.Aggregate(h, (k, ch) => unchecked(k * 31 + ch))));
+            float Rand(float a, float b) => a + (float)rng.NextDouble() * (b - a);
+            int More(int lo, int hiExclusive) => Mathf.RoundToInt(rng.Next(lo, hiExclusive) * propAmount); // a count, scaled
+            GameObject Put(string name, Vector3 at, float yaw)
+            {
+                var model = kit.Get(name);
+                if (!model) return null;
+                var go = Instantiate(model, root);
+                go.transform.position = at;
+                go.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
+                return go;
+            }
+            // Inner faces: side walls (row 0 on +z, the last row on -z) and end walls (from the end caps).
+            float wallA = 0.5f, wallB = -(c.H - 1) - 0.5f, endL = -0.85f, endR = c.W - 0.15f;
+            float aisleZ = -(c.H / 2);
+            bool Free(Cell cell) => c.InBounds(cell) && !c.Blocked(cell) && cell != c.player && !c.enemies.Exists(e => e.pos == cell);
+
+            // Hat hooks: a row of 3 or 4 on each end wall, on one side of the door, 36 cm apart (its back plate 12 cm
+            // behind the pivot). At least one wears a fedora; the rest are empty about half the time (the same model
+            // with the hat's materials hidden).
+            void Hooks(float x, float yaw)
+            {
+                float side = rng.Next(2) == 0 ? -1f : 1f;
+                int n = rng.Next(3, 5), hatted = rng.Next(n);
+                for (int i = 0; i < n; i++)
+                {
+                    var hook = Put("Prop_HatHook_Fedora", new Vector3(x, 0f, aisleZ + side * (0.95f + i * 0.36f)), yaw);
+                    if (hook && i != hatted && rng.NextDouble() < 0.5) HideParts(hook, "Trn_Felt", "Trn_BlackCloth");
+                }
+            }
+            Hooks(endL + 0.12f, -90f);
+            Hooks(endR - 0.12f, 90f);
+
+            // End corners: a steamer trunk in one, an umbrella leaning into the end wall in another.
+            var corners = new[] { (new Cell(0, 0), true), (new Cell(0, c.H - 1), true), (new Cell(c.W - 1, 0), false), (new Cell(c.W - 1, c.H - 1), false) }
+                .Where(k => Free(k.Item1)).OrderBy(_ => rng.Next()).ToList();
+            int trunks = More(1, 2), cornerBrollies = More(1, 2);
+            for (int i = 0; i < corners.Count; i++)
+            {
+                var (cell, left) = corners[i];
+                if (i % 2 == 0 && trunks-- > 0)
+                    Put("Prop_SteamerTrunk", new Vector3(left ? endL + 0.27f : endR - 0.27f, 0f, cell.y == 0 ? wallA - 0.5f : wallB + 0.5f), left ? -90f : 90f); // long side along the end wall
+                else if (cornerBrollies-- > 0)
+                    Put("Prop_Umbrella", new Vector3(left ? endL + 0.31f : endR - 0.31f, 0f, cell.y == 0 ? wallA - 0.2f : wallB + 0.2f), left ? -90f : 90f); // its back (+Z) to the end wall
+            }
+
+            // Side walls: window-row floor beside a seat bank. Umbrellas lean back against the wall; briefcases stand
+            // against it, long side along the wall.
+            var walls = new List<(Vector3 at, float yaw)>();
+            foreach (int row in new[] { 0, c.H - 1 })
+                for (int x = 0; x < c.W; x++)
+                {
+                    if (!Free(new Cell(x, row))) continue;
+                    var dirs = new[] { -1, 1 }.Where(d => c.IsSeat(new Cell(x + d, row))).ToList();
+                    if (dirs.Count == 0) continue;
+                    int d0 = dirs[rng.Next(dirs.Count)];
+                    walls.Add((new Vector3(x + d0 * 0.4f, 0f, row == 0 ? wallA : wallB), row == 0 ? 0f : 180f));
+                }
+            walls = walls.OrderBy(_ => rng.Next()).ToList();
+            int w = 0;
+            for (int i = 0, n = More(2, 3); i < n && w < walls.Count; i++, w++)
+            {
+                var (at, yaw) = walls[w];
+                Put("Prop_Umbrella", at + new Vector3(0f, 0f, yaw == 0f ? -0.31f : 0.31f), yaw);
+            }
+
+            // Seat arms (two per bank, top at 0.66 m) and cushions (two per bank, top at 0.46 m), in the seat's own
+            // space: arms at local x +-0.96, cushions at +-0.465, both centred a few cm off the bank's middle.
+            var arms = seats.SelectMany(t => new[] { -0.96f, 0.96f }.Select(x => (t, x))).OrderBy(_ => rng.Next()).ToList();
+            var cushions = seats.SelectMany(t => new[] { -0.465f, 0.465f }.Select(x => (t, x))).OrderBy(_ => rng.Next()).ToList();
+            int a = 0, s = 0;
+            // Briefcases lying flat on seat cushions at an easy angle: turned onto their back (the case's thickness
+            // now vertical), lifted by half that thickness, centred on the cushion.
+            for (int i = 0, n = More(2, 3); i < n && s < cushions.Count; i++)
+            {
+                var (t, x) = cushions[s++];
+                var rot = Quaternion.Euler(0f, t.eulerAngles.y + Rand(-35f, 35f) + (rng.Next(2) == 0 ? 0f : 180f), 0f) * Quaternion.Euler(-90f, 0f, 0f);
+                var centre = t.TransformPoint(new Vector3(x + Rand(-0.1f, 0.1f), 0.46f, -0.05f + Rand(-0.08f, 0.08f)));
+                var lengthways = rot * Vector3.up; // the case's height, lying along the seat
+                var brief = Put("Prop_Briefcase", centre - lengthways * 0.165f + Vector3.up * 0.07f, 0f);
+                if (brief) brief.transform.rotation = rot;
+            }
+            // And one or two standing on the floor at the aisle end of a seat bank, against its arm, long side along it:
+            // only beside the far banks (rows 0-1), since the near ones would hide them from the camera.
+            var far = seats.Where(t => t.position.z > aisleZ).OrderBy(_ => rng.Next()).Take(More(1, 3));
+            foreach (var t in far)
+            {
+                float side = t.TransformPoint(Vector3.right).z < t.TransformPoint(Vector3.left).z ? 1f : -1f; // the arm nearer the aisle
+                Put("Prop_Briefcase", t.TransformPoint(new Vector3(side * 1.08f, 0f, Rand(-0.2f, 0.1f))), t.eulerAngles.y + 90f + Rand(-6f, 6f));
+            }
+            // Ashtrays near the front end of the arm (the seat back is at the bank's local +Z, the arm ends at -0.5),
+            // lying along it; about 6 in 10 have a lit cigar, the rest are empty (the same model with the cigar hidden).
+            for (int n = Mathf.Min(arms.Count - 2, More(6, 11)); a < n; a++) // leave a couple of arms for newspapers
+            {
+                var (t, x) = arms[a];
+                var tray = Put("Prop_Ashtray_Cigar", t.TransformPoint(new Vector3(x, 0.66f, -0.36f)), t.eulerAngles.y + (rng.Next(2) == 0 ? 90f : -90f));
+                if (!tray) continue;
+                MatteBrass(tray);
+                if (rng.NextDouble() < 0.6) Smolder(tray);
+                else HideCigar(tray);
+            }
+            for (int n = More(3, 6), i = 0; i < n; i++)
+            {
+                if (rng.NextDouble() < 0.3 && a < arms.Count)
+                {
+                    var (t, x) = arms[a++];
+                    Put("Prop_Newspaper", t.TransformPoint(new Vector3(x, 0.66f, -0.06f)), t.eulerAngles.y + 90f + Rand(-10f, 10f));
+                }
+                else if (s < cushions.Count)
+                {
+                    var (t, x) = cushions[s++];
+                    Put("Prop_Newspaper", t.TransformPoint(new Vector3(x + Rand(-0.15f, 0.15f), 0.46f, -0.05f + Rand(-0.1f, 0.1f))), t.eulerAngles.y + Rand(-30f, 30f));
+                }
+            }
+        }
+
+        // A lit cigar: the ember glows (emissive, plus a faint flickering light) and a thin wisp of smoke rises from
+        // the ash socket the props kit put on it (Sockets/Anchor_00).
+        [Header("Cigars")]
+        public Color emberColor = new Color(1f, 0.35f, 0.08f);
+        public float emberEmission = 1.5f, emberLightIntensity = 0.1f, emberLightRange = 0.15f;
+        public float emberLightHeight = 0.08f; // metres above the ember, so it warms the air over the dish rather than the brass
+        public bool cigarSmoke = true;
+        readonly List<(Light light, float bright)> embers = new List<(Light, float)>();
+        static Texture2D puff;
+        static Material puffMaterial;
+
+        void Smolder(GameObject ashtray)
+        {
+            foreach (var r in ashtray.GetComponentsInChildren<Renderer>())
+                foreach (var m in r.materials)
+                    if (m.name.StartsWith("Trn_Ember"))
+                    {
+                        m.EnableKeyword("_EMISSION");
+                        m.SetColor("_EmissionColor", emberColor * emberEmission);
+                        m.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
+                    }
+            // The ember is found from the mesh itself (the centre of its Trn_Ember part): the FBX's socket empty
+            // doesn't come through in the right place.
+            var ember = EmberPoint(ashtray);
+            if (ember == null) return;
+
+            // Your tuned effects (Resources/Effects/CigarEmber and CigarSmoke, saved from play mode) sit where you put
+            // them on the ashtray; without them, the built-in versions go on the ember.
+            var emberFx = Resources.Load<GameObject>("Effects/CigarEmber");
+            var light = emberFx ? Instantiate(emberFx, ashtray.transform).GetComponent<Light>() : new GameObject("Ember").AddComponent<Light>();
+            if (!emberFx)
+            {
+                light.transform.SetParent(ashtray.transform, false);
+                light.transform.position = ember.Value + Vector3.up * emberLightHeight;
+                light.type = LightType.Point;
+                light.color = emberColor;
+                light.range = emberLightRange;
+                light.intensity = emberLightIntensity;
+                light.shadows = LightShadows.None;
+            }
+            if (light) embers.Add((light, light.intensity));
+
+            if (!cigarSmoke) return;
+            if (!puff)
+            {
+                // A soft round puff for the smoke particles.
+                puff = new Texture2D(32, 32) { wrapMode = TextureWrapMode.Clamp };
+                for (int y = 0; y < 32; y++)
+                    for (int x = 0; x < 32; x++)
+                    {
+                        float d = new Vector2(x - 15.5f, y - 15.5f).magnitude / 15.5f;
+                        float a = Mathf.Clamp01(1f - d);
+                        puff.SetPixel(x, y, new Color(1f, 1f, 1f, a * a));
+                    }
+                puff.Apply();
+                puffMaterial = new Material(Shader.Find("Sprites/Default")) { mainTexture = puff };
+            }
+            var smokeFx = Resources.Load<GameObject>("Effects/CigarSmoke");
+            if (smokeFx)
+            {
+                var fx = Instantiate(smokeFx, ashtray.transform).GetComponent<ParticleSystemRenderer>();
+                if (fx && !fx.sharedMaterial) fx.sharedMaterial = puffMaterial; // the material was made at runtime, so the prefab lost it
+                return;
+            }
+            var smoke = new GameObject("Smoke").AddComponent<ParticleSystem>();
+            smoke.transform.SetParent(ashtray.transform, false); // unscaled, yaw only: up stays up
+            smoke.transform.position = ember.Value + Vector3.up * 0.01f;
+            smoke.transform.rotation = Quaternion.Euler(-90f, 0f, 0f); // the cone emits along +Z: point it up
+            var main = smoke.main;
+            main.startLifetime = new ParticleSystem.MinMaxCurve(2.5f, 3.5f);
+            main.startSpeed = new ParticleSystem.MinMaxCurve(0.05f, 0.1f);
+            main.startSize = new ParticleSystem.MinMaxCurve(0.012f, 0.02f);
+            main.startRotation = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
+            main.startColor = new Color(0.75f, 0.74f, 0.72f, 0.3f);
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+            main.maxParticles = 40;
+            var emission = smoke.emission;
+            emission.rateOverTime = 6f;
+            var shape = smoke.shape;
+            shape.angle = 4f;
+            shape.radius = 0.003f;
+            var size = smoke.sizeOverLifetime;
+            size.enabled = true;
+            size.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.Linear(0f, 1f, 1f, 5f)); // spreads as it rises, to ~10 cm
+            var fade = smoke.colorOverLifetime;
+            fade.enabled = true;
+            var g = new Gradient();
+            g.SetKeys(new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(Color.white, 1f) },
+                      new[] { new GradientAlphaKey(0f, 0f), new GradientAlphaKey(1f, 0.15f), new GradientAlphaKey(0f, 1f) });
+            fade.color = g;
+            var noise = smoke.noise;
+            noise.enabled = true;
+            noise.strength = 0.04f; // a lazy curl
+            noise.frequency = 0.6f;
+            var r2 = smoke.GetComponent<ParticleSystemRenderer>();
+            r2.sharedMaterial = puffMaterial;
+            r2.shadowCastingMode = ShadowCastingMode.Off;
+            r2.receiveShadows = false;
+        }
+
+        // The ashtrays' brass, duller than the train's: its own copy of Trn_Brass with smoothness and normal
+        // strength at 0.5, so the seat caps and rails keep their shine.
+        [Header("Props")]
+        [Range(0.5f, 4f)] public float propAmount = 2f; // multiplies how many of each prop a carriage gets (spots permitting)
+
+        [Header("Ashtrays")]
+        public float ashtrayBrassSmoothness = 0.5f, ashtrayBrassNormal = 0.5f;
+        Material matteBrass;
+
+        void MatteBrass(GameObject ashtray)
+        {
+            foreach (var r in ashtray.GetComponentsInChildren<Renderer>())
+                r.sharedMaterials = r.sharedMaterials.Select(m =>
+                {
+                    if (!m || !m.name.StartsWith("Trn_Brass")) return m;
+                    if (!matteBrass)
+                    {
+                        matteBrass = new Material(m) { name = "Trn_Brass (ashtray)" };
+                        matteBrass.SetFloat("_Smoothness", ashtrayBrassSmoothness);
+                        matteBrass.SetFloat("_BumpScale", ashtrayBrassNormal);
+                    }
+                    return matteBrass;
+                }).ToArray();
+        }
+
+        // Reuse a prop without one of its parts: each part is its own materials, so those slots get an invisible
+        // material (an empty ashtray: tobacco, band and ember; an empty hook: the fedora's felt and band).
+        static Material invisible;
+
+        static void HideCigar(GameObject ashtray) => HideParts(ashtray, "Trn_Tobacco", "Trn_Velvet", "Trn_Ember");
+
+        static void HideParts(GameObject prop, params string[] materials)
+        {
+            if (!invisible) invisible = Transparent(Color.clear);
+            foreach (var r in prop.GetComponentsInChildren<Renderer>())
+                r.sharedMaterials = r.sharedMaterials.Select(m => m && materials.Any(n => m.name.StartsWith(n)) ? invisible : m).ToArray();
+        }
+
+        // The world-space centre of a prop's Trn_Ember part (its submesh bounds), or null if it has none.
+        static Vector3? EmberPoint(GameObject prop)
+        {
+            foreach (var mr in prop.GetComponentsInChildren<MeshRenderer>())
+            {
+                var mf = mr.GetComponent<MeshFilter>();
+                if (!mf || !mf.sharedMesh) continue;
+                var mats = mr.sharedMaterials;
+                for (int i = 0; i < mats.Length && i < mf.sharedMesh.subMeshCount; i++)
+                    if (mats[i] && mats[i].name.StartsWith("Trn_Ember"))
+                        return mf.transform.TransformPoint(mf.sharedMesh.GetSubMesh(i).bounds.center);
+            }
+            return null;
+        }
+
+        // Ember lights flicker a little, each on its own noise.
+        void FlickerEmbers()
+        {
+            for (int i = embers.Count - 1; i >= 0; i--)
+            {
+                var (light, bright) = embers[i];
+                if (!light) { embers.RemoveAt(i); continue; }
+                light.intensity = bright * (0.75f + 0.5f * Mathf.PerlinNoise(Time.time * 3f, i * 7.3f));
+            }
+        }
+
+        // A column walled off except for the aisle doorway.
+        bool IsPartition(int x) =>
+            !c.IsSolid(new Cell(x, c.H / 2)) && Enumerable.Range(0, c.H).All(y => y == c.H / 2 || c.IsSolid(new Cell(x, y)));
+
+        // Fallback when the kit isn't there: grey floor, brown seat blocks, dark luggage and walls.
+        void BuildWhitebox()
+        {
+            Box(new Vector3((c.W - 1) / 2f, -0.05f, -(c.H - 1) / 2f), new Vector3(c.W, 0.1f, c.H), Floor);
+            for (int x = 0; x < c.W; x++)
+                for (int y = 0; y < c.H; y++)
+                {
+                    if (c.IsSeat(new Cell(x, y))) Box(new Vector3(x, 0.3f, -y), new Vector3(0.9f, 0.6f, 0.9f), new Color(0.35f, 0.2f, 0.12f), solid: true);
+                    if (c.IsSolid(new Cell(x, y))) Box(new Vector3(x, 0.8f, -y), new Vector3(0.95f, 1.6f, 0.95f), new Color(0.2f, 0.2f, 0.25f), solid: true);
+                }
+            var wall = new Color(0.25f, 0.25f, 0.3f);
+            Box(new Vector3((c.W - 1) / 2f, 0.5f, 0.6f), new Vector3(c.W, 1f, 0.15f), wall, solid: true);
+            Box(new Vector3((c.W - 1) / 2f, 0.5f, -(c.H - 1) - 0.6f), new Vector3(c.W, 1f, 0.15f), wall, solid: true);
+        }
+
+        // A grid marker line (routes, facing arrows, blood outlines), in carriage space.
+        LineRenderer Line(Color col, float width)
+        {
+            if (!lineMat) lineMat = new Material(Shader.Find("Sprites/Default"));
+            var lr = new GameObject("Marker").AddComponent<LineRenderer>();
+            lr.transform.SetParent(root, false);
+            lr.useWorldSpace = false;
+            lr.widthMultiplier = width;
+            lr.sharedMaterial = lineMat;
+            lr.startColor = lr.endColor = col;
+            lr.shadowCastingMode = ShadowCastingMode.Off;
+            lr.receiveShadows = false;
+            lr.positionCount = 0;
+            return lr;
+        }
+
+        // Tile overlays draw only an inset rim (Resources/Shaders/TileRim), so the carriage shows through.
+        static Material OverlayMaterial()
+        {
+            var rim = Resources.Load<Shader>("Shaders/TileRim");
+            return rim ? new Material(rim) { color = Color.clear } : Transparent(Color.clear);
+        }
+
+        // The kill preview's ghost: you, see-through.
+        static Material GhostMaterial() => Transparent(new Color(0.85f, 0.9f, 1f, 0.28f));
+
+        static Material Transparent(Color col)
+        {
+            var shader = Shader.Find("Universal Render Pipeline/Unlit");
+            if (!shader) return new Material(Shader.Find("Sprites/Default"));
+            var m = new Material(shader);
+            m.SetFloat("_Surface", 1f); // transparent
+            m.SetFloat("_Blend", 0f);   // alpha
+            m.SetFloat("_SrcBlend", (float)BlendMode.SrcAlpha);
+            m.SetFloat("_DstBlend", (float)BlendMode.OneMinusSrcAlpha);
+            m.SetFloat("_SrcBlendAlpha", (float)BlendMode.One);
+            m.SetFloat("_DstBlendAlpha", (float)BlendMode.OneMinusSrcAlpha);
+            m.SetFloat("_ZWrite", 0f);
+            m.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            m.renderQueue = (int)RenderQueue.Transparent;
+            m.color = col;
+            return m;
+        }
+
+        Renderer Box(Vector3 pos, Vector3 scale, Color col, PrimitiveType type = PrimitiveType.Cube, bool solid = false)
+        {
+            var go = GameObject.CreatePrimitive(type);
+            if (!solid) Destroy(go.GetComponent<Collider>()); // solid ones keep theirs for flying guts
+            go.transform.SetParent(root);
+            go.transform.localPosition = pos;
+            go.transform.localScale = scale;
+            var r = go.GetComponent<Renderer>();
+            r.material.color = col;
+            return r;
+        }
+
+        // The first thing you can see under the cursor, if it's a window sash. The cut-away camera-side wall is
+        // drawn shadows-only but keeps its colliders, so those are looked through.
+        SlidingWindow WindowUnderMouse(Vector2 screen)
+        {
+            var hits = Physics.RaycastAll(cam.ScreenPointToRay(screen), 100f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            foreach (var hit in hits.OrderBy(h => h.distance))
+            {
+                var r = hit.collider.GetComponent<Renderer>();
+                if (r && r.shadowCastingMode == ShadowCastingMode.ShadowsOnly) continue;
+                return hit.collider.GetComponentInParent<SlidingWindow>();
+            }
+            return null;
+        }
+
+        void Update()
+        {
+            var kb = Keyboard.current;
+            var mouse = Mouse.current;
+            // Debug: F9 forgets all tutorial progress and restarts the carriage, as on a new save.
+            if (kb != null && kb.f9Key.wasPressedThisFrame) { Tutorial.ResetAll(); StopAllCoroutines(); Build(); }
+            // The intro / end card swallows input: any key or click fades a dismissable one; R always restarts.
+            // A tutorial card or the pause menu pauses the game: only their own buttons work.
+            bool carded = hud.CardUp;
+            if (carded)
+            {
+                bool any = (kb != null && kb.anyKey.wasPressedThisFrame) || (mouse != null && (mouse.leftButton.wasPressedThisFrame || mouse.rightButton.wasPressedThisFrame));
+                if (kb != null && kb.rKey.wasPressedThisFrame) { StopAllCoroutines(); Build(); }
+                else if (kb != null && kb.nKey.wasPressedThisFrame && c.Over) NewTrain();
+                else if (any && hud.CardDismissable) hud.HideCard();
+                kb = null;
+                mouse = null;
+            }
+            else if (TutorialStep(kb, mouse) || PauseStep(kb, mouse) || LogStep(kb, mouse))
+            {
+                kb = null;
+                mouse = null;
+            }
+            if (kb == null) spaceHeld = -1f;
+            if (kb != null)
+            {
+                if (kb.rKey.wasPressedThisFrame) { StopAllCoroutines(); Build(); }
+                if (kb.nKey.wasPressedThisFrame && c.Over) NewTrain(); // the run is over: on to a fresh carriage
+                var digits = new[] { kb.digit1Key, kb.digit2Key, kb.digit3Key, kb.digit4Key, kb.digit5Key, kb.digit6Key, kb.digit7Key, kb.digit8Key };
+                for (int i = 0; i < digits.Length; i++)
+                    if (digits[i].wasPressedThisFrame) Select((SkillId)i);
+                if (kb.escapeKey.wasPressedThisFrame)
+                {
+                    if (hud.ControlsOpen) hud.CloseControls();
+                    else if (selected != null) selected = null;
+                    else if (!busy) hud.ShowPause(true); // nothing to cancel: pause
+                }
+                if (kb.hKey.wasPressedThisFrame) hud.ToggleControls();
+                if (kb.lKey.wasPressedThisFrame) { hud.ShowLog(c.log); Time.timeScale = 0f; }
+                if (kb.gKey.wasPressedThisFrame && !busy) { if (c.held != null) c.Drop(); else c.Grab(); }
+                showAllSenses = kb.vKey.isPressed;
+                if (kb.zKey.wasPressedThisFrame && !busy && c.CanReset)
+                {
+                    c.ResetTurn();
+                    playerRoute.Clear();
+                    playerShown = World(c.player); // undo snaps back rather than walking
+                }
+                if (kb.cKey.wasPressedThisFrame && !busy) c.ToggleCrouch();
+                if (kb.bKey.wasPressedThisFrame) bloodOutlines = !bloodOutlines;
+                if (kb.oKey.wasPressedThisFrame && mouse != null) WindowUnderMouse(mouse.position.ReadValue())?.Toggle();
+                // End turn: hold Space (a tap does nothing, so it can't end a turn by accident).
+                if (kb.spaceKey.wasPressedThisFrame && !busy && !c.Over) spaceHeld = 0f;
+                if (spaceHeld >= 0f)
+                {
+                    if (!kb.spaceKey.isPressed || busy || c.Over) spaceHeld = -1f;
+                    else if ((spaceHeld += Time.deltaTime) >= endTurnHold) { spaceHeld = -1f; StartCoroutine(EnemyPhase()); }
+                }
+            }
+
+            MoveCamera(kb, mouse); // with input held back this only follows the camera target (tutorial pans)
+            if (selected.HasValue && !c.Has(selected.Value)) selected = null; // lost the legend for it
+            leaping = selected == SkillId.Leap || (kb != null && kb.shiftKey.isPressed);
+            hopping = selected == SkillId.Hop || (kb != null && kb.ctrlKey.isPressed);
+            throwing = selected == SkillId.Throw;
+            var screen = mouse != null ? mouse.position.ReadValue() : Vector2.zero;
+            bool overHud = mouse != null && hud.Blocks(screen);
+            hudSlot = mouse != null ? hud.SlotAt(screen) : -1;
+            hover = mouse != null && !overHud ? CellUnderMouse(screen) : null;
+            if (mouse != null && mouse.leftButton.wasPressedThisFrame && hudSlot >= 0) Select((SkillId)hudSlot);
+            if (!busy && !c.Over && mouse != null && mouse.leftButton.wasPressedThisFrame && hover.HasValue)
+            {
+                var target = c.EnemyAt(hover.Value);
+                var kill = KillMode;
+                bool paired = false, used = false;
+                if (throwing) used = c.held != null && c.Throw(hover.Value);
+                else if (target != null)
+                {
+                    if (kill.HasValue && c.Perform(kill.Value, target))
+                    {
+                        used = true;
+                        pendingAct = kill;
+                        paired = kill == Act.BrutalKill || kill == Act.QuietKill;
+                    }
+                }
+                else if (leaping) used = c.Leap(hover.Value);
+                else if (hopping) used = c.Hop(hover.Value);
+                else if (c.Move(hover.Value)) Follow(playerRoute, c.walked);
+                if (used) selected = null;
+                if (paired) StartCoroutine(PairedKill(target, kill.Value)); // the turn only ends when you end it
+            }
+            foreach (var o in c.shotsFired) ShotEffect(o);
+            c.shotsFired.Clear();
+            DetectBlood();
+            FlickerEmbers();
+            Debugging();
+            Sync();
+            Tags();
+            Tickets();
+            hud.SetEndTurn(spaceHeld >= 0f ? spaceHeld / endTurnHold : 0f, !busy && !c.Over);
+            var mode = Mode();
+            hud.Refresh(c, selected ?? (leaping ? SkillId.Leap : hopping ? SkillId.Hop : (SkillId?)null), hudSlot, mode?.name, mode?.hint,
+                c.log.Skip(Mathf.Max(0, c.log.Count - 8)).ToList());
+            if (c.Over && !busy && !endShown && !tut.Active)
+            {
+                endShown = true;
+                if (c.Won) hud.ShowCard($"Carriage {carriageNo} cleared", "The assassin washes up", "and steps out as the conductor.", "R to ride again  /  N for a new train", 0f, true, TicketStates());
+                else hud.ShowCard($"Carriage {carriageNo}", "The demon was only", "human after all.", "R to retry  /  N for a new train", 0f, false);
+            }
+        }
+
+        // ---- Tickets ----
+
+        // Killed (red) or broken (white; fleeing counts as broken), taken ones first in the order taken, then the live.
+        int[] TicketStates()
+        {
+            foreach (var e in c.enemies)
+                if (e.state != EnemyState.Active && !taken.Contains(e)) taken.Add(e);
+            return taken.Select(e => e.state == EnemyState.Dead ? 1 : 2)
+                .Concat(c.enemies.Where(e => e.state == EnemyState.Active).Select(_ => 0)).ToArray();
+        }
+
+        void Tickets() => hud.SetTickets(TicketStates());
+
+        // ---- Tutorial ----
+
+        // Shows the current card: pans the camera first if it names a spot, then dims all but its targets.
+        // Enter or NEXT moves on; Skip tutorial ends them all. True while a card is up or about to be.
+        bool TutorialStep(Keyboard kb, Mouse mouse)
+        {
+            if (!walkQueued && !hud.CardVisible)
+            {
+                walkQueued = true;
+                if (tut.WantsWalkthrough) tut.QueueWalkthrough(WalkTargets, WalkFocus);
+            }
+            if (!busy && !tut.Active) Poll();
+            var card = tut.Step();
+            if (card == null) return false;
+            if (!card.shown)
+            {
+                if (card.panUntil < 0f)
+                {
+                    var spot = card.focus?.Invoke();
+                    if (spot.HasValue) camTarget = spot;
+                    card.panUntil = Time.unscaledTime + (spot.HasValue ? 0.4f : 0f);
+                }
+                if (Time.unscaledTime < card.panUntil) return true;
+                card.shown = true;
+                hud.ShowTutorial(card.title, card.number, card.text, card.tip);
+            }
+            hud.SetTutorialTargets(card.targets?.Invoke() ?? new Rect[0]);
+            var at = mouse != null ? mouse.position.ReadValue() : Vector2.zero;
+            bool click = mouse != null && mouse.leftButton.wasPressedThisFrame;
+            bool closed = false;
+            if (click && hud.TutorialSkipHit(at)) { tut.Skip(); closed = true; }
+            else if ((kb != null && kb.spaceKey.wasPressedThisFrame) || (click && hud.TutorialNextHit(at)))
+            {
+                tut.Next();
+                closed = true;
+            }
+            if (closed)
+            {
+                hud.HideTutorial();
+                if (!tut.Active) camTarget = playerShown; // the last card: back to you
+            }
+            return true;
+        }
+
+        System.Func<IList<Rect>> WalkTargets(int i)
+        {
+            switch (i)
+            {
+                case 1: return () => new[] { hud.HealthRect };
+                case 2: return () => new[] { hud.MovesRect };
+                case 3: return () => new[] { hud.SkillRowRect };
+                case 4: return () => new[] { hud.LegendRect };
+                case 5: return () => Chip(NearestGuard());
+                case 6: return () => new[] { hud.TicketsRect };
+                default: return null;
+            }
+        }
+
+        System.Func<Vector3?> WalkFocus(int i) => i == 5 ? () => NearestGuard() is Enemy e ? shown[e] : (Vector3?)null : (System.Func<Vector3?>)null;
+
+        // The nearest stationary guard still in play (else the nearest anyone).
+        Enemy NearestGuard()
+        {
+            var live = c.enemies.Where(e => e.InPlay).OrderBy(e => (e.pos.x - c.player.x) * (e.pos.x - c.player.x) + (e.pos.y - c.player.y) * (e.pos.y - c.player.y));
+            return live.FirstOrDefault(e => e.route == null) ?? live.FirstOrDefault();
+        }
+
+        IList<Rect> Chip(Enemy e) => e != null && chips.TryGetValue(e, out var rt) && rt && rt.gameObject.activeInHierarchy ? new[] { SkillHud.ScreenRectOf(rt) } : new Rect[0];
+
+        // A floor tile's outline on screen.
+        Rect TileRect(Cell cell)
+        {
+            var w = World(cell);
+            var pts = new[] { new Vector3(-0.5f, 0, -0.5f), new Vector3(0.5f, 0, -0.5f), new Vector3(0.5f, 0, 0.5f), new Vector3(-0.5f, 0, 0.5f) }
+                .Select(d => cam.WorldToScreenPoint(w + d)).ToArray();
+            return Rect.MinMaxRect(pts.Min(p => p.x), pts.Min(p => p.y), pts.Max(p => p.x), pts.Max(p => p.y));
+        }
+
+        // First-time cards: queued the first time each event happens, in the order seen. Called once the player's
+        // move has resolved, and in the enemy turn after each enemy acts.
+        void Poll()
+        {
+            if (tut.Skipped || c == null) return;
+            foreach (var e in c.enemies)
+            {
+                if (!e.InPlay) continue;
+                var who = e;
+                System.Func<Vector3?> at = () => shown[who];
+                if (e.awareness == Awareness.Searching) tut.Once("searching", () => Chip(who), at);
+                if (e.awareness == Awareness.Startled) tut.Once("startled", () => Chip(who), at);
+                if (e.awareness == Awareness.Combat) tut.Once("combat", () => Chip(who), at);
+                if (e.hasSeen) tut.Once("seen", () => Chip(who).Append(hud.SightRect).ToList(), at);
+            }
+            if (reactTile is Cell red) tut.Once("reaction", () => new[] { TileRect(red) }, () => World(red));
+            if (c.bodies.Count > 0)
+            {
+                var b = c.bodies[0];
+                tut.Once("bodies", () => new[] { TileRect(b.pos), hud.BoxRect(SkillId.Drag) }, () => World(b.pos));
+            }
+            if (c.enemies.FirstOrDefault(x => x.state == EnemyState.Broken) is Enemy broken)
+                tut.Once("broken", () => Chip(broken), () => shown[broken]);
+            if (TicketStates().Any(t => t != 0)) tut.Once("ticket", () => new[] { hud.TicketRect(0) }, null);
+            // Only the very first unlock and the very first Bloodied get a card.
+            var unlocked = Enumerable.Range(0, c.t.skills.Length).Select(i => (SkillId)i)
+                .Where(id => c.Def(id).unlock > 0 && c.Has(id)).OrderBy(id => c.Def(id).unlock).ToList();
+            if (unlocked.Count > 0) { var id = unlocked[0]; tut.Once("unlock", () => new[] { hud.BoxRect(id) }, null, c.Def(id).name); }
+            var bloodied = Enumerable.Range(0, c.t.skills.Length).Select(i => (SkillId)i)
+                .Where(id => c.Def(id).bloodied > c.Def(id).unlock && c.Bloodied(id)).OrderBy(id => c.Def(id).bloodied).ToList();
+            if (bloodied.Count > 0)
+            {
+                var id = bloodied[0];
+                var up = c.Def(id).upgrade;
+                tut.Once("bloodied", () => new[] { hud.BoxRect(id) }, null, c.Def(id).name, up.Length > 0 ? char.ToLower(up[0]) + up.Substring(1) : up);
+            }
+            if (Mode() != null) tut.Once("targeting", () => new[] { hud.BannerRect }, null);
+        }
+
+        // The pause menu (Esc with nothing to cancel): Resume, Tutorial tips on/off, Restart. True while it's open.
+        bool PauseStep(Keyboard kb, Mouse mouse)
+        {
+            if (!hud.PauseOpen) return false;
+            var at = mouse != null ? mouse.position.ReadValue() : Vector2.zero;
+            int hit = hud.RefreshPause(new[] { "Resume", $"Tutorial tips: {(tut.Skipped ? "Off" : "On")}", "Restart", "New train" }, at);
+            if (kb != null && kb.escapeKey.wasPressedThisFrame) hud.ShowPause(false);
+            else if (mouse != null && mouse.leftButton.wasPressedThisFrame)
+            {
+                if (hit == 0) hud.ShowPause(false);
+                else if (hit == 1) tut.SetTips(tut.Skipped);
+                else if (hit == 2) { StopAllCoroutines(); Build(); }
+                else if (hit == 3) NewTrain();
+            }
+            return true;
+        }
+
+        // The full log (L): the game is paused while it's open; the wheel or arrow keys scroll it, L or Esc closes it.
+        bool LogStep(Keyboard kb, Mouse mouse)
+        {
+            if (!hud.LogOpen) return false;
+            if (kb != null && (kb.lKey.wasPressedThisFrame || kb.escapeKey.wasPressedThisFrame))
+            {
+                hud.HideLog();
+                Time.timeScale = 1f;
+                return true;
+            }
+            float scroll = mouse != null ? mouse.scroll.ReadValue().y * 0.25f : 0f;
+            if (kb != null) scroll += (kb.upArrowKey.isPressed || kb.wKey.isPressed ? 1f : kb.downArrowKey.isPressed || kb.sKey.isPressed ? -1f : 0f) * 600f * Time.unscaledDeltaTime
+                + (kb.pageUpKey.wasPressedThisFrame ? 300f : kb.pageDownKey.wasPressedThisFrame ? -300f : 0f);
+            hud.ScrollLog(scroll);
+            return true;
+        }
+
+        // A freshly generated carriage and passengers (TrainGen), as the next carriage of the run.
+        void NewTrain()
+        {
+            (Map, Spawns, Patrols) = TrainGen.Make(new System.Random(seed != 0 ? seed + carriageNo : Random.Range(1, int.MaxValue)));
+            carriageNo++;
+            StopAllCoroutines();
+            Build();
+        }
+
+        // The banner while a skill waits for its target (selected, or Shift / Ctrl held). Null when nothing is.
+        (string name, string hint)? Mode()
+        {
+            if (busy || c.Over) return null;
+            if (throwing) return ("Demon throw", "Pick a landing tile");
+            if (leaping) return ("Leap", "Pick a landing tile");
+            if (hopping) return ("Window hop", "Pick a window tile");
+            switch (KillMode)
+            {
+                case Act.QuietKill: return ("Stealth kill", "Pick an enemy next to you" + (c.Bloodied(SkillId.Stealth) ? ", or 2 tiles away to snatch" : ""));
+                case Act.RailGrab: return ("Rail grab", "Pick an enemy at a window");
+                case Act.BrutalKill: return ("Brutal kill", "Pick an enemy next to you");
+                default: return null;
+            }
+        }
+
+        // Enemy chips over their heads (awareness icon, terror segments, has-seen eye), scaled with the zoom within
+        // 0.85x..1.4x. Hovering an enemy adds its label: role, awareness and stage, intent.
+        void Tags()
+        {
+            float k = Mathf.Clamp(12f / camDistance, 0.85f, 1.4f);
+            hud.BeginTags();
+            chips.Clear();
+            foreach (var e in c.enemies)
+            {
+                if (e.state != EnemyState.Active && e.state != EnemyState.Broken) continue;
+                var sp = cam.WorldToScreenPoint(shown[e] + Vector3.up * (FigureHeight + 0.25f));
+                if (sp.z < 0) continue; // behind the camera
+                bool broken = e.state == EnemyState.Broken;
+                string role = (e.tough ? "Tough " : "") + (e.route != null ? "Patrol" : "Guard");
+                string words = broken ? "Broken" : $"{(e.awareness == Awareness.Combat ? "In combat" : e.awareness.ToString())} \u00b7 {c.StageOf(e)}";
+                bool threat = threats.TryGetValue(e, out int pct); // will fire on what you're aiming
+                chips[e] = hud.AddTag(sp, k, broken ? 4 : (int)e.awareness, e.terror, e.hasSeen, hover == e.pos || threat, c.Name(e), role, words,
+                    threat ? $"Hit {pct}%" : c.IntentText(e), threat);
+            }
+            hud.EndTags();
+        }
+
+        Act? KillMode => selected == SkillId.Stealth ? Act.QuietKill : selected == SkillId.Rail ? Act.RailGrab
+            : selected == SkillId.Brutal ? Act.BrutalKill : (Act?)null;
+
+        // Hotkey (or click on its box): grab/drop at once; leap, hop, a kill or the throw is selected until used
+        // (again to deselect). Greyed-out skills (locked, or unusable right now) and Dread (passive) do nothing.
+        void Select(SkillId s)
+        {
+            if (c == null || s == SkillId.Dread) return;
+            if (selected == s) { selected = null; return; }
+            if (busy || !c.Usable(s)) return; // greyed out: nothing to do with it right now
+            if (s == SkillId.Drag) { if (c.held != null) c.Drop(); else c.Grab(); return; }
+            selected = s;
+        }
+
+        // Inspector debug: shows the live legend and cooldowns; editing one in Play mode sets it.
+        void OnValidate() => debugDirty = true;
+
+        void Debugging()
+        {
+            if (debugDirty)
+            {
+                debugDirty = false;
+                c.legend = Mathf.Clamp(debugLegend, 0, tuning.maxLegend);
+                c.leapWait = Mathf.Clamp(debugLeapWait, 0, c.Def(SkillId.Leap).cooldown);
+                c.railWait = Mathf.Clamp(debugRailWait, 0, c.Def(SkillId.Rail).cooldown);
+                c.throwWait = Mathf.Clamp(debugThrowWait, 0, c.Def(SkillId.Throw).cooldown);
+            }
+            debugLegend = c.legend;
+            debugLeapWait = c.leapWait;
+            debugRailWait = c.railWait;
+            debugThrowWait = c.throwWait;
+        }
+
+        // WASD / arrows pan, right-drag pans, scroll zooms.
+        void MoveCamera(Keyboard kb, Mouse mouse)
+        {
+            var pan = Vector2.zero;
+            if (kb != null)
+            {
+                if (kb.aKey.isPressed || kb.leftArrowKey.isPressed) pan.x -= 1;
+                if (kb.dKey.isPressed || kb.rightArrowKey.isPressed) pan.x += 1;
+                if (kb.wKey.isPressed || kb.upArrowKey.isPressed) pan.y += 1;
+                if (kb.sKey.isPressed || kb.downArrowKey.isPressed) pan.y -= 1;
+            }
+            if (pan != Vector2.zero || (mouse != null && mouse.rightButton.isPressed)) camTarget = null; // you took the camera
+            pan *= panSpeed * camDistance * Time.deltaTime;
+            if (mouse != null)
+            {
+                if (mouse.rightButton.isPressed) pan -= mouse.delta.ReadValue() * camDistance * 0.002f;
+                camDistance = Mathf.Clamp(camDistance - mouse.scroll.ReadValue().y * zoomSpeed * camDistance, 4f, 30f);
+            }
+            if (camTarget.HasValue)
+            {
+                focus = Vector3.Lerp(focus, camTarget.Value, 1f - Mathf.Exp(-6f * Time.deltaTime));
+                if (!busy && (focus - camTarget.Value).sqrMagnitude < 0.01f) camTarget = null; // back on you: hand it over
+            }
+            focus.x = Mathf.Clamp(focus.x + pan.x, 0, Map[0].Length - 1);
+            focus.z = Mathf.Clamp(focus.z + pan.y, -(Map.Length - 1), 0);
+            cam.transform.position = focus - cam.transform.forward * camDistance;
+        }
+
+        // The rules have already resolved the kill; this only plays it.
+
+        // Brutal kill ("Takedown") or quiet kill ("StealthKill"): the rules have already resolved it; this plays the
+        // pair, bleeds on cue, then hands over to the enemy turn if the turn is over (a brutal kill always ends it).
+        IEnumerator PairedKill(Enemy victim, Act act)
+        {
+            busy = true;
+            bool brutal = act == Act.BrutalKill;
+            string state = brutal ? "Takedown" : "StealthKill";
+            int hash = Animator.StringToHash(state);
+            if (playerAnim && anims.TryGetValue(victim, out var va) && playerAnim.HasState(0, hash) && va.HasState(0, hash))
+            {
+                takedownVictim = victim;
+                Vector3 from = playerShown, at = shown[victim];
+                var dir = at - from;
+                dir.y = 0;
+                playerFacing = dir.normalized;
+                // The snatch: the rules already put the victim on your tile. Yank them across, then kill them there.
+                bool snatch = !brutal && victim.pos == c.player;
+                if (snatch)
+                {
+                    var land = from + playerFacing * 0.45f;
+                    va.transform.localRotation = Quaternion.LookRotation(quietVictimFacesAway ? playerFacing : -playerFacing);
+                    for (float time = 0f; time < snatchTime; time += Time.deltaTime)
+                    {
+                        float k = time / snatchTime;
+                        va.transform.localPosition = Vector3.Lerp(at, land, k * k);
+                        yield return null;
+                    }
+                    at = land;
+                }
+                // Each clip plays in place (root motion discarded) so nobody drifts into the seats. The victim stays on
+                // their own tile: facing you for the takedown, back to you for the stealth kill. You glide onto their
+                // tile for a brutal kill (the rules moved you there), or close in partway for a quiet one.
+                var to = brutal ? at : snatch ? from : Vector3.Lerp(from, at, quietKillReach);
+                var move = brutal ? takedownMove : quietKillMove;
+                float bloodAt = brutal ? takedownBloodAt : quietKillBloodAt;
+                va.transform.localPosition = at;
+                va.transform.localRotation = Quaternion.LookRotation(!brutal && quietVictimFacesAway ? playerFacing : -playerFacing);
+                va.transform.localScale = Vector3.one * characterScale;
+                playerAnim.Play(hash, 0, 0f);
+                va.Play(hash, 0, 0f);
+                yield return null; // let the state start so its length is known
+                float length = playerAnim.GetCurrentAnimatorStateInfo(0).length;
+                bool bled = false;
+                for (float time = 0f; time < length; time += Time.deltaTime)
+                {
+                    playerShown = Vector3.Lerp(from, to, move.Evaluate(time / length));
+                    if (!bled && time / length >= bloodAt) { KillBlood(victim, act, playerFacing); bled = true; }
+                    yield return null;
+                }
+                if (!bled) KillBlood(victim, act, playerFacing);
+                playerShown = to;
+                // Hold on the body. After a quiet kill, ease back onto your own tile meanwhile, still facing it.
+                for (float time = 0f; time < takedownHold; time += Time.deltaTime)
+                {
+                    playerShown = Vector3.Lerp(to, from, Mathf.SmoothStep(0f, 1f, time / takedownHold));
+                    yield return null;
+                }
+                playerShown = brutal ? to : from;
+                pairedKills.Add(victim);
+                takedownVictim = null;
+            }
+            yield return FreeShots();
+            busy = false;
+        }
+
+        // A brutal kill's free shots, after the kill: the camera cuts to each shooter in turn, who fires.
+        IEnumerator FreeShots()
+        {
+            Enemy next;
+            while ((next = c.NextFreeShooter()) != null)
+            {
+                camTarget = shown[next];
+                yield return new WaitForSeconds(freeShotPause);
+                c.FireFreeShot();
+                yield return new WaitForSeconds(freeShotPause);
+            }
+            if (camTarget.HasValue) camTarget = playerShown;
+        }
+
+        // One shot: the "Shoot" state if the enemy controller has one, a muzzle flash and a tracer to whatever they fired at.
+        void ShotEffect(Enemy e)
+        {
+            if (!shown.ContainsKey(e)) return;
+            var face = new Vector3(e.facing.x, 0f, -e.facing.y);
+            if (anims.TryGetValue(e, out var a) && a.HasState(0, Animator.StringToHash("Shoot"))) a.Play("Shoot", 0, 0f);
+            var hand = a ? a.GetBoneTransform(HumanBodyBones.RightHand) : null;
+            var muzzle = hand ? root.InverseTransformPoint(hand.position) + face * 0.15f : shown[e] + Vector3.up * FigureHeight * 0.7f + face * 0.4f;
+            var chest = playerShown + Vector3.up * FigureHeight * 0.6f;
+            var end = c.CanSee(e, c.player) ? chest : muzzle + face * 4f;
+            var tracer = Line(muzzleColor, 0.03f);
+            tracer.positionCount = 2;
+            tracer.SetPosition(0, muzzle);
+            tracer.SetPosition(1, end);
+            var flash = new GameObject("Muzzle Flash").AddComponent<Light>();
+            flash.transform.SetParent(root, false);
+            flash.transform.localPosition = muzzle;
+            flash.type = LightType.Point;
+            flash.color = muzzleColor;
+            flash.intensity = 6f;
+            flash.range = 3f;
+            Destroy(flash.gameObject, 0.08f);
+            Destroy(tracer.gameObject, 0.1f);
+        }
+
+        static Vector3 World(Cell cell) => new Vector3(cell.x, 0, -cell.y);
+
+        // Spots deaths and hits since last frame and bleeds for them. The takedown victim bleeds on cue instead.
+        void DetectBlood()
+        {
+            foreach (var e in c.enemies)
+            {
+                if (lastState[e] != EnemyState.Dead && e.state == EnemyState.Dead && e != takedownVictim)
+                {
+                    var dir = World(e.pos) - playerShown;
+                    dir.y = 0;
+                    if (pendingAct == Act.RailGrab) hung.Add(e);
+                    KillBlood(e, pendingAct, dir.sqrMagnitude > 1e-4f ? dir.normalized : Vector3.forward);
+                }
+                lastState[e] = e.state;
+            }
+            pendingAct = null;
+            if (c.hitsTaken > lastHits) HitBlood();
+            lastHits = c.hitsTaken;
+        }
+
+        // `how` null = shot by someone else's gun. `dir` points from the killer through the victim.
+        void KillBlood(Enemy e, Act? how, Vector3 dir)
+        {
+            if (!blood) return;
+            decaled.Add(e.pos);
+            var at = World(e.pos);
+            var chest = at + Vector3.up * FigureHeight * 0.6f;
+            switch (how)
+            {
+                case Act.QuietKill:
+                    blood.Splash(root, chest, dir, false);
+                    blood.Decal(root, at, Vector3.down, blood.spatterScale);
+                    blood.Spray(root, chest, dir, blood.quietRays, blood.spatterScale);
+                    break;
+                case Act.BrutalKill:
+                    blood.Spray(root, chest, dir, blood.brutalRays, blood.smearScale); // before the guts exist to block it
+                    blood.Decal(root, at, Vector3.down, blood.poolScale);
+                    blood.Splash(root, chest, dir, true);
+                    break;
+                case Act.RailGrab:
+                {
+                    // Blood on the glass: leans towards the window wall beside the victim.
+                    var glass = e.pos.y == 0 ? Vector3.forward : Vector3.back;
+                    blood.Splash(root, chest, glass, false);
+                    blood.Decal(root, at, Vector3.down, blood.spatterScale);
+                    blood.Spray(root, chest, glass * 2f, blood.railRays, blood.smearScale * 1.4f);
+                    break;
+                }
+                default:
+                    var spray = Random.insideUnitCircle.normalized;
+                    var away = new Vector3(spray.x, 0, spray.y);
+                    blood.Splash(root, chest, away, false);
+                    blood.Decal(root, at, Vector3.down, blood.spatterScale);
+                    blood.Spray(root, chest, away, blood.shotRays, blood.spatterScale);
+                    break;
+            }
+        }
+
+        void HitBlood()
+        {
+            if (!blood) return;
+            var spray = Random.insideUnitCircle.normalized;
+            blood.Splash(root, playerShown + Vector3.up * FigureHeight * 0.6f, new Vector3(spray.x, 0, spray.y), false);
+            blood.Decal(root, playerShown, Vector3.down, blood.dripScale);
+            blood.Screen(screenCanvas.transform);
+        }
+
+        IEnumerator EnemyPhase()
+        {
+            busy = true;
+            Poll(); // cards from the player's move first
+            while (tut.Active) yield return null;
+            c.EndPlayerTurn();
+            foreach (var e in c.enemies)
+            {
+                if (c.Over) break;
+                if (!e.InPlay) continue;
+                if (followCamera) camTarget = shown[e];
+                yield return new WaitForSeconds(enemyStepDelay);
+                bool fleeing = c.Decide(e) == Intent.Flee;
+                c.EnemyAct(e);
+                if (!routes.TryGetValue(e, out var route)) routes[e] = route = new Queue<Vector3>();
+                if (e.walked != null)
+                {
+                    Follow(route, e.walked);
+                    e.walked = null;
+                }
+                // The camera stays on each enemy until it has finished moving (a fleer all the way out of the door).
+                bool walked = route.Count > 0;
+                while (route.Count > 0 || (shown[e] - World(e.pos)).sqrMagnitude > 1e-3f)
+                {
+                    if (followCamera) camTarget = shown[e];
+                    yield return null;
+                }
+                if (fleeing && e.state == EnemyState.Fled) { yield return new WaitForSeconds(0.3f); gone.Add(e); }
+                else if (walked) yield return new WaitForSeconds(0.15f);
+                Poll(); // a card pauses the turn before the next enemy acts
+                while (tut.Active) yield return null;
+            }
+            c.StartPlayerTurn();
+            if (followCamera) { yield return new WaitForSeconds(enemyStepDelay); camTarget = playerShown; }
+            busy = false;
+        }
+
+        Cell? CellUnderMouse(Vector2 screen)
+        {
+            var ray = cam.ScreenPointToRay(screen);
+            if (!new Plane(Vector3.up, new Vector3(0, 0.25f, 0)).Raycast(ray, out float d)) return null;
+            var p = ray.GetPoint(d);
+            var cell = new Cell(Mathf.RoundToInt(p.x), Mathf.RoundToInt(-p.z));
+            return c.InBounds(cell) ? cell : (Cell?)null;
+        }
+
+        void Sync()
+        {
+            // One layer at a time, never stacked: hovering an enemy (or holding V) shows senses,
+            // otherwise you see your movement (or reveal) range and the path preview.
+            var hovered = hover.HasValue ? c.EnemyAt(hover.Value) : null;
+            bool senses = hovered != null || showAllSenses;
+            bool aiming = leaping || hopping || (throwing && c.held != null);
+            var kill = KillMode;
+            // With a kill selected the grid shows its attack range instead of where you can walk.
+            var reach = busy || senses || aiming || kill.HasValue ? new HashSet<Cell>() : c.Reachable();
+            // The move or leap under the mouse: per tile, seen or not, and who fires.
+            var preview = busy || senses || !hover.HasValue || hopping || throwing ? null
+                : leaping ? (c.CanLeapTo(hover.Value) ? c.LeapPreview(hover.Value) : null)
+                : c.MovePreview(hover.Value);
+            reactTile = preview?.Where(p => p.shooter != null).Select(p => (Cell?)p.tile).FirstOrDefault();
+            // Purple = your kill's noise: only when hovering a target you can act on, centred where it dies.
+            var outcome = hovered != null && kill.HasValue && !busy ? c.KillOutcome(kill.Value, hovered) : null;
+            threats.Clear();
+            if (preview != null)
+                foreach (var p in preview)
+                    if (p.shooter != null) threats[p.shooter] = Mathf.RoundToInt(100 * c.HitChance(p.shooter, p.tile));
+            if (outcome.HasValue && kill == Act.BrutalKill)
+                foreach (var o in c.FreeShooters(hovered)) threats[o] = Mathf.RoundToInt(100 * c.HitChance(o, hovered.pos));
+            SyncPath(preview);
+            SyncPreviewGhost(preview);
+            SyncClues();
+            bool targeting = outcome.HasValue;
+            int noise = targeting ? c.NoiseOf(kill.Value) : 0;
+            var dies = targeting ? outcome.Value.body : default;
+            SyncGhost(outcome);
+            SyncLastKnown();
+            for (int x = 0; x < c.W; x++)
+                for (int y = 0; y < c.H; y++)
+                {
+                    var cell = new Cell(x, y);
+                    var col = Color.clear; // overlays are see-through: nothing to show = invisible
+                    if (senses)
+                    {
+                        // The whole cone faint (where they'd see you standing), strong where they'd see you as you are
+                        // now (crouched behind a seat, say); red where a ready gun covers it.
+                        bool Shown(Enemy e) => showAllSenses || e == hovered;
+                        bool react = c.enemies.Exists(e => Shown(e) && (c.WillReact(e) || e.awareness == Awareness.Combat) && c.Sees(e, cell, false));
+                        if (c.enemies.Exists(e => Shown(e) && c.CanSee(e, cell))) col = Fill(react ? ReactCol : SightCol, 0.55f);
+                        else if (c.enemies.Exists(e => Shown(e) && c.Sees(e, cell, false))) col = Fill(react ? ReactCol : SightCol, 0.07f);
+                        else if (targeting && Within(cell, dies, noise)) col = Fill(HearCol, 0.4f);
+                    }
+                    else if (preview != null && preview.Exists(p => p.shooter != null && p.tile == cell))
+                        col = Fill(ReactCol, 0.75f); // the move draws reaction fire here
+                    else if (aiming)
+                    {
+                        if (leaping ? c.CanLeapTo(cell) : hopping ? c.CanHopTo(cell) : c.CanThrowTo(cell))
+                            col = Fill(Bone, 0.6f); // one mode at a time and the banner names it: every target looks the same
+                    }
+                    else if (kill.HasValue && c.InReach(kill.Value, cell))
+                        col = Fill(Bone, 0.3f); // the selected kill's reach
+                    else if (reach.Contains(cell))
+                        col = Fill(Bone, 0.18f); // faint: where you can walk
+                    // Every stained tile gets a decal, once the kill or landing that stained it has bled for itself.
+                    if (c.IsBloody(cell) && !bloodEdges[x, y]) bloodEdges[x, y] = BloodOutline(cell);
+                    if (bloodEdges[x, y]) bloodEdges[x, y].enabled = bloodOutlines;
+                    if (this.blood && c.IsBloody(cell) && !decaled.Contains(cell) && !FreshBlood(cell))
+                    {
+                        decaled.Add(cell);
+                        this.blood.Decal(root, World(cell) + new Vector3(Random.Range(-0.2f, 0.2f), 0f, Random.Range(-0.2f, 0.2f)), Vector3.down, this.blood.spatterScale);
+                    }
+                    // The hovered tile: a solid, thicker outline at full strength, warning what you'd step onto:
+                    // red = a gun covers it (reaction fire), amber = someone would see you there, else bone white.
+                    var m = tiles[x, y].material;
+                    bool under = hover == cell;
+                    if (under)
+                        col = c.enemies.Exists(e => c.WillReact(e) && c.CanSee(e, cell)) ? ReactCol
+                            : c.SeenByAnyone(cell) ? SightCol : Bone;
+                    m.color = col;
+                    m.SetFloat("_Width", under ? 0.15f : 0.1f);
+                    m.SetFloat("_Opacity", under ? 1f : 0.5f);
+                }
+
+            SyncMarks();
+            SyncBodies();
+            playerBody.transform.localPosition = new Vector3(c.player.x, c.crouched ? 0.3f : 0.5f, -c.player.y);
+            playerBody.transform.localScale = new Vector3(0.6f, c.crouched ? 0.3f : 0.5f, 0.6f);
+            // More blood-soaked as the legend fills.
+            var blood = Color.Lerp(Color.white, new Color(0.55f, 0f, 0f), c.legend / (float)tuning.maxLegend);
+            playerBody.material.color = blood;
+            if (playerAnim) SyncPlayerAnim();
+
+            foreach (var kv in views)
+            {
+                var e = kv.Key;
+                var (body, nose, react) = kv.Value;
+                bool present = e.state == EnemyState.Active || e.state == EnemyState.Broken || e == takedownVictim
+                    || (e.state == EnemyState.Fled && !gone.Contains(e)); // a fleer stays in sight until out of the door
+                body.gameObject.SetActive(present);
+                nose.gameObject.SetActive(e.InPlay);
+                react.gameObject.SetActive(c.WillReact(e));
+                react.transform.localPosition = new Vector3(e.pos.x, FigureHeight + 0.3f, -e.pos.y);
+                if (anims.TryGetValue(e, out var anim))
+                {
+                    if (e.state == EnemyState.Dead && e != takedownVictim) { Corpse(e, anim); continue; }
+                    SyncEnemyAnim(e, anim, present);
+                }
+                if (!present) continue;
+                bool broken = e.state == EnemyState.Broken;
+                var pos = new Vector3(e.pos.x, broken ? 0.25f : 0.5f, -e.pos.y);
+                body.transform.localPosition = pos;
+                body.transform.localScale = broken ? new Vector3(0.6f, 0.25f, 0.6f) : e.tough ? new Vector3(0.8f, 0.6f, 0.8f) : new Vector3(0.6f, 0.5f, 0.6f);
+                body.material.color = SuitColor(e);
+                var dir = new Vector3(e.facing.x, 0, -e.facing.y).normalized;
+                nose.transform.localPosition = pos + dir * 0.4f + Vector3.up * 0.2f;
+                nose.transform.rotation = Quaternion.LookRotation(dir);
+            }
+        }
+
+        // Kill preview: a see-through you where you'll end up, facing the victim, and a red square where the body lands.
+        void SyncGhost((Cell player, Cell body)? outcome)
+        {
+            bool on = outcome.HasValue;
+            ghostBody.positionCount = on ? 4 : 0;
+            if (!on) return;
+            var mid = World(outcome.Value.body) + Vector3.up * 0.06f;
+            const float h = 0.42f;
+            ghostBody.SetPosition(0, mid + new Vector3(-h, 0, -h));
+            ghostBody.SetPosition(1, mid + new Vector3(h, 0, -h));
+            ghostBody.SetPosition(2, mid + new Vector3(h, 0, h));
+            ghostBody.SetPosition(3, mid + new Vector3(-h, 0, h));
+        }
+
+        // The last-seen ghost (Carriage.LastSeen: where you were last seen, while someone who saw you there still hunts).
+        // A new sighting waits until you're shown on that tile (the rules run ahead of the animation), then freezes
+        // a see-through copy of you in exactly that pose: mid-hop, crouched, mid-kill, dragging. Hidden while you
+        // stand on it yourself.
+        void SyncLastKnown()
+        {
+            var seen = c.LastSeen;
+            if (!seen.HasValue) ghostCell = pendingGhost = null;
+            else if (seen != ghostCell && seen != pendingGhost) pendingGhost = seen;
+            if (pendingGhost.HasValue)
+            {
+                var at = World(pendingGhost.Value);
+                var flat = new Vector3(playerShown.x, 0f, playerShown.z);
+                bool there = (flat - at).sqrMagnitude < 0.35f * 0.35f;
+                bool settled = playerRoute.Count == 0 && flipT < 0f && !hopRunning && takedownVictim == null;
+                if (there || settled)
+                {
+                    SnapshotGhost(there ? playerShown : at);
+                    ghostCell = pendingGhost;
+                    pendingGhost = null;
+                }
+            }
+            if (ghostRenderers == null) return;
+            bool on = ghostCell.HasValue && ghostCell != c.player;
+            foreach (var r in ghostRenderers) if (r) r.enabled = on;
+        }
+
+        void SnapshotGhost(Vector3 at)
+        {
+            if (!ghost) ghost = NewGhost(GhostMaterial(), out ghostRenderers);
+            if (playerAnim)
+            {
+                CopyPose(ghost);
+                ghost.position = playerAnim.transform.position;
+                ghost.rotation = playerAnim.transform.rotation;
+                ghost.localScale = playerAnim.transform.localScale;
+            }
+            else ghost.localPosition = at + Vector3.up * (c.crouched ? 0.3f : 0.5f);
+        }
+
+        // A see-through copy of you (a frozen pose, set by CopyPose), or a capsule without the models.
+        Transform NewGhost(Material see, out Renderer[] renderers)
+        {
+            Transform g;
+            if (HasModels)
+            {
+                var a = Character(characterModel, playerController);
+                a.enabled = false;
+                g = a.transform;
+            }
+            else g = Box(Vector3.zero, new Vector3(0.6f, 0.5f, 0.6f), Color.white, PrimitiveType.Capsule).transform;
+            renderers = g.GetComponentsInChildren<Renderer>();
+            foreach (var r in renderers)
+            {
+                r.sharedMaterials = Enumerable.Repeat(see, r.sharedMaterials.Length).ToArray();
+                r.shadowCastingMode = ShadowCastingMode.Off;
+            }
+            return g;
+        }
+
+        void CopyPose(Transform g)
+        {
+            var from = playerAnim.GetComponentsInChildren<Transform>(true);
+            var to = g.GetComponentsInChildren<Transform>(true);
+            for (int i = 1; i < from.Length && i < to.Length; i++)
+            {
+                to[i].localPosition = from[i].localPosition;
+                to[i].localRotation = from[i].localRotation;
+                to[i].localScale = from[i].localScale;
+            }
+        }
+
+        // The aimed move or leap as a line along the floor, a segment per tile: bone where nobody will see you, red
+        // where someone will.
+        void SyncPath(List<(Cell tile, bool seen, Enemy shooter)> preview)
+        {
+            int n = preview?.Count ?? 0;
+            while (pathLines.Count < n) pathLines.Add(Line(Bone, 0.07f));
+            for (int i = 0; i < pathLines.Count; i++)
+            {
+                var lr = pathLines[i];
+                lr.enabled = n > 1 && i < n;
+                if (!lr.enabled) continue;
+                var at = World(preview[i].tile);
+                var a = i > 0 ? (World(preview[i - 1].tile) + at) / 2f : at;
+                var b = i < n - 1 ? (World(preview[i + 1].tile) + at) / 2f : at;
+                lr.positionCount = 2;
+                lr.SetPosition(0, a + Vector3.up * 0.08f);
+                lr.SetPosition(1, b + Vector3.up * 0.08f);
+                lr.startColor = lr.endColor = preview[i].seen ? DangerRed : Bone;
+            }
+        }
+
+        // A see-through you at the end of the aimed move or leap, in your pose, facing along the last step.
+        void SyncPreviewGhost(List<(Cell tile, bool seen, Enemy shooter)> preview)
+        {
+            bool on = preview != null && preview.Count > 1;
+            if (on && !previewGhost) previewGhost = NewGhost(Transparent(Fill(Bone, 0.3f)), out previewGhostRenderers);
+            if (previewGhostRenderers != null) foreach (var r in previewGhostRenderers) if (r) r.enabled = on;
+            if (!on) return;
+            var end = World(preview[preview.Count - 1].tile);
+            var dir = end - World(preview[preview.Count - 2].tile);
+            if (playerAnim)
+            {
+                CopyPose(previewGhost);
+                previewGhost.localPosition = end;
+                previewGhost.localRotation = Quaternion.LookRotation(dir.sqrMagnitude > 1e-6f ? dir : Vector3.right);
+                previewGhost.localScale = playerAnim.transform.localScale;
+            }
+            else previewGhost.localPosition = end + Vector3.up * (c.crouched ? 0.3f : 0.5f);
+        }
+
+        // "?" on the floor wherever a searcher is going to look (a noise, blood, a body, a glimpse of movement), one per
+        // spot, gone once nobody is. Never where they saw you: that's the last-seen ghost.
+        void SyncClues()
+        {
+            var ghostAt = c.LastSeen;
+            var spots = new HashSet<Cell>(c.enemies.Where(e => e.InPlay && e.awareness == Awareness.Searching && e.lastKnown.HasValue && e.lastKnown != ghostAt)
+                .Select(e => e.lastKnown.Value));
+            foreach (var s in spots) if (!clueMarks.ContainsKey(s)) clueMarks[s] = ClueMark(s);
+            foreach (var kv in clueMarks) kv.Value.SetActive(spots.Contains(kv.Key));
+        }
+
+        // A bone "?" lying on the tile inside a slanted frame, the HUD's style on the floor.
+        GameObject ClueMark(Cell cell)
+        {
+            var go = new GameObject("Investigate");
+            go.transform.SetParent(root, false);
+            go.transform.localPosition = World(cell) + Vector3.up * 0.06f;
+            var q = new GameObject("?").AddComponent<TMPro.TextMeshPro>();
+            q.transform.SetParent(go.transform, false);
+            q.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            q.rectTransform.sizeDelta = Vector2.one;
+            var font = Resources.Load<TMPro.TMP_FontAsset>("Fonts/Anton SDF");
+            if (font) q.font = font;
+            q.fontSize = 5f;
+            q.fontStyle = TMPro.FontStyles.Italic;
+            q.alignment = TMPro.TextAlignmentOptions.Center;
+            q.color = Bone;
+            q.text = "?";
+            var frame = Line(Bone, 0.035f);
+            frame.transform.SetParent(go.transform, false);
+            frame.loop = true;
+            frame.positionCount = 4;
+            const float h = 0.3f, lean = 0.1f; // leans like the HUD's boxes
+            frame.SetPosition(0, new Vector3(-h - lean, 0f, -h));
+            frame.SetPosition(1, new Vector3(h - lean, 0f, -h));
+            frame.SetPosition(2, new Vector3(h + lean, 0f, h));
+            frame.SetPosition(3, new Vector3(-h + lean, 0f, h));
+            return go;
+        }
+
+        // Patrol routes (drawn once at Build) and an arrow for where an enemy will turn or move next turn.
+        void SyncMarks()
+        {
+            foreach (var kv in marks)
+            {
+                var e = kv.Key;
+                var (route, arrow) = kv.Value;
+                route.enabled = e.InPlay && e.route != null && e.awareness == Awareness.Unaware;
+                // Only on the turn before the enemy actually turns or moves that way (the rules' own plan).
+                var plan = c.PlannedTurn(e);
+                arrow.enabled = e.InPlay && !busy && plan.HasValue;
+                if (!arrow.enabled) continue;
+                var f = plan.Value;
+                var dir = new Vector3(f.x, 0f, -f.y);
+                var side = new Vector3(dir.z, 0f, -dir.x);
+                var from = World(e.pos) + Vector3.up * 0.07f + dir * 0.3f;
+                var tip = from + dir * 0.45f;
+                arrow.positionCount = 5;
+                arrow.SetPosition(0, from);
+                arrow.SetPosition(1, tip);
+                arrow.SetPosition(2, tip - dir * 0.18f + side * 0.14f);
+                arrow.SetPosition(3, tip);
+                arrow.SetPosition(4, tip - dir * 0.18f - side * 0.14f);
+                arrow.startColor = arrow.endColor = Fill(DangerRed, 0.95f);
+            }
+        }
+
+        // The optional red outline round a stained tile (B), inside the tile rim.
+        LineRenderer BloodOutline(Cell cell)
+        {
+            var lr = Line(BloodEdge, 0.035f);
+            lr.loop = true;
+            lr.positionCount = 4;
+            var mid = World(cell) + Vector3.up * 0.05f;
+            const float h = 0.36f;
+            lr.SetPosition(0, mid + new Vector3(-h, 0, -h));
+            lr.SetPosition(1, mid + new Vector3(h, 0, -h));
+            lr.SetPosition(2, mid + new Vector3(h, 0, h));
+            lr.SetPosition(3, mid + new Vector3(-h, 0, h));
+            lr.enabled = bloodOutlines;
+            return lr;
+        }
+
+        // A tile still waiting for its own blood: next to a kill being played, or where a thrown body will land.
+        bool FreshBlood(Cell cell)
+        {
+            if (takedownVictim != null && Mathf.Max(Mathf.Abs(cell.x - takedownVictim.pos.x), Mathf.Abs(cell.y - takedownVictim.pos.y)) <= 1) return true;
+            if (busy && pendingAct.HasValue) return true;
+            foreach (var b in flying)
+                if (Mathf.Max(Mathf.Abs(cell.x - b.pos.x), Mathf.Abs(cell.y - b.pos.y)) <= 1) return true;
+            return false;
+        }
+
+        // Corpses follow their bodies: dragged a tile at a time (smearing the trail), or thrown (a splash where they land).
+        void SyncBodies()
+        {
+            foreach (var b in c.bodies)
+            {
+                if (!bodyCell.TryGetValue(b, out var was)) { bodyCell[b] = b.pos; continue; }
+                if (!anims.TryGetValue(b.who, out var a) || b.who == takedownVictim || !corpses.Contains(b.who)) continue;
+                if (!bodyOffset.ContainsKey(b.who)) bodyOffset[b.who] = a.transform.localPosition - World(was);
+                if (was != b.pos)
+                {
+                    bodyCell[b] = b.pos;
+                    if (Mathf.Max(Mathf.Abs(b.pos.x - was.x), Mathf.Abs(b.pos.y - was.y)) > 1) flying.Add(b); // thrown
+                    else if (blood) { blood.Decal(root, World(was), Vector3.down, blood.dripScale); decaled.Add(was); } // the drag trail
+                }
+                var t = a.transform;
+                var goal = World(b.pos) + bodyOffset[b.who];
+                bool inAir = flying.Contains(b);
+                var before = t.localPosition;
+                t.localPosition = Vector3.MoveTowards(t.localPosition, goal, (inAir ? 10f : unitSpeed * 0.5f) * Time.deltaTime);
+                if (inAir && (t.localPosition - goal).sqrMagnitude < 1e-4f)
+                {
+                    // Landed: the gore splash (a short effect) and the pools and spatter that stay.
+                    flying.Remove(b);
+                    if (!blood) continue;
+                    var land = World(b.pos);
+                    var dir = goal - before;
+                    dir.y = 0f;
+                    dir = dir.sqrMagnitude > 1e-6f ? dir.normalized : Vector3.forward;
+                    blood.Splash(root, land + Vector3.up * 0.4f, dir, true);
+                    blood.Decal(root, land, Vector3.down, blood.poolScale);
+                    blood.Spray(root, land + Vector3.up * 0.5f, dir, blood.shotRays, blood.smearScale);
+                    decaled.Add(b.pos);
+                }
+            }
+        }
+
+        // Drives Player.controller: Moving, Crouched (bools), Flip (trigger).
+        void SyncPlayerAnim()
+        {
+            var target = new Vector3(c.player.x, 0, -c.player.y);
+            if (c.leaped && !wasLeaped)
+            {
+                flipFrom = playerShown;
+                flipT = 0f;
+                // Past the normal leap range (only the bloodied leap gets there): the stylish flip, if the controller has it.
+                bool far = (target - flipFrom).magnitude > c.t.leapRange + 0.01f && playerAnim.HasState(0, Animator.StringToHash("StylishFlip"));
+                flipTime = far ? stylishFlipLength : flipLength;
+                if (far) playerAnim.CrossFade("StylishFlip", 0.1f, 0, 0f);
+                else playerAnim.SetTrigger("Flip");
+            }
+            wasLeaped = c.leaped;
+            if (c.hopped && !wasHopped) { playerRoute.Clear(); StartCoroutine(HopThrough(playerShown, target, c.player.y)); } // out one window, in the next
+            wasHopped = c.hopped;
+
+            var before = playerShown;
+            if (flipT >= 0f)
+            {
+                flipT += Time.deltaTime;
+                playerShown = Vector3.Lerp(flipFrom, target, flipT / flipTime);
+                if (flipT >= flipTime) flipT = -1f;
+            }
+            bool moving = false;
+            float speed = c.crouched || c.held != null ? unitSpeed * 0.5f : unitSpeed; // crouching or dragging costs double, so it looks slower too
+            if (flipT < 0f && takedownVictim == null && !hopRunning) moving = Advance(ref playerShown, playerRoute, target, speed); // else PairedKill() / HopThrough() moves it
+            moving |= hopMoving;
+            var step = playerShown - before;
+            if (step.sqrMagnitude > 1e-6f) playerFacing = step.normalized;
+
+            playerAnim.SetBool("Crouched", c.crouched);
+            playerAnim.SetBool("Moving", moving);
+            Stride(playerAnim, moving ? speed : 0f, c.crouched);
+            var t = playerAnim.transform;
+            t.localPosition = playerShown;
+            t.localRotation = Quaternion.LookRotation(playerFacing);
+            t.localScale = Vector3.one * characterScale;
+            // Soaks up as the legend fills, washes back when you're hurt; eased so a kill spreads rather than pops.
+            shownBlood = Mathf.MoveTowards(shownBlood, c.legend / (float)tuning.maxLegend, bloodSpreadSpeed * Time.deltaTime);
+            if (bloodOverlay) bloodOverlay.SetFloat("_Amount", shownBlood);
+        }
+
+        // The window hop as it looks: the window slides up, you climb out, walk along the outside of the carriage,
+        // the next window slides up, you climb back in; each window shuts behind you. The rules already moved you.
+        // The window hop as it looks: the window slides up, you climb out, walk along the outside of the carriage
+        // (hidden while you're out there), the next window slides up, you climb back in; each shuts behind you.
+        // The rules already moved you.
+        IEnumerator HopThrough(Vector3 from, Vector3 to, int row)
+        {
+            hopRunning = true;
+            bool wasBusy = busy;
+            busy = true;
+            var outward = new Vector3(0f, 0f, row == 0 ? 1.1f : -1.1f); // row 0's wall is on +z, the last row's on -z
+            yield return Climb(SashNear(from, row), from, from + outward);
+            ShowPlayer(false);
+            hopMoving = true;
+            var outside = to + outward;
+            while ((playerShown - outside).sqrMagnitude > 1e-4f)
+            {
+                var step = Vector3.MoveTowards(playerShown, outside, hopWalkSpeed * Time.deltaTime) - playerShown;
+                if (step.sqrMagnitude > 1e-8f) playerFacing = step.normalized;
+                playerShown += step;
+                yield return null;
+            }
+            hopMoving = false;
+            yield return Climb(SashNear(to, row), outside, to, () => ShowPlayer(true));
+            hopRunning = false;
+            busy = wasBusy;
+        }
+
+        // Open the window (if there's a sash), climb through it in a little hop over the sill, shut it behind you.
+        // started: called as the climb begins (after the window is open).
+        IEnumerator Climb(SlidingWindow window, Vector3 a, Vector3 b, System.Action started = null)
+        {
+            if (window)
+            {
+                window.open = true;
+                while (window && !window.IsOpen) yield return null;
+            }
+            started?.Invoke();
+            var flat = b - a;
+            flat.y = 0f;
+            if (flat.sqrMagnitude > 1e-6f) playerFacing = flat.normalized;
+            hopMoving = true;
+            for (float time = 0f; time < hopClimbTime; time += Time.deltaTime)
+            {
+                float k = time / hopClimbTime;
+                playerShown = Vector3.Lerp(a, b, k) + Vector3.up * Mathf.Sin(k * Mathf.PI) * 0.7f;
+                yield return null;
+            }
+            playerShown = b;
+            hopMoving = false;
+            if (window) window.open = false;
+        }
+
+        void ShowPlayer(bool on)
+        {
+            if (playerAnim) foreach (var r in playerAnim.GetComponentsInChildren<Renderer>()) r.enabled = on;
+            else playerBody.enabled = on;
+        }
+
+        // The sash on that side whose window spans x (nearest, if none quite does). Null without the kit.
+        SlidingWindow SashNear(Vector3 at, int row)
+        {
+            SlidingWindow best = null;
+            float bestGap = float.MaxValue;
+            foreach (var (sash, r, x, half) in sashes)
+            {
+                float gap = Mathf.Max(0f, Mathf.Abs(at.x - x) - half);
+                if (r == row && sash && gap < bestGap) { best = sash; bestGap = gap; }
+            }
+            return bestGap <= 0.5f ? best : null;
+        }
+
+        static void Follow(Queue<Vector3> route, List<Cell> walked)
+        {
+            if (walked == null) return;
+            foreach (var cell in walked) route.Enqueue(World(cell));
+        }
+
+        // Moves `shown` along `route`, then on to `target`; true while still on the way.
+        static bool Advance(ref Vector3 shown, Queue<Vector3> route, Vector3 target, float speed)
+        {
+            var goal = route.Count > 0 ? route.Peek() : target;
+            shown = Vector3.MoveTowards(shown, goal, speed * Time.deltaTime);
+            if (route.Count > 0 && (shown - goal).sqrMagnitude < 1e-6f) route.Dequeue();
+            return route.Count > 0 || (target - shown).sqrMagnitude > 1e-4f;
+        }
+
+        // Feeds the walk/run blend and plays it at the rate that makes the feet match `speed` (tiles/s).
+        // Gait speeds come from the controller's WalkSpeed/RunSpeed/CrouchSpeed defaults (Rail Tracer > Set Up Animations).
+        void Stride(Animator a, float speed, bool crouched)
+        {
+            if (!gaits.TryGetValue(a, out var gait))
+            {
+                var p = a.parameters;
+                float Get(string name) => System.Array.Find(p, q => q.name == name)?.defaultFloat ?? 0f;
+                gaits[a] = gait = System.Array.Exists(p, q => q.name == "Speed") ? new Vector3(Get("WalkSpeed"), Get("RunSpeed"), Get("CrouchSpeed")) : Vector3.zero;
+            }
+            if (gait == Vector3.zero) return; // controller not upgraded yet: leave the clips at normal speed
+            float v = speed / characterScale; // the character's own m/s
+            float natural = crouched ? gait.z : Mathf.Clamp(v, gait.x, gait.y);
+            a.SetFloat("Speed", v);
+            a.SetFloat("StrideScale", v > 0f && natural > 0f ? v / natural : 1f);
+        }
+
+        // Drives Enemy.controller: Moving, Broken (bools).
+        void SyncEnemyAnim(Enemy e, Animator a, bool present)
+        {
+            a.gameObject.SetActive(present);
+            if (!present) return;
+            if (e == takedownVictim) return; // PairedKill() placed it; it stays put while it plays
+            if (!routes.TryGetValue(e, out var route)) routes[e] = route = new Queue<Vector3>();
+            var pos = shown[e];
+            var before = pos;
+            bool moving = Advance(ref pos, route, World(e.pos), unitSpeed);
+            shown[e] = pos;
+            a.SetBool("Moving", moving);
+            // Broken: down on their knees to beg ("BegStart", then the "Beg" loop), or the old cower without those states.
+            bool broken = e.state == EnemyState.Broken;
+            if (!a.HasState(0, Animator.StringToHash("BegStart"))) a.SetBool("Broken", broken);
+            else if (broken && begging.Add(e)) a.CrossFade("BegStart", 0.25f, 0, 0f);
+            if (armed.Contains(a)) a.SetBool("Armed", e.awareness != Awareness.Unaware); // holstered only while unaware
+            Stride(a, moving ? unitSpeed : 0f, false);
+            var t = a.transform;
+            t.localPosition = pos;
+            // Face where they're walking; once there, face where the rules say they're looking.
+            var step = pos - before;
+            t.localRotation = Quaternion.LookRotation(moving && step.sqrMagnitude > 1e-8f ? step : new Vector3(e.facing.x, 0, -e.facing.y));
+            if (e.awareness == Awareness.Startled) t.localRotation *= Quaternion.Euler(-14f, 0f, 0f); // recoils
+            else if (!moving && e.awareness == Awareness.Unaware) t.localRotation *= Quaternion.Euler(0f, IdleLook(e), 0f);
+            t.localScale = Vector3.one * characterScale * (e.tough ? 1.15f : 1f);
+            Tint(a, SuitColor(e));
+        }
+
+        // Idle reaction: now and then an unaware enemy glances round (yaw in degrees, eased out and back).
+        float IdleLook(Enemy e)
+        {
+            float now = Time.time;
+            if (!idleLook.TryGetValue(e, out var look)) idleLook[e] = look = (-10f, 0f, now + Random.Range(2f, 7f));
+            if (now >= look.next) idleLook[e] = look = (now, Random.Range(30f, 60f) * (Random.value < 0.5f ? -1f : 1f), now + Random.Range(5f, 10f));
+            float k = (now - look.start) / 1.6f;
+            return k >= 0f && k <= 1f ? look.yaw * Mathf.Sin(k * Mathf.PI) : 0f;
+        }
+
+        // Bodies stay for the whole match. A paired-kill victim already lies where its clip ended (the victim state
+        // has no exit); anyone else (shot, rail grab) topples over away from the player and freezes there.
+        void Corpse(Enemy e, Animator a)
+        {
+            if (!corpses.Add(e) || pairedKills.Contains(e)) return;
+            if (hung.Contains(e)) HangOut(e, a);
+            else StartCoroutine(Topple(a.transform, shown[e] - playerShown));
+        }
+
+        // Rail grab: hips on the window sill, tipped out so the head and arms hang over the passing track, legs down
+        // inside, one hooked higher than the other. Posed by hand (no clip for this).
+        void HangOut(Enemy e, Animator a)
+        {
+            var body = c.bodies.Find(b => b.who == e);
+            if (body == null) return;
+            var t = a.transform;
+            var hips = a.GetBoneTransform(HumanBodyBones.Hips);
+            var bones = new[] { HumanBodyBones.LeftUpperLeg, HumanBodyBones.RightUpperLeg, HumanBodyBones.LeftUpperArm, HumanBodyBones.RightUpperArm }
+                .Select(a.GetBoneTransform).ToArray();
+            a.enabled = false; // freeze, then pose
+            var outward = body.pos.y == 0 ? Vector3.forward : Vector3.back;
+            var axis = Vector3.Cross(Vector3.up, outward); // tipping about this leans the head outward
+            t.localRotation = Quaternion.LookRotation(outward);
+            t.localPosition = World(body.pos) + outward * 0.45f;
+            if (hips)
+            {
+                t.localPosition += Vector3.up * (railSillHeight - root.InverseTransformPoint(hips.position).y);
+                t.RotateAround(hips.position, root.TransformDirection(axis), railLean);
+                var down = new[] { -railLean - 5f, -railLean + 30f, -railLean + 10f, -railLean + 10f }; // left leg hooked higher
+                for (int i = 0; i < bones.Length; i++)
+                    if (bones[i]) bones[i].RotateAround(bones[i].position, root.TransformDirection(axis), down[i]);
+            }
+            else t.localRotation = Quaternion.AngleAxis(railLean, axis) * t.localRotation;
+            bodyCell[body] = body.pos; // stays put (SyncBodies)
+            bodyOffset[e] = t.localPosition - World(body.pos);
+        }
+
+        IEnumerator Topple(Transform t, Vector3 away)
+        {
+            t.GetComponent<Animator>().enabled = false; // freeze the pose
+            away.y = 0;
+            var axis = Vector3.Cross(Vector3.up, away.sqrMagnitude > 1e-4f ? away.normalized : t.forward);
+            var start = t.localRotation;
+            for (float time = 0f; time < 0.5f; time += Time.deltaTime)
+            {
+                float k = time / 0.5f;
+                t.localRotation = Quaternion.AngleAxis(88f * k * k, axis) * start; // accelerates like a fall
+                yield return null;
+                if (!t) yield break; // restarted mid-fall
+            }
+            t.localRotation = Quaternion.AngleAxis(88f, axis) * start;
+        }
+
+        static Color Fill(Color c, float alpha) => new Color(c.r, c.g, c.b, alpha);
+
+        // Same square reach as the rules' Hears(): radius 1 = the 8 tiles round it.
+        static bool Within(Cell a, Cell b, int radius) =>
+            radius > 0 && Mathf.Max(Mathf.Abs(a.x - b.x), Mathf.Abs(a.y - b.y)) <= radius;
+
+    }
+}
