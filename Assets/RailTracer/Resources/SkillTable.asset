@@ -47,7 +47,7 @@ MonoBehaviour:
     upgrade: 'A brutal kill refreshes your leap.'
     unlock: 10
     bloodied: 50
-    cooldown: 0
+    cooldown: 2
   - name: 'Rail grab'
     shortName: 'Rail'
     description: 'Hold an enemy against the passing track.'

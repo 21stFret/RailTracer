@@ -10,11 +10,12 @@ namespace RailTracer
     // Unaware: holstered, patrols or guards. Searching: gun out, goes to what set it off, then searches nearby.
     // Startled: loses the next turn. Combat: gun aimed, sees you.
     public enum Awareness { Unaware, Searching, Startled, Combat }
-    // How a searcher hunts: Go to the trigger, Sweep the tiles round it, hold Cover facing it, or follow a blood Trail.
-    public enum Hunt { Go, Sweep, Cover, Trail }
+    // How a searcher hunts: Go to the spot, Sweep (look around) the tiles round it, Look around from where it stands
+    // (a shout or gunfire it heard), or follow a blood Trail.
+    public enum Hunt { Go, Sweep, Look, Trail }
     // What a searcher is investigating (the hover label and the log).
     public enum Clue { Noise, Blood, Body, Movement }
-    public enum Panic { Freeze, Flee, WildFire, Charge }
+    public enum Panic { Freeze, WildFire }
     public enum Act { QuietKill, BrutalKill, RailGrab }
     // Slot order = hotkey order (1..8).
     public enum SkillId { Drag, Leap, Hop, Stealth, Brutal, Rail, Throw, Dread }
@@ -33,13 +34,13 @@ namespace RailTracer
             new SkillDef { name = "Leap", shortName = "Leap", bloodied = 75, cooldown = 3, description = "Leap over seats to close in. Startles anyone who has never seen you. 3-turn cooldown.", upgrade = "Double leap range." },
             new SkillDef { name = "Window hop", shortName = "Hop", bloodied = 25, description = "Out one window, in through the next. Unseen outside.", upgrade = "Hop without using your move." },
             new SkillDef { name = "Stealth kill", shortName = "Stealth", bloodied = 35, description = "Kill anyone who can't see you: pulled onto your tile, you stay in cover.", upgrade = "Snatch: yank an enemy 2 tiles away onto your tile, over seats." },
-            new SkillDef { name = "Brutal kill", shortName = "Brutal", unlock = 10, bloodied = 50, description = "Butcher them where everyone can see. Uses up your moves.", upgrade = "A brutal kill refreshes your leap." },
+            new SkillDef { name = "Brutal kill", shortName = "Brutal", unlock = 10, bloodied = 50, cooldown = 2, description = "Butcher them where everyone can see. Uses up your moves.", upgrade = "A brutal kill refreshes your leap." },
             new SkillDef { name = "Rail grab", shortName = "Rail", unlock = 25, bloodied = 60, cooldown = 2, description = "Hold an enemy against the passing track.", upgrade = "Bigger terror, more blood." },
             new SkillDef { name = "Demon throw", shortName = "Throw", unlock = 85, bloodied = 85, cooldown = 3, description = "Hurl a held body. Blood and terror where it lands." },
             new SkillDef { name = "Dread", shortName = "Dread", unlock = 100, bloodied = 100, description = "Passive. Anyone who sees you is at least Shaken." },
         };
     }
-    public enum Intent { None, Hold, Return, Patrol, Shoot, Hesitate, TakeCover, Watch, Investigate, Follow, Charge, Melee, Search, Startled, Freeze, Flee, WildFire }
+    public enum Intent { None, Hold, Return, Patrol, Shoot, Hesitate, Investigate, Follow, Charge, Melee, Search, Startled, Freeze, Flee, WildFire }
 
     // Every tuning knob in one place, editable in the Inspector on the Game component.
     [Serializable]
@@ -58,8 +59,9 @@ namespace RailTracer
         public int smallTerror = 10, mediumTerror = 25, largeTerror = 45;
         public int bodyFearSmall = 10, bodyFearLarge = 45; // finding a stealth kill / a rail-grab or thrown body (brutal or shot: mediumTerror)
         public int unseenTerror = 35; // a body dragged or an enemy snatched away by something unseen: less than a kill seen
-        public float hitChance = 0.65f, shakenHitChance = 0.35f, wildHitChance = 0.3f, meleeHitChance = 0.8f;
-        public float halfCoverHitMult = 0.5f;
+        public float hitChance = 0.85f, shakenHitChance = 0.35f, wildHitChance = 0.3f, meleeHitChance = 0.9f;
+        public float halfCoverHitMult = 0.75f;
+        public float leapHitPenalty = 0.25f; // off the hit chance of shots at a leaping player
         public int shotDamage = 15, maxHp = 30, maxLegend = 100;
         public int quietLegend = 10, brutalLegend = 30, railLegend = 25; // the legend grows from kills only
         // Skill unlocks, Bloodied points and cooldowns: the SkillTable asset (Game copies it in at Build).
@@ -67,7 +69,9 @@ namespace RailTracer
         public int leapRange = 3, throwDistance = 5;
         public int leapTerror = 40; // terror per 100 legend for whoever sees you land
         public float railBoost = 1.5f;
-        public float shakenHesitate = 0.4f, panicReactChance = 0.5f;
+        public float shakenHesitate = 0.4f;
+        public float panicFreezeChance = 0.5f; // a Panicked guard's panic turn: freeze, else wild fire
+        public float brokenFleeChance = 0.5f;  // on breaking: flee to the next carriage, else kneel and beg
         public int searchTurns = 3, searchRadius = 2; // a searcher sweeps the tiles this close to the spot for this long
         public int guardTurnInterval = 2; // a stationary guard turns every this many turns
     }
@@ -106,7 +110,10 @@ namespace RailTracer
         public readonly HashSet<Stain> reacted = new HashSet<Stain>();
         // Pre-rolled each player turn so the intent is visible.
         public Panic panic;
-        public bool hesitate, panicReacts;
+        public bool hesitate;
+        public bool panicNext; // a Panicked guard: its next turn is a panic turn (they alternate)
+        public bool berserk;   // a Panicked heavy: charges you every turn, for good
+        public bool fleeing;   // Broken and running for the next carriage (else begging)
         public Cell sweepLook; public double sweepPick; // a sweep's next look and destination, rolled ahead so the arrow is true
         public bool reactionReady; // one reaction shot per player turn
         public int spottedRound = -1; // the round its "spotted you" was last logged
@@ -137,7 +144,7 @@ namespace RailTracer
         public List<Cell> walked; // tiles of the last move, in order, for the view to follow
         public int movesLeft; // spent per tile walked, double while crouched or dragging
         public bool acted, turnOver, leaped, hopped, crouched;
-        public int leapWait, railWait, throwWait; // cooldowns: turns until usable again
+        public int leapWait, railWait, throwWait, brutalWait; // cooldowns: turns until usable again
         public Body held;   // body being dragged
         Stain dragTrail;
         public readonly List<Body> bodies = new List<Body>();
@@ -149,8 +156,6 @@ namespace RailTracer
         public readonly List<Enemy> enemies = new List<Enemy>();
         public readonly List<string> log = new List<string>();
         public readonly List<Enemy> shotsFired = new List<Enemy>(); // every shot at you, in order, for the view to play (it clears them)
-        readonly List<Enemy> freeShots = new List<Enemy>();          // a brutal kill's free shots, fired one at a time (FireFreeShot)
-        public bool FreeShotsPending => freeShots.Count > 0;
         int round;                                                  // player turns started, so "spotted you" logs once a round
 
         // Map: '.' floor, 'S' seat (half cover), 'L' luggage / 'W' wall (full cover), 'P' player start.
@@ -277,8 +282,8 @@ namespace RailTracer
             return tiles;
         }
 
-        // Inside the enemy's cone (ignoring walls): forward and the forward diagonals, plus close peripheral vision
-        // (one forward, two to the side); tough ones also both sides.
+        // Inside the enemy's cone (ignoring walls): forward and the forward diagonals at full range, plus close
+        // peripheral vision (one forward, two to the side); heavies also see the first 2 tiles straight out to each side.
         public bool InCone(Enemy e, Cell c)
         {
             int dx = c.x - e.pos.x, dy = c.y - e.pos.y;
@@ -286,10 +291,10 @@ namespace RailTracer
             int range = Sight(e);
             if (dx * dx + dy * dy > range * range) return false;
             int fwd = dx * e.facing.x + dy * e.facing.y, side = Math.Abs(dx * e.facing.y - dy * e.facing.x);
-            return e.tough ? fwd >= 0 : fwd > 0 && (side <= fwd || (fwd == 1 && side == 2));
+            return (fwd > 0 && (side <= fwd || (fwd == 1 && side == 2))) || (e.tough && fwd == 0 && side <= 2);
         }
 
-        // `low` = on the floor or crouched: hidden by a seat right next to it on the viewer's side, except from a
+        // `low` = on the floor or crouched: hidden by half cover on the viewer's side (Covered), except from a
         // searcher's close look (any tile next to it inside its cone: a guard's 3 in front, a heavy's 5 with the sides).
         public bool Sees(Enemy e, Cell c, bool low)
         {
@@ -299,13 +304,18 @@ namespace RailTracer
             return !(low && Covered(c, e.pos));
         }
 
-        // Cover only works up close: a seat on the tile right next to `c`, on the line towards the viewer (either way
-        // the straight line is drawn, as the two can differ by a tile).
+        // Half cover by distance: a seat on the line towards the viewer, right next to `c` if the viewer is 3 tiles
+        // away or less, within 2 tiles of it if further (either way the straight line is drawn, as they can differ).
         public bool Covered(Cell c, Cell from)
         {
-            if (Cheb(c, from) <= 1) return false;
+            int d = Cheb(c, from);
+            if (d <= 1) return false;
+            int reach = d <= 3 ? 1 : 2;
+            var to = Line(c, from);
             var back = Line(from, c);
-            return IsSeat(Line(c, from)[0]) || IsSeat(back[back.Count - 2]);
+            for (int i = 0; i < reach && i < d - 1; i++)
+                if (IsSeat(to[i]) || IsSeat(back[back.Count - 2 - i])) return true;
+            return false;
         }
 
         // Crowds give cover: each standing enemy on the line halves the sight left beyond them (whole tiles, rounded
@@ -402,8 +412,8 @@ namespace RailTracer
                 Face(e, n.Value);
                 e.pos = n.Value;
                 e.walked.Add(n.Value);
-                if (CanSee(e, player)) { Fight(e); break; }
-                if (Notice(e)) break;
+                if (e.awareness != Awareness.Combat && CanSee(e, player)) { Fight(e); break; }
+                if (e.awareness != Awareness.Combat && Notice(e)) break;
             }
         }
 
@@ -422,7 +432,20 @@ namespace RailTracer
             e.terror = Math.Min(t.brokenAt, e.terror + amount);
             if (e.terror >= t.brokenAt) { e.state = EnemyState.Broken; e.lastKnown = null; }
             var after = StageOf(e);
-            if (after != before) Log(after == Stage.Broken ? $"{Name(e)} broke: drops the gun and begs." : $"{Name(e)} is {after}.");
+            if (after == before) return;
+            if (after == Stage.Broken)
+            {
+                // One roll: run for the next carriage (if there's a way) or kneel and beg.
+                e.fleeing = rng.NextDouble() < t.brokenFleeChance && DoorPath(e) != null;
+                Log(e.fleeing ? $"{Name(e)} broke: drops the gun and runs." : $"{Name(e)} broke: drops the gun and begs.");
+                return;
+            }
+            Log($"{Name(e)} is {after}.");
+            if (after != Stage.Panicked) return;
+            if (!e.tough) { e.panicNext = true; return; } // the next turn is a panic turn
+            e.berserk = true;
+            e.awareness = Awareness.Combat;
+            Log($"{Name(e)} goes berserk!");
         }
 
         // Gun out and hunting `at`. Never calms a fighter or wakes the startled early.
@@ -447,66 +470,64 @@ namespace RailTracer
 
         // Any sighting of you: remembered for good, and with Dread at least Shaken. Logged once a round, unless
         // they're already fighting you (they had you in sight).
-        void SawPlayer(Enemy e)
+        void SawPlayer(Enemy e, Cell at)
         {
             if (e.awareness != Awareness.Combat && e.spottedRound != round) Log($"{Name(e)} spotted you.");
             e.spottedRound = round;
             e.hasSeen = true;
-            e.lastKnown = player;
-            e.sawYouAt = lastSeen = player;
+            e.lastKnown = at;
+            e.sawYouAt = lastSeen = at;
             if (Has(SkillId.Dread) && e.terror < t.shakenAt) AddTerror(e, t.shakenAt - e.terror);
         }
 
-        // A glimpse of you on the move: Searching towards where you were. The first one also shouts.
-        void Glimpse(Enemy e, Cell at)
+        // Anyone who sees you is in combat (the chip turns red), the moment they see you; `at` = where (default: where
+        // you are). The startled stay startled until their own turn. The first sighting also shouts.
+        void Fight(Enemy e, Cell? at = null)
         {
             bool fresh = e.awareness == Awareness.Unaware;
-            SawPlayer(e);
-            Search(e, at, Hunt.Go, Clue.Movement);
-            if (fresh) Shout(e, at);
-        }
-
-        // In combat (the chip turns white). The startled stay startled until their own turn.
-        void Fight(Enemy e)
-        {
-            bool fresh = e.awareness == Awareness.Unaware;
-            SawPlayer(e);
+            SawPlayer(e, at ?? player);
             if (e.awareness == Awareness.Startled || e.awareness == Awareness.Combat) return;
             e.awareness = Awareness.Combat;
             Log($"{Name(e)} is fighting you!");
-            if (fresh) Shout(e, player);
+            if (fresh) Shout(e, at ?? player);
         }
 
         // Someone who has never seen you, seeing you burst into view (leap landing, brutal kill): loses their next turn.
         void Startle(Enemy e)
         {
-            SawPlayer(e);
+            SawPlayer(e, player);
             if (!e.InPlay) return;
             e.awareness = Awareness.Startled;
             Log($"{Name(e)} is startled!");
         }
 
-        // Unaware enemies within the shout's radius learn where you were seen and watch it; the closest comes looking.
-        // ponytail: no cascade (listeners don't shout on); add it if a carriage feels too sleepy.
+        // The shouter is the one who comes looking (it's fighting you). Unaware listeners within the shout's radius
+        // turn to face it and look around from where they stand. ponytail: no cascade (listeners don't shout on).
         void Shout(Enemy spotter, Cell seenAt)
         {
-            Enemy closest = null;
+            bool heard = false;
             foreach (var o in enemies)
             {
                 if (o == spotter || !o.InPlay || o.awareness != Awareness.Unaware || !Hears(o, spotter.pos, t.shoutNoise)) continue;
-                Search(o, seenAt, Hunt.Cover, Clue.Movement);
-                if (closest == null || Dist2(o.pos, seenAt) < Dist2(closest.pos, seenAt)) closest = o;
+                Look(o, spotter.pos, Clue.Movement);
+                heard = true;
             }
-            if (closest == null) return;
-            closest.hunt = Hunt.Go;
-            Log($"{Name(spotter)} shouts! {Name(closest)} comes looking.");
+            if (heard) Log($"{Name(spotter)} shouts!");
         }
 
-        // Gunfire: the whole carriage learns where you are and takes cover rather than wandering over.
+        // Gunfire: everyone not already fighting turns towards it and looks around where they stand (the carriage
+        // doesn't pile in).
         void AlertAll()
         {
             foreach (var e in enemies)
-                if (e.InPlay) Search(e, player, Hunt.Cover, Clue.Noise);
+                if (e.InPlay) Look(e, player, Clue.Noise);
+        }
+
+        // Searching from where they stand: face `at`, look around for searchTurns, then stand down.
+        void Look(Enemy e, Cell at, Clue clue)
+        {
+            Search(e, at, Hunt.Look, clue);
+            if (e.awareness == Awareness.Searching && e.hunt == Hunt.Look) Face(e, at);
         }
 
         // What `e` notices besides you: a body (stops them for the turn: true) or blood (they go to it).
@@ -554,7 +575,7 @@ namespace RailTracer
         public SkillDef Def(SkillId s) => t.skills[(int)s];
         public bool Has(SkillId s) => legend >= Def(s).unlock;
         public bool Bloodied(SkillId s) => Def(s).bloodied >= 0 && legend >= Def(s).bloodied;
-        public int Wait(SkillId s) => s == SkillId.Leap ? leapWait : s == SkillId.Rail ? railWait : s == SkillId.Throw ? throwWait : 0;
+        public int Wait(SkillId s) => s == SkillId.Leap ? leapWait : s == SkillId.Rail ? railWait : s == SkillId.Throw ? throwWait : s == SkillId.Brutal ? brutalWait : 0;
 
         // Why an unlocked skill can't be used right now, in a couple of words for the HUD (null if it can be).
         public string WhyNot(SkillId s)
@@ -723,12 +744,13 @@ namespace RailTracer
             return res;
         }
 
-        // Overwatch: gun out, not broken, shot unspent, and (if panicked) keeping their nerve this turn.
+        // Overwatch: gun out (searching or fighting), not broken, shot unspent, and not about to freeze in panic.
         public bool WillReact(Enemy e) =>
             e.InPlay && e.reactionReady && (e.awareness == Awareness.Searching || e.awareness == Awareness.Combat)
-            && (StageOf(e) != Stage.Panicked || e.panicReacts);
+            && !(PanicTurn(e) && e.panic == Panic.Freeze);
 
-        // You are now on `tile` (seen as you stand or crouch): whoever sees it goes looking, `watching` enemies fire.
+        // You are now on `tile` (seen as you stand or crouch): whoever sees it is in combat; `watching` enemies (those
+        // already searching or fighting when you set off) fire.
         // True if you got shot at.
         bool StepInto(Cell tile, List<Enemy> watching, bool low)
         {
@@ -736,7 +758,7 @@ namespace RailTracer
             foreach (var e in enemies)
             {
                 if (!Sees(e, tile, low)) continue;
-                Glimpse(e, tile);
+                Fight(e, tile);
                 spotted = true;
                 if (Over || !watching.Contains(e) || !e.reactionReady) continue;
                 e.reactionReady = false;
@@ -847,19 +869,21 @@ namespace RailTracer
             foreach (var e in enemies)
             {
                 bool landing = Sees(e, c, false);
-                if (!landing && !arc.Exists(tile => Sees(e, tile, false))) continue;
+                int last = arc.FindLastIndex(tile => Sees(e, tile, false)); // the last of you they saw
+                if (last < 0) continue;
                 spotted = true;
                 bool fresh = !e.hasSeen; // only someone who's never seen you can be startled
                 if (landing && fresh) Startle(e);
-                else Glimpse(e, c);
+                else Fight(e, arc[last]);
                 if (landing && e.InPlay) AddTerror(e, legend * t.leapTerror / 100);
             }
-            // Watchers who weren't startled get their reaction shot at the landing (crossing their sight counts).
+            // Watchers who weren't startled get their reaction shot at the landing (crossing their sight counts),
+            // harder to land on a leaping target.
             foreach (var e in shooters)
                 if (!Over && e.InPlay && e.awareness != Awareness.Startled)
                 {
                     e.reactionReady = false;
-                    Shoot(e, "reaction fire");
+                    Shoot(e, "reaction fire", true);
                 }
             return true;
         }
@@ -1022,6 +1046,7 @@ namespace RailTracer
                     break;
                 case Act.BrutalKill:
                     if (!Has(SkillId.Brutal)) return $"Brutal kill unlocks at {Def(SkillId.Brutal).unlock} legend.";
+                    if (brutalWait > 0) return $"Brutal kill ready in {brutalWait} turn(s).";
                     break;
                 case Act.RailGrab:
                     if (!Has(SkillId.Rail)) return $"Rail grab unlocks at {Def(SkillId.Rail).unlock} legend.";
@@ -1061,33 +1086,6 @@ namespace RailTracer
             return (player, player);
         }
 
-        // Who'd take a free shot if you brutal-kill `victim`: everyone who'd see you on their tile with a gun out
-        // and the nerve to use it (the kill's terror counted). Anyone who's never seen you is startled instead.
-        public List<Enemy> FreeShooters(Enemy victim) =>
-            enemies.FindAll(o => o != victim && o.InPlay && o.hasSeen && o.awareness != Awareness.Startled
-                && Sees(o, victim.pos, false) && o.terror + t.largeTerror < t.panickedAt);
-
-        // Who takes the next of a brutal kill's free shots (null when none are left); the view cuts to them first.
-        public Enemy NextFreeShooter()
-        {
-            freeShots.RemoveAll(o => !CanReturnFire(o));
-            if (Over) freeShots.Clear();
-            return freeShots.Count > 0 ? freeShots[0] : null;
-        }
-
-        // Fires the next free shot. False when none are left.
-        public bool FireFreeShot()
-        {
-            var o = NextFreeShooter();
-            if (o == null) return false;
-            freeShots.RemoveAt(0);
-            Face(o, player);
-            Shoot(o, "takes a free shot");
-            return true;
-        }
-
-        bool CanReturnFire(Enemy o) => CanSee(o, player) && StageOf(o) < Stage.Panicked && o.awareness != Awareness.Startled;
-        public int Watchers() => enemies.FindAll(CanReturnFire).Count;
 
         public bool Perform(Act a, Enemy e)
         {
@@ -1154,17 +1152,18 @@ namespace RailTracer
                 }
                 case Act.BrutalKill:
                 {
-                    // Anti-spam: rooted for the turn, and every watcher with the nerve gets a free shot once the kill
-                    // is done (fired one at a time by FireFreeShot, so the view can show each).
-                    var shooters = FreeShooters(e);
-                    crouched = false; // you rise for it, crouched or not
+                    // A standing act, loud: rooted for the rest of the turn, and a cooldown. Crouched before it, you
+                    // drop back down after.
+                    bool wasCrouched = crouched;
+                    crouched = false;
                     player = at; // the takedown carries you onto the victim's tile
                     Bleed(at, true);
                     Witness(at, body, t.largeTerror, t.smallTerror, t.brutalNoise, true);
                     if (Bloodied(SkillId.Brutal)) leapWait = 0; // judged at the legend you did it with
                     GainLegend(t.brutalLegend);
-                    movesLeft = 0; // rooted for the rest of the turn; you still end it yourself
-                    freeShots.AddRange(shooters);
+                    movesLeft = 0; // you still end the turn yourself
+                    brutalWait = Def(SkillId.Brutal).cooldown;
+                    crouched = wasCrouched;
                     break;
                 }
             }
@@ -1204,11 +1203,7 @@ namespace RailTracer
             return b;
         }
 
-        public void EndPlayerTurn()
-        {
-            while (FireFreeShot()) { } // any the view didn't play
-            turnOver = true;
-        }
+        public void EndPlayerTurn() => turnOver = true;
 
         public void StartPlayerTurn()
         {
@@ -1219,12 +1214,12 @@ namespace RailTracer
             if (leapWait > 0) leapWait--;
             if (railWait > 0) railWait--;
             if (throwWait > 0) throwWait--;
+            if (brutalWait > 0) brutalWait--;
             leapWaitAtStart = leapWait;
             foreach (var e in enemies)
             {
-                e.panic = (Panic)rng.Next(4);
+                e.panic = rng.NextDouble() < t.panicFreezeChance ? Panic.Freeze : Panic.WildFire;
                 e.hesitate = rng.NextDouble() < t.shakenHesitate;
-                e.panicReacts = rng.NextDouble() < t.panicReactChance;
                 e.reactionReady = true;
                 e.sweepLook = Dirs[rng.Next(4)];
                 e.sweepPick = rng.NextDouble();
@@ -1237,86 +1232,88 @@ namespace RailTracer
 
         // ---- Enemies ----
 
-        public float HitChance(Enemy e, Cell target) =>
-            (StageOf(e) >= Stage.Shaken ? t.shakenHitChance : t.hitChance) * (HalfCovered(target, e.pos) ? t.halfCoverHitMult : 1f);
+        // Shots at a leaping player lose leapHitPenalty (percentage points).
+        public float HitChance(Enemy e, Cell target, bool leaping = false) =>
+            Math.Max(0f, (StageOf(e) >= Stage.Shaken ? t.shakenHitChance : t.hitChance) * (HalfCovered(target, e.pos) ? t.halfCoverHitMult : 1f)
+                - (leaping ? t.leapHitPenalty : 0f));
 
-        // Best reachable tile against the last known position: half cover first, then a line to shoot down.
-        Cell CoverSpot(Enemy e)
-        {
-            var threat = e.lastKnown.Value;
-            var parent = Bfs(e.pos, t.enemyMoveRange, n => !Blocked(n) && !Occupied(n));
-            Cell best = e.pos;
-            int bestScore = -1, bestSteps = 0;
-            foreach (var c in parent.Keys)
-            {
-                int score = (HalfCovered(c, threat) ? 2 : 0)
-                    + (Dist2(c, threat) <= Sight(e) * Sight(e) && LineOfSight(c, threat, false) ? 1 : 0);
-                int steps = 0;
-                for (var p = c; p != e.pos; p = parent[p]) steps++;
-                if (score > bestScore || (score == bestScore && steps < bestSteps)) { best = c; bestScore = score; bestSteps = steps; }
-            }
-            return best;
-        }
+        // A Panicked guard's panic turn (every other turn, from the one after it panics): it freezes or fires wildly,
+        // as rolled at the start of your turn.
+        public bool PanicTurn(Enemy e) => e.InPlay && !e.tough && StageOf(e) == Stage.Panicked && e.panicNext;
+
+        // Will they shoot you if you end your turn on `at` (crouched as now)? Seeing it, gun out, not hesitating,
+        // startled or panicking. Heavies don't shoot (they charge): see Charges.
+        public bool WillShoot(Enemy e, Cell at) =>
+            e.InPlay && !e.tough && e.awareness != Awareness.Startled && !PanicTurn(e) && Sees(e, at, crouched)
+            && !(StageOf(e) >= Stage.Shaken && e.hesitate);
+
+        // A heavy that will come for you: berserk, or seeing `at`.
+        public bool Charges(Enemy e, Cell at) =>
+            e.InPlay && e.tough && e.awareness != Awareness.Startled && (e.berserk || Sees(e, at, crouched));
 
         public Intent Decide(Enemy e)
         {
+            if (e.state == EnemyState.Broken) return e.fleeing ? Intent.Flee : Intent.None;
             if (!e.InPlay) return Intent.None;
             if (e.awareness == Awareness.Startled) return Intent.Startled;
-            var stage = StageOf(e);
-            if (stage == Stage.Panicked && e.panic != Panic.Charge)
-                return e.panic == Panic.Freeze ? Intent.Freeze : e.panic == Panic.Flee ? Intent.Flee : Intent.WildFire;
-            bool sees = CanSee(e, player);
-            bool rush = e.tough || stage == Stage.Panicked; // tough (or panicked into charging): close in to melee
-            if (sees)
+            if (e.berserk) return Adjacent(e.pos, player) ? Intent.Melee : Intent.Charge; // a panicked heavy: for good
+            if (PanicTurn(e)) return e.panic == Panic.Freeze ? Intent.Freeze : Intent.WildFire;
+            if (CanSee(e, player))
             {
-                if (rush) return Adjacent(e.pos, player) ? Intent.Melee : Intent.Charge;
-                return stage == Stage.Shaken && e.hesitate ? Intent.Hesitate : Intent.Shoot;
+                if (e.tough) return Adjacent(e.pos, player) ? Intent.Melee : Intent.Charge; // heavies close in to melee
+                return StageOf(e) >= Stage.Shaken && e.hesitate ? Intent.Hesitate : Intent.Shoot;
             }
-            if (e.awareness == Awareness.Combat && e.lastKnown.HasValue) // lost sight: it'll hunt from where you were
-                return rush ? Intent.Charge : CoverSpot(e) == e.pos ? Intent.Watch : Intent.TakeCover;
+            // Out of sight: a fighter drops to searching where it saw you at its turn (EnemyAct), and goes there.
+            if (e.awareness == Awareness.Combat) return Intent.Investigate;
             if (e.awareness == Awareness.Searching && e.lastKnown.HasValue)
                 switch (e.hunt)
                 {
                     case Hunt.Go: return Intent.Investigate;
-                    case Hunt.Sweep: return Intent.Search;
                     case Hunt.Trail: return e.trail != null ? Intent.Follow : Intent.Investigate;
-                    default: return rush ? Intent.Charge : CoverSpot(e) == e.pos ? Intent.Watch : Intent.TakeCover;
+                    default: return Intent.Search; // looking around: at the spot (Sweep) or where they stand (Look)
                 }
             // Unaware again (a search ran out): patrollers pick their route back up, guards walk back to their post.
             if (e.awareness == Awareness.Unaware && e.route == null && e.pos != e.post) return Intent.Return;
             return e.route != null && e.awareness == Awareness.Unaware ? Intent.Patrol : Intent.Hold;
         }
 
+        // The chip label's one state line: awareness and nerve, or the single behaviour that overrides them.
+        public string StatusText(Enemy e)
+        {
+            if (e.state == EnemyState.Fled || (e.state == EnemyState.Broken && e.fleeing)) return "Fled";
+            if (e.state == EnemyState.Broken) return "Begging";
+            if (e.berserk) return "Berserk";
+            var stage = StageOf(e);
+            if (stage == Stage.Panicked && !e.tough) return e.panicNext ? $"Panicked · {(e.panic == Panic.Freeze ? "Freeze" : "Wild fire")}" : "Panicked";
+            var aware = e.awareness == Awareness.Combat ? "In combat" : e.awareness.ToString();
+            return stage == Stage.Calm ? aware : $"{aware} · {stage}";
+        }
+
         // What they'll do next and why: one thing only. Searchers say what they're investigating.
         public string IntentText(Enemy e)
         {
-            bool panicked = StageOf(e) == Stage.Panicked;
-            var intent = Decide(e);
-            if (e.awareness == Awareness.Searching && (intent == Intent.Investigate || intent == Intent.Follow || intent == Intent.Search
-                || intent == Intent.TakeCover || intent == Intent.Watch))
-                return $"Investigate: {e.clue}";
-            switch (intent)
+            switch (Decide(e))
             {
                 case Intent.Shoot: return $"Hit {Math.Round(100 * HitChance(e, player))}%";
                 case Intent.Hesitate: return "Hesitates";
-                case Intent.TakeCover: return "Take cover";
-                case Intent.Watch: return "Hold";
-                case Intent.Charge: return panicked ? "Panic: charge!" : "Charge";
+                case Intent.Charge: return e.berserk ? "Charge!" : "Charge";
                 case Intent.Melee: return $"Melee: hit {Math.Round(100 * t.meleeHitChance)}%";
+                case Intent.Investigate: case Intent.Follow: case Intent.Search:
+                    return $"Investigate: {(e.awareness == Awareness.Combat ? Clue.Movement : e.clue)}";
                 case Intent.Startled: return "Startled: loses turn";
                 case Intent.Patrol: return "Patrol";
                 case Intent.Hold: return "Hold";
                 case Intent.Return: return "Back to post";
-                case Intent.Freeze: return "Panic: freeze";
-                case Intent.Flee: return "Panic: flee";
-                case Intent.WildFire: return "Panic: wild fire!";
+                case Intent.Freeze: return "Loses the turn";
+                case Intent.WildFire: return "Fires at anything in front";
+                case Intent.Flee: return "Runs for the door";
                 default: return e.state == EnemyState.Broken ? "Begging" : "";
             }
         }
 
         // The arrow: where the enemy will face after its next turn, shown only when it will turn or move that way
-        // (null otherwise). Every act below turns exactly as NextFacing says, so the arrow never lies; it's
-        // recomputed live, so a startle, freeze or panic clears it at once.
+        // (null otherwise); a look-around draws it on the tile it will stand on (PlannedTile). Every act below turns
+        // as NextFacing says; it's recomputed live, so a startle, freeze or panic clears it at once.
         public Cell? PlannedTurn(Enemy e)
         {
             if (!e.InPlay) return null;
@@ -1324,9 +1321,25 @@ namespace RailTracer
             if (intent == Intent.Startled || intent == Intent.Freeze || intent == Intent.WildFire) return null;
             var f = NextFacing(e);
             bool moves = intent == Intent.Patrol || intent == Intent.Return || intent == Intent.Investigate || intent == Intent.Charge
-                || intent == Intent.Follow || intent == Intent.Flee || intent == Intent.Search
-                || ((intent == Intent.TakeCover || intent == Intent.Watch) && CoverSpot(e) != e.pos);
+                || intent == Intent.Follow || intent == Intent.Search;
             return f != e.facing || moves ? f : (Cell?)null;
+        }
+
+        // Where a looking-around searcher will stand after its next turn (null for everyone else).
+        public Cell? PlannedTile(Enemy e)
+        {
+            if (Decide(e) != Intent.Search) return null;
+            return e.hunt == Hunt.Look ? e.pos : SweepTarget(e) ?? e.pos;
+        }
+
+        // The tile a sweep walks to: one within searchRadius of the spot, picked by the roll made at your turn's start.
+        Cell? SweepTarget(Enemy e)
+        {
+            var centre = e.lastKnown.Value;
+            var options = new List<Cell>();
+            foreach (var c in Bfs(e.pos, t.enemyMoveRange, n => !Blocked(n) && !Occupied(n)).Keys)
+                if (Cheb(c, centre) <= t.searchRadius && c != e.pos) options.Add(c);
+            return options.Count > 0 ? options[(int)(e.sweepPick * options.Count)] : (Cell?)null;
         }
 
         // The facing a walk toward `goal` ends with: along the last of up to `steps` tiles of its path.
@@ -1365,24 +1378,24 @@ namespace RailTracer
                     // Arriving this turn: it turns back to its watch; otherwise it faces along its last step.
                     return p != null && p.Count <= t.patrolMoveRange ? e.looks[e.lookIndex] : WalkFacing(e, e.post, t.patrolMoveRange);
                 }
-                case Intent.Flee:
-                    return WalkFacing(e, new Cell(e.pos.x < W / 2 ? 0 : W - 1, H / 2), t.enemyMoveRange);
-                case Intent.Investigate: case Intent.Charge:
+                case Intent.Investigate: case Intent.Follow:
                     return WalkFacing(e, e.lastKnown ?? player, t.enemyMoveRange);
+                case Intent.Charge:
+                    return WalkFacing(e, e.berserk ? player : e.lastKnown ?? player, t.enemyMoveRange);
                 case Intent.Startled: case Intent.Freeze: case Intent.WildFire:
                     return e.facing;
                 case Intent.Shoot: case Intent.Melee: case Intent.Hesitate:
                     return Cardinal(player.x - e.pos.x, player.y - e.pos.y, e.facing);
                 default:
-                    return e.lastKnown.HasValue ? Cardinal(e.lastKnown.Value.x - e.pos.x, e.lastKnown.Value.y - e.pos.y, e.facing) : e.facing;
+                    return e.facing;
             }
         }
 
-        void Shoot(Enemy o, string what)
+        void Shoot(Enemy o, string what, bool leaping = false)
         {
             shotsFired.Add(o);
             if (o.InPlay && o.awareness != Awareness.Combat && CanSee(o, player)) Fight(o); // whoever fires on you has you in sight
-            if (rng.NextDouble() < HitChance(o, player)) { Log($"{Name(o)} {what}: hit!"); Damage(t.shotDamage); }
+            if (rng.NextDouble() < HitChance(o, player, leaping)) { Log($"{Name(o)} {what}: hit!"); Damage(t.shotDamage); }
             else Log($"{Name(o)} {what}: miss.");
             AlertAll();
         }
@@ -1405,10 +1418,42 @@ namespace RailTracer
             e.trail = null;
         }
 
+        // A trail follower heads for the newest part of the trail it can see right now (its "?" moves with it).
+        void RetargetTrail(Enemy e)
+        {
+            var s = e.trail;
+            if (s == null) return;
+            for (int i = s.tiles.Count - 1; i > e.trailIndex; i--)
+                if (Sees(e, s.tiles[i], true)) { e.trailIndex = i; break; }
+            e.lastKnown = s.tiles[e.trailIndex];
+        }
+
+        // The nearest door it can reach (null: cornered).
+        List<Cell> DoorPath(Enemy e)
+        {
+            List<Cell> best = null;
+            foreach (var door in new[] { new Cell(0, H / 2), new Cell(W - 1, H / 2) })
+            {
+                var p = PathTo(e.pos, door);
+                if (p != null && (e.pos == door || (p.Count > 0 && p[p.Count - 1] == door)) && (best == null || p.Count < best.Count)) best = p;
+            }
+            return best;
+        }
+
         public void EnemyAct(Enemy e)
         {
-            if (!e.InPlay) return;
             e.walked = null;
+            if (e.state == EnemyState.Broken && e.fleeing)
+            {
+                // Broken and running: for the next carriage, or begging if the way is blocked.
+                var path = DoorPath(e);
+                if (path == null) { e.fleeing = false; Log($"{Name(e)} is cornered and begs."); return; }
+                int i = 0;
+                Walk(e, t.enemyMoveRange, () => i < path.Count ? path[i++] : (Cell?)null);
+                if (e.pos.x == 0 || e.pos.x == W - 1) { e.state = EnemyState.Fled; Log($"{Name(e)} flees to the next carriage."); }
+                return;
+            }
+            if (!e.InPlay) return;
             if (e.awareness == Awareness.Startled)
             {
                 Searching(e, Clue.Movement); // then hunts where they saw you
@@ -1417,14 +1462,19 @@ namespace RailTracer
                 Log($"{Name(e)} is startled and loses the turn.");
                 return;
             }
-            if (CanSee(e, player)) Fight(e);
-            else if (e.awareness == Awareness.Combat)
+            bool panicTurn = PanicTurn(e);
+            if (!e.berserk)
             {
-                e.awareness = Awareness.Unaware; // out of sight: keep hunting where they last saw you
-                Search(e, e.lastKnown ?? player, e.tough ? Hunt.Go : Hunt.Cover, Clue.Movement);
+                if (CanSee(e, player)) Fight(e);
+                else if (e.awareness == Awareness.Combat)
+                {
+                    e.awareness = Awareness.Unaware; // out of sight: search where they last saw you
+                    Search(e, e.lastKnown ?? player, Hunt.Go, Clue.Movement);
+                }
+                else if (Notice(e)) { NextPanicTurn(e, panicTurn); return; } // found a body: frozen to the spot this turn
             }
-            else if (Notice(e)) return; // found a body: frozen to the spot this turn
             if (!e.InPlay) return;
+            if (e.trail != null && e.hunt == Hunt.Trail) RetargetTrail(e);
             switch (Decide(e))
             {
                 case Intent.Hesitate:
@@ -1440,20 +1490,14 @@ namespace RailTracer
                     if (rng.NextDouble() < t.meleeHitChance) { Log($"{Name(e)} lunges: hit!"); Damage(t.shotDamage); }
                     else Log($"{Name(e)} lunges: miss.");
                     break;
-                case Intent.TakeCover:
-                case Intent.Watch:
-                {
-                    var spot = CoverSpot(e);
-                    if (spot != e.pos) { var path = PathTo(e.pos, spot); int i = 0; Walk(e, t.enemyMoveRange, () => i < path.Count ? path[i++] : (Cell?)null); Log($"{Name(e)} takes cover."); }
-                    if (e.lastKnown.HasValue) Face(e, e.lastKnown.Value); // watching where you were, searching or in combat
-                    if (e.awareness == Awareness.Searching && --e.searchLeft <= 0) StandDown(e);
-                    break;
-                }
-                case Intent.Investigate:
                 case Intent.Charge:
+                    // Berserk: straight for your real tile. Otherwise for where it saw you.
+                    Walk(e, t.enemyMoveRange, () => StepToward(e, e.berserk ? player : e.lastKnown ?? player));
+                    break;
+                case Intent.Investigate:
                 {
                     var goal = e.lastKnown ?? player;
-                    Walk(e, t.enemyMoveRange, () => e.awareness == Awareness.Searching || e.awareness == Awareness.Combat ? StepToward(e, e.lastKnown ?? goal) : null);
+                    Walk(e, t.enemyMoveRange, () => e.awareness == Awareness.Searching ? StepToward(e, e.lastKnown ?? goal) : null);
                     if (e.awareness != Awareness.Searching || e.hunt == Hunt.Sweep) break; // saw you or found something
                     var at = e.lastKnown ?? goal;
                     if (Cheb(e.pos, at) <= 1 || StepToward(e, at) == null)
@@ -1467,37 +1511,35 @@ namespace RailTracer
                 case Intent.Follow:
                 {
                     var s = e.trail;
-                    Walk(e, t.enemyMoveRange, () =>
+                    var goal = e.lastKnown.Value;
+                    Walk(e, t.enemyMoveRange, () => e.trail == s && e.awareness == Awareness.Searching ? StepToward(e, goal) : null);
+                    if (e.trail != s || e.awareness != Awareness.Searching) break;
+                    var before = e.lastKnown;
+                    RetargetTrail(e);
+                    // Where it was heading, with nothing newer in sight: the trail goes cold here (or ends at the body).
+                    if (e.lastKnown == before && (e.pos == goal || StepToward(e, goal) == null))
                     {
-                        if (e.trail != s || e.awareness != Awareness.Searching) return null;
-                        int at = s.tiles.IndexOf(e.pos, Math.Min(e.trailIndex, s.tiles.Count - 1));
-                        if (at < 0) at = s.tiles.LastIndexOf(e.pos);
-                        if (at >= 0) e.trailIndex = Math.Max(e.trailIndex, at);
-                        if (at >= 0 && at == s.tiles.Count - 1) return null; // the newest end
-                        return at >= 0 ? s.tiles[at + 1] : StepToward(e, s.tiles[e.trailIndex]);
-                    });
-                    if (e.trail == s && e.awareness == Awareness.Searching && e.pos == s.tiles[s.tiles.Count - 1])
-                    {
-                        Notice(e); // the body, if it's still at the end
+                        Notice(e);
                         if (e.hunt == Hunt.Trail) StartSweep(e, e.pos);
                     }
                     break;
                 }
                 case Intent.Search:
                 {
-                    var centre = e.lastKnown.Value;
-                    var options = new List<Cell>();
-                    foreach (var c in Bfs(e.pos, t.enemyMoveRange, n => !Blocked(n) && !Occupied(n)).Keys)
-                        if (Cheb(c, centre) <= t.searchRadius && c != e.pos) options.Add(c);
-                    if (options.Count > 0)
+                    if (e.hunt == Hunt.Sweep)
                     {
-                        var path = PathTo(e.pos, options[(int)(e.sweepPick * options.Count)]);
-                        int i = 0;
-                        Walk(e, t.enemyMoveRange, () => path != null && i < path.Count ? path[i++] : (Cell?)null);
+                        var to = SweepTarget(e);
+                        if (to.HasValue)
+                        {
+                            var path = PathTo(e.pos, to.Value);
+                            int i = 0;
+                            Walk(e, t.enemyMoveRange, () => path != null && i < path.Count ? path[i++] : (Cell?)null);
+                        }
                     }
-                    if (e.awareness != Awareness.Searching || e.hunt != Hunt.Sweep) break;
+                    if (e.awareness != Awareness.Searching || (e.hunt != Hunt.Sweep && e.hunt != Hunt.Look)) break;
                     e.facing = e.sweepLook; // look around (rolled at the start of your turn, so the arrow showed it)
-                    if (--e.searchLeft <= 0) StandDown(e);
+                    Notice(e);
+                    if (e.awareness == Awareness.Searching && --e.searchLeft <= 0) StandDown(e);
                     break;
                 }
                 case Intent.Patrol:
@@ -1526,17 +1568,6 @@ namespace RailTracer
                     e.facing = e.looks[e.lookIndex];
                     Notice(e); // a fresh view
                     break;
-                case Intent.Flee:
-                {
-                    var door = new Cell(e.pos.x < W / 2 ? 0 : W - 1, H / 2);
-                    var path = PathTo(e.pos, door);
-                    if (path == null || path.Count == 0) { Log($"{Name(e)} panics but is cornered."); break; }
-                    int i = 0;
-                    Walk(e, t.enemyMoveRange, () => i < path.Count ? path[i++] : (Cell?)null);
-                    if (e.pos == door) { e.state = EnemyState.Fled; Log($"{Name(e)} flees to the next carriage."); }
-                    else Log($"{Name(e)} runs for the door.");
-                    break;
-                }
                 case Intent.WildFire:
                 {
                     var targets = new List<Cell> { player };
@@ -1562,6 +1593,13 @@ namespace RailTracer
                     Log($"{Name(e)} freezes in terror.");
                     break;
             }
+            NextPanicTurn(e, panicTurn);
+        }
+
+        // Panicked guards alternate: a panic turn, then a normal one.
+        void NextPanicTurn(Enemy e, bool wasPanicTurn)
+        {
+            if (e.InPlay && !e.tough && StageOf(e) == Stage.Panicked) e.panicNext = !wasPanicTurn;
         }
     }
 }

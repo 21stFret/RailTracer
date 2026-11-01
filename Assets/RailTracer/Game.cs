@@ -190,6 +190,10 @@ namespace RailTracer
         Transform previewGhost;
         Renderer[] previewGhostRenderers;
         readonly Dictionary<Enemy, int> threats = new Dictionary<Enemy, int>();
+        Cell? previewLanding; // the aimed move's end: the chips' crosshairs are for it
+        // Reaction fire zone: one red dashed line round every tile a ready gun watches.
+        readonly List<LineRenderer> zoneLines = new List<LineRenderer>();
+        Material dashMat;
         // "?" floor markers where searchers are going to look, one per spot.
         readonly Dictionary<Cell, GameObject> clueMarks = new Dictionary<Cell, GameObject>();
         // Rail grab: bent over the window sill, head and arms out over the track, legs inside.
@@ -338,6 +342,7 @@ namespace RailTracer
             camTarget = null;
             foreach (var e in c.enemies) shown[e] = new Vector3(e.pos.x, 0, -e.pos.y);
             pathLines.Clear();
+            zoneLines.Clear();
             previewGhost = null;
             previewGhostRenderers = null;
             threats.Clear();
@@ -872,7 +877,17 @@ namespace RailTracer
         }
 
         // The kill preview's ghost: you, see-through.
-        static Material GhostMaterial() => Transparent(new Color(0.85f, 0.9f, 1f, 0.28f));
+        static Material GhostMaterial() => Outline(new Color(0.85f, 0.9f, 1f, 0.5f)); // the last-seen ghost: fainter than the preview's
+
+        // A see-through outline of a figure (Resources/Shaders/GhostOutline), or plain see-through without it.
+        static Material Outline(Color col)
+        {
+            var shader = Shader.Find("RailTracer/GhostOutline");
+            if (!shader) return Transparent(new Color(col.r, col.g, col.b, col.a * 0.35f));
+            var m = new Material(shader);
+            m.SetColor("_Color", col);
+            return m;
+        }
 
         static Material Transparent(Color col)
         {
@@ -1239,10 +1254,17 @@ namespace RailTracer
                 if (sp.z < 0) continue; // behind the camera
                 bool broken = e.state == EnemyState.Broken;
                 string role = (e.tough ? "Tough " : "") + (e.route != null ? "Patrol" : "Guard");
-                string words = broken ? "Broken" : $"{(e.awareness == Awareness.Combat ? "In combat" : e.awareness.ToString())} \u00b7 {c.StageOf(e)}";
                 bool threat = threats.TryGetValue(e, out int pct); // will fire on what you're aiming
-                chips[e] = hud.AddTag(sp, k, broken ? 4 : (int)e.awareness, e.terror, e.hasSeen, hover == e.pos || threat, c.Name(e), role, words,
-                    threat ? $"Hit {pct}%" : c.IntentText(e), threat);
+                // What they'll do if you end your turn where you are (or where the aimed move ends).
+                var at = previewLanding ?? c.player;
+                string icon = broken || e.awareness == Awareness.Startled ? null
+                    : c.PanicTurn(e) && e.panic == Panic.WildFire ? "wildfire"
+                    : c.Charges(e, at) ? "charge"
+                    : c.WillShoot(e, at) ? "crosshair" : null;
+                int plate = e.tough && !broken ? (c.StageOf(e) >= Stage.Shaken ? 2 : 1) : 0; // cracked once they can be killed
+                bool notYet = KillMode.HasValue && plate == 1;
+                chips[e] = hud.AddTag(sp, k, broken ? 4 : (int)e.awareness, e.terror, e.hasSeen, hover == e.pos || threat, c.Name(e), role, c.StatusText(e),
+                    threat ? $"Hit {pct}%" : c.IntentText(e), threat, icon, plate, notYet);
             }
             hud.EndTags();
         }
@@ -1390,7 +1412,6 @@ namespace RailTracer
                 pairedKills.Add(victim);
                 takedownVictim = null;
             }
-            yield return FreeShots();
             busy = false;
         }
 
@@ -1488,20 +1509,6 @@ namespace RailTracer
             var tint = Color.Lerp(Color.white, shownLampColor, 0.5f);
             RenderSettings.ambientLight = baseAmbient * tint;
             RenderSettings.ambientIntensity = baseAmbientIntensity * shownLampLevel;
-        }
-
-        // A brutal kill's free shots, after the kill: the camera cuts to each shooter in turn, who fires.
-        IEnumerator FreeShots()
-        {
-            Enemy next;
-            while ((next = c.NextFreeShooter()) != null)
-            {
-                camTarget = shown[next];
-                yield return new WaitForSeconds(freeShotPause);
-                c.FireFreeShot();
-                yield return new WaitForSeconds(freeShotPause);
-            }
-            if (camTarget.HasValue) camTarget = playerShown;
         }
 
         // One shot: the "Shoot" state if the enemy controller has one, a muzzle flash and a tracer to whatever they fired at.
@@ -1606,7 +1613,7 @@ namespace RailTracer
             foreach (var e in c.enemies)
             {
                 if (c.Over) break;
-                if (!e.InPlay) continue;
+                if (!e.InPlay && c.Decide(e) != Intent.Flee) continue; // broken ones only move to flee
                 if (followCamera) camTarget = shown[e];
                 yield return new WaitForSeconds(enemyStepDelay);
                 bool fleeing = c.Decide(e) == Intent.Flee;
@@ -1663,9 +1670,8 @@ namespace RailTracer
             threats.Clear();
             if (preview != null)
                 foreach (var p in preview)
-                    if (p.shooter != null) threats[p.shooter] = Mathf.RoundToInt(100 * c.HitChance(p.shooter, p.tile));
-            if (outcome.HasValue && kill == Act.BrutalKill)
-                foreach (var o in c.FreeShooters(hovered)) threats[o] = Mathf.RoundToInt(100 * c.HitChance(o, hovered.pos));
+                    if (p.shooter != null) threats[p.shooter] = Mathf.RoundToInt(100 * c.HitChance(p.shooter, p.tile, leaping));
+            previewLanding = preview != null && preview.Count > 1 ? preview[preview.Count - 1].tile : (Cell?)null;
             SyncPath(preview);
             SyncPreviewGhost(preview);
             SyncClues();
@@ -1697,7 +1703,7 @@ namespace RailTracer
                             col = Fill(Bone, 0.6f); // one mode at a time and the banner names it: every target looks the same
                     }
                     else if (kill.HasValue && c.InReach(kill.Value, cell))
-                        col = Fill(Bone, 0.3f); // the selected kill's reach
+                        col = Fill(DangerRed, 0.35f); // the selected kill's reach
                     else if (reach.Contains(cell))
                         col = Fill(Bone, 0.18f); // faint: where you can walk
                     // Every stained tile gets a decal, once the kill or landing that stained it has bled for itself.
@@ -1720,6 +1726,7 @@ namespace RailTracer
                     m.SetFloat("_Opacity", under ? 1f : 0.5f);
                 }
 
+            SyncZone();
             SyncMarks();
             SyncBodies();
             playerBody.transform.localPosition = new Vector3(c.player.x, c.crouched ? 0.3f : 0.5f, -c.player.y);
@@ -1784,10 +1791,13 @@ namespace RailTracer
                 var at = World(pendingGhost.Value);
                 var flat = new Vector3(playerShown.x, 0f, playerShown.z);
                 bool there = (flat - at).sqrMagnitude < 0.35f * 0.35f;
-                bool settled = playerRoute.Count == 0 && flipT < 0f && !hopRunning && takedownVictim == null;
+                // A leap or hop the rules have done but whose animation only starts later this frame isn't settled
+                // (the ghost was being frozen on the take-off tile).
+                bool starting = (c.leaped && !wasLeaped) || (c.hopped && !wasHopped);
+                bool settled = !starting && playerRoute.Count == 0 && flipT < 0f && !hopRunning && takedownVictim == null;
                 if (there || settled)
                 {
-                    SnapshotGhost(there ? playerShown : at);
+                    SnapshotGhost(at, there);
                     ghostCell = pendingGhost;
                     pendingGhost = null;
                 }
@@ -1797,13 +1807,14 @@ namespace RailTracer
             foreach (var r in ghostRenderers) if (r) r.enabled = on;
         }
 
-        void SnapshotGhost(Vector3 at)
+        // Your pose, frozen on the sighting tile `at` (exactly where your model is, if it's on that tile now).
+        void SnapshotGhost(Vector3 at, bool there)
         {
             if (!ghost) ghost = NewGhost(GhostMaterial(), out ghostRenderers);
             if (playerAnim)
             {
                 CopyPose(ghost);
-                ghost.position = playerAnim.transform.position;
+                ghost.position = there ? playerAnim.transform.position : root.TransformPoint(at);
                 ghost.rotation = playerAnim.transform.rotation;
                 ghost.localScale = playerAnim.transform.localScale;
             }
@@ -1867,7 +1878,7 @@ namespace RailTracer
         void SyncPreviewGhost(List<(Cell tile, bool seen, Enemy shooter)> preview)
         {
             bool on = preview != null && preview.Count > 1;
-            if (on && !previewGhost) previewGhost = NewGhost(Transparent(Fill(Bone, 0.3f)), out previewGhostRenderers);
+            if (on && !previewGhost) previewGhost = NewGhost(Outline(Fill(Bone, 0.9f)), out previewGhostRenderers);
             if (previewGhostRenderers != null) foreach (var r in previewGhostRenderers) if (r) r.enabled = on;
             if (!on) return;
             var end = World(preview[preview.Count - 1].tile);
@@ -1893,7 +1904,7 @@ namespace RailTracer
             foreach (var kv in clueMarks) kv.Value.SetActive(spots.Contains(kv.Key));
         }
 
-        // A bone "?" lying on the tile inside a slanted frame, the HUD's style on the floor.
+        // A bone "?" lying on the tile.
         GameObject ClueMark(Cell cell)
         {
             var go = new GameObject("Investigate");
@@ -1910,15 +1921,6 @@ namespace RailTracer
             q.alignment = TMPro.TextAlignmentOptions.Center;
             q.color = Bone;
             q.text = "?";
-            var frame = Line(Bone, 0.035f);
-            frame.transform.SetParent(go.transform, false);
-            frame.loop = true;
-            frame.positionCount = 4;
-            const float h = 0.3f, lean = 0.1f; // leans like the HUD's boxes
-            frame.SetPosition(0, new Vector3(-h - lean, 0f, -h));
-            frame.SetPosition(1, new Vector3(h - lean, 0f, -h));
-            frame.SetPosition(2, new Vector3(h + lean, 0f, h));
-            frame.SetPosition(3, new Vector3(-h + lean, 0f, h));
             return go;
         }
 
@@ -1937,7 +1939,7 @@ namespace RailTracer
                 var f = plan.Value;
                 var dir = new Vector3(f.x, 0f, -f.y);
                 var side = new Vector3(dir.z, 0f, -dir.x);
-                var from = World(e.pos) + Vector3.up * 0.07f + dir * 0.3f;
+                var from = World(c.PlannedTile(e) ?? e.pos) + Vector3.up * 0.07f + dir * 0.3f; // a look-around: where it'll stand
                 var tip = from + dir * 0.45f;
                 arrow.positionCount = 5;
                 arrow.SetPosition(0, from);
@@ -1947,6 +1949,54 @@ namespace RailTracer
                 arrow.SetPosition(4, tip - dir * 0.18f - side * 0.14f);
                 arrow.startColor = arrow.endColor = Fill(DangerRed, 0.95f);
             }
+        }
+
+        // Reaction fire zone: every tile a ready gun (searching or fighting) would see you on as you stand or crouch,
+        // drawn as one red dashed line round the whole area (overlaps merged: only its outer edges).
+        void SyncZone()
+        {
+            var watched = new HashSet<Cell>();
+            if (!busy && !c.Over)
+                foreach (var e in c.enemies)
+                {
+                    if (!c.WillReact(e)) continue;
+                    for (int x = 0; x < c.W; x++)
+                        for (int y = 0; y < c.H; y++)
+                        {
+                            var cell = new Cell(x, y);
+                            if (!c.Blocked(cell) && c.Sees(e, cell, c.crouched)) watched.Add(cell);
+                        }
+                }
+            if (!dashMat)
+            {
+                var tex = new Texture2D(4, 1) { wrapMode = TextureWrapMode.Repeat, filterMode = FilterMode.Point };
+                tex.SetPixels(new[] { Color.white, Color.white, Color.clear, Color.clear });
+                tex.Apply();
+                dashMat = new Material(Shader.Find("Sprites/Default")) { mainTexture = tex, mainTextureScale = new Vector2(4f, 1f) }; // 4 dashes a tile
+            }
+            int n = 0;
+            var sides = new[] { new Cell(1, 0), new Cell(-1, 0), new Cell(0, 1), new Cell(0, -1) };
+            foreach (var cell in watched)
+                foreach (var d in sides)
+                {
+                    if (watched.Contains(new Cell(cell.x + d.x, cell.y + d.y))) continue;
+                    if (n == zoneLines.Count)
+                    {
+                        var lr = Line(DangerRed, 0.045f);
+                        lr.sharedMaterial = dashMat;
+                        lr.textureMode = LineTextureMode.Tile;
+                        lr.positionCount = 2;
+                        zoneLines.Add(lr);
+                    }
+                    var edge = zoneLines[n++];
+                    var mid = World(cell) + Vector3.up * 0.07f;
+                    var out_ = new Vector3(d.x, 0f, -d.y) * 0.47f;
+                    var along = new Vector3(-out_.z, 0f, out_.x);
+                    edge.SetPosition(0, mid + out_ + along);
+                    edge.SetPosition(1, mid + out_ - along);
+                    edge.enabled = true;
+                }
+            for (int i = n; i < zoneLines.Count; i++) zoneLines[i].enabled = false;
         }
 
         // The optional red outline round a stained tile (B), inside the tile rim.
@@ -2172,7 +2222,7 @@ namespace RailTracer
             shown[e] = pos;
             a.SetBool("Moving", moving);
             // Broken: down on their knees to beg ("BegStart", then the "Beg" loop), or the old cower without those states.
-            bool broken = e.state == EnemyState.Broken;
+            bool broken = e.state == EnemyState.Broken && !e.fleeing;
             if (!a.HasState(0, Animator.StringToHash("BegStart"))) a.SetBool("Broken", broken);
             else if (broken && begging.Add(e)) a.CrossFade("BegStart", 0.25f, 0, 0f);
             if (armed.Contains(a)) a.SetBool("Armed", e.awareness != Awareness.Unaware); // holstered only while unaware

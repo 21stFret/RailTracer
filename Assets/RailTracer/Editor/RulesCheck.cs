@@ -39,7 +39,7 @@ namespace RailTracer
 
         public static void Run()
         {
-            var t = new Tuning { hitChance = 1f, shakenHitChance = 1f };
+            var t = new Tuning { hitChance = 1f, shakenHitChance = 1f, leapHitPenalty = 0f }; // sure shots, so hits can be checked
 
             // Cones: basic = forward and the forward diagonals; tough = also both sides, and further.
             var c = new Carriage(new[] { "P........", ".........", ".........", "........." }, t, 1);
@@ -58,13 +58,15 @@ namespace RailTracer
             basic.awareness = tough.awareness = Awareness.Combat;
             Check(!c.CanSee(basic, new Cell(1, 0)) && !c.CanSee(tough, new Cell(0, 1)), "nor does combat");
 
-            // Cover only works right next to you: crouched behind a seat, hidden; one tile back from it, seen.
+            // Half cover by distance: from 3 tiles or less it must be right next to you; from further, within 2.
             c = new Carriage(new[] { ".PS...." }, t, 1);
             var e = c.Spawn(5, 0, -1, 0, 0);
             c.crouched = true;
             Check(!c.CanSee(e, c.player), "crouched right behind the seat: hidden");
             c.player = new Cell(0, 0);
-            Check(c.CanSee(e, c.player), "an empty tile between you and the seat: seen");
+            Check(!c.CanSee(e, c.player), "2 tiles behind it, viewer 5 away: hidden");
+            e.pos = new Cell(3, 0);
+            Check(c.CanSee(e, c.player), "2 tiles behind it, viewer 3 away: seen");
 
             // Senses: seats hide you only when crouched; full cover always; hearing ignores both.
             c = new Carriage(Map, t, 1);
@@ -118,11 +120,11 @@ namespace RailTracer
             c.ToggleCrouch();
             Check(c.Move(new Cell(0, 1)) && c.movesLeft == t.moveRange - t.crouchMoveCost, "crouching halves movement");
 
-            // Every tile of the path is checked: walking through a cone is a glimpse, even if you end out of sight.
+            // Every tile of the path is checked: walking through a cone puts them in combat, even if you end out of sight.
             c = new Carriage(new[] { "P....", "....." }, t, 1);
             e = c.Spawn(1, 1, 0, -1, 0);
             Check(c.Move(new Cell(4, 0)), "walk past");
-            Check(e.awareness == Awareness.Searching && e.hunt == Hunt.Go && e.lastKnown == new Cell(3, 0) && e.hasSeen, "glimpse: searching to the last tile seen");
+            Check(e.awareness == Awareness.Combat && e.lastKnown == new Cell(3, 0) && e.sawYouAt == new Cell(3, 0) && e.hasSeen, "seen in passing: combat, remembering the last tile seen");
             Check(!c.CanReset, "spotted locks undo");
             Check(c.hp == t.maxHp, "unaware enemies don't shoot");
 
@@ -135,15 +137,16 @@ namespace RailTracer
             Check(safe.Count == 2 && safe[0] == new Cell(0, 1), "safe route chosen over one under reaction fire");
             Check(c.Move(new Cell(1, 1)) && c.hp == t.maxHp, "and walked without being shot (leaving its sight draws nothing)");
 
-            // A fresh glimpse shouts: listeners hold and watch, the closest comes looking; no cascade.
-            c = new Carriage(new[] { "P.........", ".........." }, t, 1);
+            // A fresh sighting shouts: the shouter comes looking; listeners turn to it and look around in place; no cascade.
+            c = new Carriage(new[] { "P..L......", "...L......" }, t, 1); // luggage keeps the listeners from seeing you
             var spotter = c.Spawn(2, 1, 0, -1, 0);
             var near = c.Spawn(4, 1, 1, 0, 0);
             var farther = c.Spawn(6, 1, 1, 0, 1);
             var outOfEarshot = c.Spawn(9, 1, 1, 0, 1); // hears `farther`, not the spotter
-            c.Move(new Cell(2, 0)); // not on past `near`: right beside a searcher it would notice you
-            Check(near.awareness == Awareness.Searching && near.hunt == Hunt.Go && near.lastKnown == new Cell(1, 0), "closest listener comes looking");
-            Check(farther.awareness == Awareness.Searching && farther.hunt == Hunt.Cover, "other listeners watch");
+            c.Move(new Cell(1, 0));
+            Check(spotter.awareness == Awareness.Combat, "the shouter: in combat, it comes looking");
+            Check(near.awareness == Awareness.Searching && near.hunt == Hunt.Look && near.pos == new Cell(4, 1) && near.facing == new Cell(-1, 0), "listeners turn to the shout and look around where they stand");
+            Check(farther.awareness == Awareness.Searching && farther.hunt == Hunt.Look, "every listener in earshot");
             Check(outOfEarshot.awareness == Awareness.Unaware, "no cascade");
             Check(!near.hasSeen && spotter.hasSeen, "hearing a shout isn't seeing you");
 
@@ -179,7 +182,7 @@ namespace RailTracer
             c.EnemyAct(shooter);
             Check(shooter.awareness == Awareness.Combat && c.hp == t.maxHp - t.shotDamage, "sees you: combat, shoots past allies");
             Check(bystander.awareness == Awareness.Searching && bystander.lastKnown == new Cell(0, 0), "gunfire alerts everyone");
-            Check(c.HalfCovered(new Cell(0, 1), new Cell(4, 1)) && c.HitChance(shooter, new Cell(0, 1)) == 0.5f * t.hitChance, "seat is half cover");
+            Check(c.HalfCovered(new Cell(0, 1), new Cell(4, 1)) && c.HitChance(shooter, new Cell(0, 1)) == t.halfCoverHitMult * t.hitChance, "seat is half cover");
 
             // Patrols face the way they walk; guards turn every few turns.
             c = new Carriage(new[] { "P.........", ".........." }, t, 1);
@@ -230,35 +233,37 @@ namespace RailTracer
             Check(c.CantAct(Act.BrutalKill, second) == null, "brutal from a crouch is allowed");
             c.ToggleCrouch();
 
-            // Brutal kill: roots you, whole carriage hears it, witnesses fight and shoot; one victim only (no double).
-            c = new Carriage(new[] { "P.......", "........" }, t, 1);
+            // Brutal kill: roots you, whole carriage hears it, witnesses fight (no free shots); one victim only; 2-turn cooldown.
+            c = new Carriage(new[] { "P.......", "......L." }, t, 1); // luggage hides the kill from the listener, who turns to the shout
             victim = c.Spawn(1, 0, 1, 0, 0);
             second = c.Spawn(3, 1, 0, 1, 0); // close by but not beside you (a searcher beside you would notice you and fire too)
             witness = c.Spawn(5, 0, -1, 0, 0);
             witness.hasSeen = true; // seen you before: gun out, no startle
             var listener = c.Spawn(7, 1, 1, 0, 1);
             c.legend = Unlock(t, SkillId.Brutal);
-            Check(c.FreeShooters(victim).SequenceEqual(new[] { witness }), "preview: the witness will take a free shot");
+            c.ToggleCrouch();
             c.Perform(Act.BrutalKill, victim);
-            Check(c.legend == Unlock(t, SkillId.Brutal) + t.brutalLegend && c.FreeShotsPending, "the kill first, then the shots");
-            Check(c.FireFreeShot() && !c.FireFreeShot(), "one free shot from the one witness");
+            Check(c.crouched, "crouched before it: back to crouching after");
             Check(second.InPlay, "no double kill");
             Check(!c.turnOver && c.movesLeft == 0 && c.Reachable().Count == 0 && c.player == new Cell(1, 0), "brutal uses up your moves (you end the turn), onto the victim's tile");
             Check(witness.awareness == Awareness.Combat && witness.terror == t.largeTerror, "witness: large terror, combat");
             Check(listener.awareness == Awareness.Searching && listener.terror == t.smallTerror, "heard across the carriage");
             Check(c.stains[0].tiles.Count == 4, "brutal bloodies the tile and its open neighbours");
-            Check(c.hp == t.maxHp && c.legend == Unlock(t, SkillId.Brutal) + t.brutalLegend - t.shotDamage, "free shot hits the legend shield first");
+            Check(c.hp == t.maxHp && c.legend == Unlock(t, SkillId.Brutal) + t.brutalLegend && c.shotsFired.Count == 0, "no free shots");
+            Check(c.brutalWait == Cool(t, SkillId.Brutal) && Cool(t, SkillId.Brutal) == 2, "cooldown 2");
+            c.EndPlayerTurn();
+            c.StartPlayerTurn();
+            Check(c.Wait(SkillId.Brutal) == 1 && c.CantAct(Act.BrutalKill, second) != null, "blocked next turn, the box shows 1");
+            c.StartPlayerTurn();
+            Check(c.brutalWait == 0, "ready the turn after");
 
-            // Blood: seen like a crouched player on that tile; each enemy reacts once per stain; fighters ignore it.
+            // Blood: seen like a crouched player on that tile; each enemy reacts once per stain.
             c = new Carriage(new[] { "........", "........" }, t, 1);
             c.player = new Cell(7, 0);                      // behind the seer and 2 away from it (beside a searcher, it'd notice you)
             var blood = new Stain();
             blood.tiles.Add(new Cell(3, 1));
             c.stains.Add(blood);
             var seer = c.Spawn(5, 1, -1, 0, 0);
-            var fighter = c.Spawn(1, 0, 1, 0, 1);
-            c.EnemyAct(fighter); // first, while nobody stands between it and you (crowds block sight)
-            Check(!fighter.reacted.Contains(blood), "fighters ignore blood");
             c.EnemyAct(seer);
             Check(seer.reacted.Contains(blood) && seer.awareness == Awareness.Searching, "blood seen: searching to the stain");
 
@@ -374,7 +379,7 @@ namespace RailTracer
             Check(c.KillOutcome(Act.QuietKill, victim) == (c.player, c.player), "stealth preview: you stay, the body lands on your tile");
 
             // The table matches the handoff (slot order, unlocks, Bloodied points, cooldowns).
-            int[] unlocks = { 0, 0, 0, 0, 10, 25, 85, 100 }, bloodied = { -1, 75, 25, 35, 50, 60, 85, 100 }, cools = { 0, 3, 0, 0, 0, 2, 3, 0 };
+            int[] unlocks = { 0, 0, 0, 0, 10, 25, 85, 100 }, bloodied = { -1, 75, 25, 35, 50, 60, 85, 100 }, cools = { 0, 3, 0, 0, 2, 2, 3, 0 };
             for (int i = 0; i < 8; i++)
                 Check(t.skills[i].unlock == unlocks[i] && t.skills[i].bloodied == bloodied[i] && t.skills[i].cooldown == cools[i], "skill table row " + (i + 1));
 
@@ -415,7 +420,7 @@ namespace RailTracer
             victim = c.Spawn(1, 0, 1, 0, 0);
             c.Spawn(5, 1, 1, 0, 0);
             c.ToggleCrouch();
-            Check(c.Perform(Act.BrutalKill, victim) && !c.crouched, "brutal kill from a crouch: you stand for it");
+            Check(c.Perform(Act.BrutalKill, victim) && c.crouched, "brutal kill from a crouch: back down after");
 
             // Why a kill can't be used: the HUD says so.
             c = new Carriage(new[] { "P.....", "......" }, t, 1);
@@ -528,6 +533,7 @@ namespace RailTracer
 
             Update14(t);
             BodyFear(t);
+            Update16(t);
 
             Generated(t);
             Scenarios(t);
@@ -595,7 +601,8 @@ namespace RailTracer
             c.player = new Cell(0, 1);
             var e = c.Spawn(1, 3, 0, -1, 0);
             Check(c.Leap(new Cell(3, 1)), "2: leap over the booth");
-            Check(e.awareness == Awareness.Searching && e.hunt == Hunt.Go && e.lastKnown == new Cell(3, 1) && e.terror == 0, "2: glimpse, searching to the landing");
+            Check(e.awareness == Awareness.Combat && e.lastKnown == new Cell(1, 1) && c.LastSeen == new Cell(1, 1) && e.terror == 0,
+                  "2: sees only the start of the arc: combat, remembering where it saw you (not the landing)");
             // ...and someone who sees the landing, never having seen you, is startled and loses the turn.
             c = new Carriage(new[] { "P.S....", "......." }, t, 1);
             c.legend = 50;
@@ -687,6 +694,121 @@ namespace RailTracer
             Check(c.KillOutcome(Act.QuietKill, c.Spawn(3, 0, 1, 0, 0)) == null, "9-10/5: luggage blocks the snatch");
         }
 
+        // Update 16: awareness, searching, panic, sight and leap shots.
+        static void Update16(Tuning t)
+        {
+            // An unaware guard who spots you mid-move turns red but doesn't fire; at its turn, still seeing you, it shoots.
+            var c = new Carriage(new[] { "P....", "....." }, t, 1);
+            var g = c.Spawn(3, 1, 0, -1, 0);
+            c.Move(new Cell(2, 0));
+            Check(g.awareness == Awareness.Combat && c.hp == t.maxHp && c.player == new Cell(2, 0), "spotted mid-move: red, no reaction shot, the move carries on");
+            Check(c.WillShoot(g, c.player) && !c.Charges(g, c.player), "crosshair: it will shoot if you end here");
+            c.EndPlayerTurn();
+            c.EnemyAct(g);
+            Check(c.hp == t.maxHp - t.shotDamage, "still seen at its turn: it shoots");
+
+            // Out of sight: still red until its turn, then searching where it last saw you.
+            c = new Carriage(new[] { "P.....", "..LL..", "......" }, t, 1);
+            g = c.Spawn(5, 0, -1, 0, 0);
+            c.Move(new Cell(1, 0));
+            Check(g.awareness == Awareness.Combat, "seen: red");
+            c.EndPlayerTurn(); c.StartPlayerTurn();
+            c.player = new Cell(1, 2); // gone behind the luggage
+            Check(g.awareness == Awareness.Combat && !c.WillShoot(g, c.player), "out of its sight: still red, no crosshair");
+            Check(c.Decide(g) == Intent.Investigate && c.IntentText(g) == "Investigate: Movement", "its turn: it will search where it saw you");
+
+            // Heavies don't shoot: they charge.
+            c = new Carriage(new[] { "P.....", "......" }, t, 1);
+            var h = c.Spawn(4, 0, -1, 0, 0, tough: true);
+            Check(c.Charges(h, c.player) && !c.WillShoot(h, c.player), "a heavy shows the charge, not the crosshair");
+            // ...and see only 2 tiles straight out to the sides.
+            c = new Carriage(new[] { "......", "......", "......", "......", "......", "......", "......" }, t, 1);
+            h = c.Spawn(0, 3, 1, 0, 0, tough: true);
+            Check(c.InCone(h, new Cell(0, 1)) && !c.InCone(h, new Cell(0, 0)) && c.InCone(h, new Cell(5, 3)), "heavy: 2 to the side, full range ahead");
+
+            // A blood trail: the searcher heads for the newest part it can see, and its spot moves with it.
+            c = new Carriage(new[] { "......L.", "......L.", "......L." }, t, 1);
+            c.player = new Cell(7, 2); // walled off
+            var trail = new Stain { trail = true };
+            for (int x = 0; x < 6; x++) trail.tiles.Add(new Cell(x, 0));
+            c.stains.Add(trail);
+            var s = c.Spawn(0, 2, 0, -1, 0);
+            c.EndPlayerTurn();
+            c.EnemyAct(s);
+            Check(s.hunt == Hunt.Trail && s.lastKnown.HasValue && s.lastKnown.Value.x > 0, "follows the trail to the newest part it sees");
+            Check(c.IntentText(s) == "Investigate: Blood", "investigating blood");
+
+            // Looking around: the arrow's tile and facing are where it goes and faces.
+            c = new Carriage(new[] { "P.........", "..........", ".........." }, t, 1);
+            s = c.Spawn(6, 2, 1, 0, 0);
+            s.awareness = Awareness.Searching;
+            s.hunt = Hunt.Sweep;
+            s.lastKnown = new Cell(6, 1);
+            s.searchLeft = 3;
+            var tile = c.PlannedTile(s);
+            var face = c.NextFacing(s);
+            c.EndPlayerTurn();
+            c.EnemyAct(s);
+            Check(tile.HasValue && s.pos == tile.Value && s.facing == face, "look-around: stands and faces where the arrow said");
+
+            // A Panicked guard alternates panic turns and normal ones; reaction fire only off on a freeze turn.
+            c = new Carriage(new[] { "P.......", "........" }, t, 1);
+            c.legend = Unlock(t, SkillId.Brutal);
+            var victim = c.Spawn(1, 0, 1, 0, 0);
+            g = c.Spawn(6, 1, -1, 0, 0);
+            g.hasSeen = true;
+            g.terror = 20;
+            h = c.Spawn(7, 0, -1, 0, 0, tough: true);
+            h.hasSeen = true;
+            h.terror = 20;
+            c.Perform(Act.BrutalKill, victim);
+            Check(c.StageOf(g) == Stage.Panicked && g.panicNext && c.StatusText(g).StartsWith("Panicked"), "panicked: its next turn is a panic turn");
+            Check(h.berserk && c.StatusText(h) == "Berserk" && c.Decide(h) == Intent.Charge, "a panicked heavy goes berserk");
+            g.panic = Panic.Freeze;
+            Check(!c.WillReact(g) && c.Decide(g) == Intent.Freeze, "freeze turn: no reaction fire");
+            c.EndPlayerTurn();
+            c.EnemyAct(g);
+            Check(!g.panicNext && c.Decide(g) != Intent.Freeze && c.Decide(g) != Intent.WildFire, "then a normal turn");
+            c.EnemyAct(g);
+            Check(g.panicNext, "then a panic turn again");
+            c.player = new Cell(0, 1);
+            c.EnemyAct(h);
+            Check(h.awareness == Awareness.Combat && h.berserk, "berserk never drops to searching");
+
+            // Broken: one roll, flee (if there's a way) or beg.
+            var flee = new Tuning { brokenFleeChance = 1f };
+            c = new Carriage(new[] { "........", "........", "........" }, flee, 1);
+            c.player = new Cell(7, 0);
+            c.legend = Unlock(flee, SkillId.Brutal);
+            victim = c.Spawn(6, 0, 1, 0, 0);
+            var b = c.Spawn(3, 1, 1, 0, 0);
+            b.hasSeen = true;
+            b.terror = 60;
+            c.Spawn(0, 2, 0, -1, 0); // someone left fighting, so the level goes on
+            c.Perform(Act.BrutalKill, victim);
+            Check(b.state == EnemyState.Broken && b.fleeing && c.StatusText(b) == "Fled", "broken: runs");
+            c.EndPlayerTurn();
+            c.EnemyAct(b);
+            Check(b.pos.x < 3, "runs for the nearer door");
+            var beg = new Tuning { brokenFleeChance = 0f };
+            c = new Carriage(new[] { "P.......", "........", "........" }, beg, 1);
+            c.legend = Unlock(beg, SkillId.Brutal);
+            victim = c.Spawn(1, 0, 1, 0, 0);
+            b = c.Spawn(4, 0, -1, 0, 0);
+            b.hasSeen = true;
+            b.terror = 60;
+            c.Spawn(7, 2, 1, 0, 0);
+            c.Perform(Act.BrutalKill, victim);
+            Check(b.state == EnemyState.Broken && !b.fleeing && c.StatusText(b) == "Begging", "broken: begs");
+
+            // Shots at a leaping player are 25 points harder.
+            var real = new Tuning();
+            c = new Carriage(new[] { "P....", "....." }, real, 1);
+            g = c.Spawn(4, 0, -1, 0, 0);
+            Check(Math.Abs(c.HitChance(g, new Cell(1, 0), true) - (c.HitChance(g, new Cell(1, 0)) - 0.25f)) < 1e-4f, "leap shots: 25 points lower");
+            Check(real.hitChance == 0.85f && real.meleeHitChance == 0.9f && real.halfCoverHitMult == 0.75f, "the scene's tuning is the default");
+        }
+
         // Update 15: body fear by how the body was made.
         static void BodyFear(Tuning t)
         {
@@ -749,18 +871,16 @@ namespace RailTracer
             c.legend = Unlock(t, SkillId.Brutal);
             victim = c.Spawn(1, 0, 1, 0, 0);
             var fresh = c.Spawn(6, 0, -1, 0, 0);
-            Check(c.FreeShooters(victim).Count == 0, "preview: nobody will shoot");
             c.Perform(Act.BrutalKill, victim);
-            Check(fresh.awareness == Awareness.Startled && !c.FreeShotsPending, "never seen you: startled by the brutal kill, no free shot");
+            Check(fresh.awareness == Awareness.Startled, "never seen you: startled by the brutal kill");
             // A guard startled by a leap stays startled through a brutal kill he sees.
             c = new Carriage(new[] { "P.S.....", "........" }, t, 1);
             c.legend = Unlock(t, SkillId.Brutal);
             var g = c.Spawn(7, 0, -1, 0, 0);
             victim = c.Spawn(4, 1, 1, 0, 0);
             Check(c.Leap(new Cell(3, 0)) && g.awareness == Awareness.Startled, "startled by the leap");
-            Check(c.FreeShooters(victim).Count == 0, "the startled won't shoot");
             c.Perform(Act.BrutalKill, victim);
-            Check(g.awareness == Awareness.Startled && !c.FreeShotsPending && c.hp == t.maxHp, "still startled: no free shot");
+            Check(g.awareness == Awareness.Startled && c.hp == t.maxHp, "still startled");
 
             // 8. A guard hears a noise: "Investigate: Noise", and the log names him.
             c = new Carriage(new[] { "P......", "......." }, t, 1);

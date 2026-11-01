@@ -163,8 +163,9 @@ namespace RailTracer
             public RectTransform rt;
             public GameObject label;
             public TMP_Text name, role, words, intent, glyph;
-            public Image chipBg, chipBorder, icon, eye, labelBorder;
-            public Image[] segs;
+            public Image chipBg, chipBorder, icon, eye, labelBorder, plate;
+            public Image[] segs, segEdges;
+            public GameObject notYet;
             public RectTransform chip;
         }
         readonly List<Tag> tags = new List<Tag>();
@@ -679,26 +680,35 @@ namespace RailTracer
 
         // One enemy's chip (and, when hovered, its label above it), bottom centre at `screen` (pixels).
         // awareness: 0 Unaware, 1 Searching, 2 Startled, 3 Combat, 4 Broken.
-        // threat: they'll fire on what you're aiming (a red border, the shot in red).
-        public RectTransform AddTag(Vector2 screen, float scale, int awareness, int terrorNow, bool seen, bool hovered, string name, string role, string words, string intent, bool threat = false)
+        // threat: they'll fire on what you're aiming (a red border, the shot in red). icon: what they'll do if you end
+        // your turn there ("crosshair", "charge", "wildfire" or null). plate: a tough's armour, 1 whole, 2 cracked
+        // (killable). notYet: "Not yet" over a tough you're targeting before it's Shaken.
+        public RectTransform AddTag(Vector2 screen, float scale, int awareness, int terrorNow, bool seen, bool hovered, string name, string role, string words, string intent,
+            bool threat = false, string icon = null, int plate = 0, bool notYet = false)
         {
             if (tagCount == tags.Count) tags.Add(MakeTag());
             var g = tags[tagCount++];
             g.rt.gameObject.SetActive(true);
             g.rt.position = screen;
             g.rt.localScale = Vector3.one * scale;
-            // Brighter as they get more alert; a white chip in combat; dimmed when broken.
-            bool combat = awareness == 3, broken = awareness == 4;
-            g.chipBg.color = combat ? Bone : broken ? Alpha(Black, 0.7f) : Black;
-            g.chipBorder.color = combat ? Bone : awareness == 2 ? Bone : awareness == 1 ? NotchOff : LockedBox;
-            var ink = combat ? Black : awareness == 0 || broken ? Grey : Bone;
-            bool glyph = awareness == 1 || awareness == 2;
+            // What they know, by colour: black (white outline) unaware, white searching or startled, red in combat;
+            // dimmed when broken. The icon is what they'll do.
+            bool combat = awareness == 3, broken = awareness == 4, white = awareness == 1 || awareness == 2;
+            g.chipBg.color = combat ? Blood : white ? Bone : broken ? Alpha(Black, 0.7f) : Black;
+            g.chipBorder.color = combat ? Blood : broken ? LockedBox : Bone;
+            var ink = white ? Black : broken ? Grey : Bone;
+            bool glyph = white && icon == null;
             g.glyph.gameObject.SetActive(glyph);
             g.glyph.text = awareness == 1 ? "?" : "!";
             g.glyph.color = ink;
-            g.icon.enabled = !glyph;
-            if (!glyph) g.icon.sprite = IconSprite(combat ? "crosshair" : broken ? "flag" : "ring");
+            g.icon.enabled = !glyph && (broken || icon != null || awareness == 0);
+            if (g.icon.enabled) g.icon.sprite = IconSprite(broken ? "flag" : icon ?? "ring");
             g.icon.color = ink;
+            for (int i = 0; i < 3; i++) g.segEdges[i].color = white ? Black : Bone; // the red fill always reads
+            g.plate.gameObject.SetActive(plate > 0);
+            if (plate > 0) g.plate.sprite = IconSprite(plate == 2 ? "plate_cracked" : "plate");
+            g.plate.color = ink;
+            g.notYet.SetActive(notYet);
             // Three segments, one per stage (Shaken, Panicked, Broken), each filling smoothly within its stage.
             for (int i = 0; i < 3; i++)
                 g.segs[i].fillAmount = broken ? 1f : Mathf.Clamp01((terrorNow - terror[i]) / (float)(terror[i + 1] - terror[i]));
@@ -747,6 +757,15 @@ namespace RailTracer
             g.intent.alignment = TextAlignmentOptions.Center;
             g.label = label.gameObject;
 
+            // "Not yet": over a tough you're targeting before it's Shaken.
+            var notYet = Row("Not Yet", g.rt, 0f);
+            notYet.GetComponent<HorizontalLayoutGroup>().padding = new RectOffset(9, 9, 2, 3);
+            Img(notYet, Blood, 0f, skew: true);
+            Img(notYet, Black, 1.5f, skew: true);
+            IgnoreLayout(notYet);
+            Label(notYet, "Not yet", 12, Bone, 2f);
+            g.notYet = notYet.gameObject;
+
             // Chip: awareness icon, three terror segments, the has-seen eye.
             var chip = g.chip = Row("Chip", g.rt, 6f);
             chip.GetComponent<HorizontalLayoutGroup>().padding = new RectOffset(7, 7, 3, 3);
@@ -760,15 +779,18 @@ namespace RailTracer
             g.glyph = Text(slot, title, 18, TextAlignmentOptions.Center, Vector2.zero, new Vector2(18, 22));
             var segs = Row("Terror", chip, 3f);
             g.segs = new Image[3];
+            g.segEdges = new Image[3];
             for (int i = 0; i < 3; i++)
             {
                 var seg = Rect("Segment", segs, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(14, 9));
                 Size(seg, 14, 9);
-                Img(seg, LockedBox, 0f, skew: true);
-                g.segs[i] = Img(seg, Blood, 0f, skew: true);
+                g.segEdges[i] = Img(seg, Bone, 0f, skew: true);
+                Img(seg, LockedBox, 1.5f, skew: true);
+                g.segs[i] = Img(seg, Blood, 1.5f, skew: true);
                 Filled(g.segs[i], Image.FillMethod.Horizontal, (int)Image.OriginHorizontal.Left);
             }
             g.eye = Icon(chip, "eye", 18, 12);
+            g.plate = Icon(chip, "plate", 14, 14);
             return g;
         }
 

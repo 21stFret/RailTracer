@@ -38,7 +38,7 @@ namespace RailTracer
         {
             ["searching"] = ("Searching", "They've noticed something and they're looking for you. Searchers follow blood, spot you right beside them even crouched, and they will shoot."),
             ["startled"] = ("Startled", "They freeze for a moment. Only someone who's never seen you can be startled, so make it count."),
-            ["combat"] = ("In combat", "A white chip means they're fighting you. Gunfire alerts the whole carriage. Get out of sight."),
+            ["combat"] = ("In combat", "A red chip means they can see you. A crosshair means they'll shoot if you end your turn there. Get out of sight."),
             ["seen"] = ("Seen", "The eye on their chip means they've seen you, and they won't forget. They can't be startled again."),
             ["reaction"] = ("Reaction fire", "Red on your path means a gun is covering that tile. Step onto it, or leap across it, and they fire."),
             ["bodies"] = ("Bodies", "Grab a body for free and drag it at half speed. Blood leaves a trail they'll follow. Drag a body away in front of a witness, and watch them panic."),
