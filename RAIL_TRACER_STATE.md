@@ -84,7 +84,7 @@ Hover label: name, role, one state line ("Searching · Shaken", "Panicked · Fre
 - Shaken (30+): hit chance 35%; 40% chance each turn to hesitate instead of shooting.
 - Panicked (60+), guards: every other turn is a panic turn, starting with the next turn after they panic. On a panic turn they freeze (50%, tunable; lose the turn, no reaction fire that player turn) or fire wildly at a random target in front of them (30% to hit, ally or you). The roll is made at the start of your turn and shown on the chip. Other turns: normal, with the Shaken penalties. No fleeing or charging.
 - Panicked (60+), heavies: berserk for good. They charge your real tile every turn (3 tiles), melee when next to you, and never drop to searching.
-- Broken (100): one roll: flee to the next carriage (50%, tunable; needs a path to a door, else they beg) or kneel and beg. Both count as broken; killing a broken enemy turns its ticket red.
+- Broken (100): one roll: flee to the next carriage (50%, tunable; needs a path to a door, else they beg) or kneel and beg. Both count as broken; killing a broken enemy turns its ticket red. If the level is won while someone is still fleeing, they run out before the end card.
 - Terror values: small 10, medium 25, large 45, unseen (a body dragged or someone snatched away by something unseen) 35. A leap landing seen: legend × 40 / 100.
 
 ## Sight
@@ -108,13 +108,17 @@ Hover label: name, role, one state line ("Searching · Shaken", "Panicked · Fre
 
 - Hit 85% (Shaken 35%), half cover ×0.75, melee 90%, wild fire 30%.
 
+## Animation test
+
+`Assets/RailTracer/AnimationTest.unity`: the main scene with the Game component's Test Mode on. You stand at (4,1) with three dummies facing away (at the window above you, beside a seat to your left, in the open aisle below) and a body to throw; legend 100, nobody acts (Space just starts a new turn), no tutorial or end card; R resets.
+
 ## Camera, HUD and presentation
 
-- Kill cam on brutal kills (as long as the finisher), rail grabs and throws (1.2 s); any input skips it; Pause menu "Kill cam: On/Off" (default On). The HUD hides during it.
+- Kill cam on brutal kills (as long as the finisher), rail grabs and throws (1.2 s): the camera flies in (0.45 s), holds a beat (0.2 s), plays the shot from a fixed angle, then flies back to your exact view (0.35 s). The angle is low and side-on, trying other angles until no wall, floor, luggage or seat back is in the way (or a takedown's own Cam Offset). Slow motion: Kill Cam Slow Mo (brutal and rail, default 1 = none), Throw Cam Slow Mo (0.5). Any input skips it; Pause menu "Kill cam: On/Off" (default On). The HUD hides during it.
 - The carriage lamps redden with legend, stepping at 25, 50, 75 and 100 and blending over about a second. Overlays never change.
 - Finishers: Brutal Finishers knife clips (Humanoid on the mannequin avatar) in `Resources/Takedowns`, Alex's picks:
   - Stealth, crouched: Heart Stab. Stealth, standing: Shove Neck Slice (quick).
-  - Brutal, at random: Duck and Back Stab, or the Slash Combo (mid-section slash, then face slash; the victim topples after).
+  - Brutal, at random: Duck and Back Stab, or the Slash Combo (mid-section slash, then face slash cross-faded in on the "Finisher2" states: Combo From / Combo Start / Combo Blend on the entry; the victim topples after).
   - Brutal with half cover (a seat) straight out from the victim's tile: always Shove to Table, the pair turned to face that seat.
   - Each entry can be tagged Guard / Heavy / Any (all Any for now). The victim offset per entry still needs tuning in Play mode.
 - Ghosts: the move-preview ghost and the last-seen ghost are see-through outlines (last-seen fainter). The last-seen ghost marks only where an enemy actually last saw you.

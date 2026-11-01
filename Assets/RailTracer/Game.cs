@@ -13,6 +13,8 @@ namespace RailTracer
         public Tuning tuning = new Tuning();
         public SkillTable skillTable; // empty = Resources/SkillTable
         public int seed; // 0 = random each run
+        [Tooltip("The animation test: you beside three dummies and a body, every skill unlocked, nobody acts; R resets.")]
+        public bool testMode;
         public float enemyStepDelay = 0.4f;
         public bool useTrainKit = true;      // off = the white-box carriage
         public bool cutawayNearWall = true;  // camera-side wall casts shadows but isn't drawn
@@ -66,6 +68,19 @@ namespace RailTracer
             new[] { 10, 2, -1, 0, 1, 0 }, new[] { 12, 0, 0, 1, 0, 0 }, new[] { 15, 4, 0, -1, 1, 0 },
             new[] { 18, 2, -1, 0, 0, 1 }, new[] { 21, 1, 0, 1, 1, 0 }, new[] { 24, 3, 0, -1, 0, 1 },
         };
+
+        // The animation test carriage: you at (4,1), every dummy facing away so any kill works on it. Above you at the
+        // window (rail grab; a seat beside it, so its brutal kill is the table shove), left of you with a seat beyond it
+        // (the table shove), below you in the open aisle (the other brutal kills), and a body up-left to throw.
+        static readonly string[] TestMap =
+        {
+            "..S..S..S..S.WS..SL.S..SL.",
+            "..S.PS..S..S.WS..S..S..S..",
+            "..........................",
+            "..S..S..S..S.WS..S..S..S..",
+            "..S..S.LS..S.WS..S.LS..S..",
+        };
+        static readonly int[][] TestSpawns = { new[] { 4, 0, 0, -1, 0, 0 }, new[] { 3, 1, -1, 0, 0, 0 }, new[] { 4, 2, 0, 1, 0, 0 }, new[] { 3, 0, 1, 0, 0, 0 } };
 
         // Patrol routes by spawn index (waypoints walked in a loop); everyone else guards their spot, turning now and then.
         static readonly Dictionary<int, Cell[]> FirstPatrols = new Dictionary<int, Cell[]>
@@ -172,6 +187,8 @@ namespace RailTracer
         const string KillCamKey = "RailTracer.KillCam";
         static bool KillCamOn => PlayerPrefs.GetInt(KillCamKey, 1) == 1;
         public float killCamDistance = 1.9f, killCamHeight = 0.55f, sceneCamTime = 1.2f;
+        public float killCamFlyIn = 0.45f, killCamPause = 0.2f, killCamFlyOut = 0.35f; // seconds (real time)
+        [Range(0.1f, 1f)] public float killCamSlowMo = 1f, throwCamSlowMo = 0.5f;       // game speed during the shot
         bool camming, camSkip;
         Vector3 savedFocus; float savedDistance; Quaternion savedCamRot;
 
@@ -272,6 +289,7 @@ namespace RailTracer
             bodyOffset.Clear();
             takedownVictim = null;
             selected = null;
+            if (testMode) { Map = TestMap; Spawns = TestSpawns; Patrols = new Dictionary<int, Cell[]>(); }
             c = new Carriage(Map, tuning, seed != 0 ? seed : Random.Range(1, int.MaxValue));
             for (int i = 0; i < Spawns.Length; i++)
             {
@@ -279,7 +297,16 @@ namespace RailTracer
                 c.Spawn(s[0], s[1], s[2], s[3], s[4], s[5] == 1, Patrols.TryGetValue(i, out var route) ? route.ToList() : null);
             }
             c.NameEnemies();
-            hud.ShowCard($"Carriage {carriageNo}", "A carriage full of gunmen.", "Break their nerve.", null, 3f, true);
+            if (testMode)
+            {
+                // The last spawn is the body to throw; every skill unlocked.
+                var dead = c.enemies[c.enemies.Count - 1];
+                dead.state = EnemyState.Dead;
+                c.bodies.Add(new Body { who = dead, pos = dead.pos, kind = BodyKind.Brutal });
+                c.legend = tuning.maxLegend;
+                hud.ShowCard("Animation test", "Kill the dummies.", "R resets.", "1-8 skills  /  C crouch  /  G grab the body, 7 throws  /  Space: next turn", 4f, true);
+            }
+            else hud.ShowCard($"Carriage {carriageNo}", "A carriage full of gunmen.", "Break their nerve.", null, 3f, true);
             endShown = false;
             walkQueued = false;
             taken.Clear();
@@ -951,7 +978,7 @@ namespace RailTracer
                 kb = null;
                 mouse = null;
             }
-            else if (TutorialStep(kb, mouse) || PauseStep(kb, mouse) || LogStep(kb, mouse))
+            else if ((!testMode && TutorialStep(kb, mouse)) || PauseStep(kb, mouse) || LogStep(kb, mouse))
             {
                 kb = null;
                 mouse = null;
@@ -1011,7 +1038,12 @@ namespace RailTracer
                 {
                     var thrown = c.held;
                     used = thrown != null && c.Throw(hover.Value);
-                    if (used && KillCamOn && anims.TryGetValue(thrown.who, out var ta)) StartCoroutine(SceneKillCam(() => ta.transform.localPosition, World(hover.Value)));
+                    if (used && KillCamOn && anims.TryGetValue(thrown.who, out var ta))
+                    {
+                        var flat = cam.transform.forward;
+                        flat.y = 0f;
+                        StartCoroutine(SceneKillCam(() => ta.transform.localPosition, World(hover.Value), flat.normalized, throwCamSlowMo));
+                    }
                 }
                 else if (target != null)
                 {
@@ -1020,7 +1052,13 @@ namespace RailTracer
                         used = true;
                         pendingAct = kill;
                         paired = kill == Act.BrutalKill || kill == Act.QuietKill;
-                        if (kill == Act.RailGrab && KillCamOn) { var w = World(c.bodies[c.bodies.Count - 1].pos); StartCoroutine(SceneKillCam(() => w, w)); }
+                        if (kill == Act.RailGrab && KillCamOn)
+                        {
+                            var hungAt = c.bodies[c.bodies.Count - 1].pos;
+                            var w = World(hungAt);
+                            var outward = hungAt.y == 0 ? Vector3.forward : Vector3.back;
+                            StartCoroutine(SceneKillCam(() => w + outward * 0.3f, w, outward, killCamSlowMo));
+                        }
                     }
                 }
                 else if (leaping) used = c.Leap(hover.Value);
@@ -1042,7 +1080,9 @@ namespace RailTracer
             var mode = Mode();
             hud.Refresh(c, selected ?? (leaping ? SkillId.Leap : hopping ? SkillId.Hop : (SkillId?)null), hudSlot, mode?.name, mode?.hint,
                 c.log.Skip(Mathf.Max(0, c.log.Count - 8)).ToList());
-            if (c.Over && !busy && !endShown && !tut.Active)
+            // The level is won the moment nobody is left fighting; anyone broken and fleeing still runs out first.
+            if (c.Won && !busy && !endShown && c.enemies.Exists(e => e.state == EnemyState.Broken && e.fleeing)) StartCoroutine(FleersOut());
+            if (c.Over && !busy && !endShown && !tut.Active && !testMode)
             {
                 endShown = true;
                 if (c.Won) hud.ShowCard($"Carriage {carriageNo} cleared", "The assassin washes up", "and steps out as the conductor.", "R to ride again  /  N for a new train", 0f, true, TicketStates());
@@ -1145,7 +1185,7 @@ namespace RailTracer
         // move has resolved, and in the enemy turn after each enemy acts.
         void Poll()
         {
-            if (tut.Skipped || c == null) return;
+            if (tut.Skipped || c == null || testMode) return;
             foreach (var e in c.enemies)
             {
                 if (!e.InPlay) continue;
@@ -1394,43 +1434,66 @@ namespace RailTracer
                 va.transform.localRotation = victimRot;
                 va.transform.localScale = Vector3.one * characterScale;
                 playerAnim.speed = va.speed = entry != null ? entry.speed : 1f;
-                bool cam = brutal && KillCamOn;
-                if (cam) BeginKillCam();
-                // One clip, or a combo of two back to back (the blood flies in the last).
-                int parts = entry != null && entry.attacker2 && entry.victim2 ? 2 : 1;
-                bool bled = false, skipped = false;
-                for (int part = 0; part < parts && !skipped; part++)
+                // A combo: the second clip on the "Finisher2" states, cross-faded in (comboFrom / comboStart / comboBlend).
+                int combo = Animator.StringToHash("Finisher2");
+                bool chained = entry != null && entry.attacker2 && entry.victim2 && playerAnim.HasState(0, combo) && va.HasState(0, combo);
+                if (entry != null)
                 {
-                    if (entry != null)
+                    Override(playerAnim, "Finisher Attacker", entry.attacker);
+                    Override(va, "Finisher Victim", entry.victim);
+                }
+                if (chained)
+                {
+                    Override(playerAnim, "Finisher Attacker 2", entry.attacker2);
+                    Override(va, "Finisher Victim 2", entry.victim2);
+                }
+                bool cam = brutal && KillCamOn;
+                if (cam)
+                {
+                    // Fly in and hold a beat before the strike; the shot then stays put (no chasing the pair).
+                    BeginKillCam();
+                    playerShown = to;
+                    yield return FlyIn(KillCamPose(to, at, entry != null ? entry.camOffset : Vector3.zero));
+                    Time.timeScale = killCamSlowMo;
+                }
+                playerAnim.Play(hash, 0, 0f);
+                va.Play(hash, 0, 0f);
+                yield return null; // let the state start so its length is known
+                float length = playerAnim.GetCurrentAnimatorStateInfo(0).length;
+                float length2 = 0f;
+                bool second = false, bled = false;
+                for (float time = 0f; ; time += Time.deltaTime)
+                {
+                    if (cam && (camSkip || SkipPressed()))
                     {
-                        Override(playerAnim, "Finisher Attacker", part == 0 ? entry.attacker : entry.attacker2);
-                        Override(va, "Finisher Victim", part == 0 ? entry.victim : entry.victim2);
+                        // Straight to the end state (the combo's last clip).
+                        int h = chained ? combo : hash;
+                        playerAnim.Play(h, 0, 1f);
+                        va.Play(h, 0, 1f);
+                        camSkip = true;
+                        break;
                     }
-                    playerAnim.Play(hash, 0, 0f);
-                    va.Play(hash, 0, 0f);
-                    yield return null; // let the state start so its length is known
-                    float length = playerAnim.GetCurrentAnimatorStateInfo(0).length;
-                    bool last = part == parts - 1;
-                    for (float time = 0f; time < length; time += Time.deltaTime)
+                    if (!second)
                     {
-                        if (cam && SkipPressed())
+                        if (!cam) playerShown = Vector3.Lerp(from, to, move.Evaluate(Mathf.Min(1f, time / length)));
+                        if (chained && time / length >= entry.comboFrom)
                         {
-                            // Straight to the end state (the combo's last clip).
-                            if (!last) { Override(playerAnim, "Finisher Attacker", entry.attacker2); Override(va, "Finisher Victim", entry.victim2); }
-                            playerAnim.Play(hash, 0, 1f);
-                            va.Play(hash, 0, 1f);
-                            skipped = true;
-                            break;
+                            playerAnim.CrossFadeInFixedTime(combo, entry.comboBlend, 0, entry.comboStart * entry.attacker2.length);
+                            va.CrossFadeInFixedTime(combo, entry.comboBlend, 0, entry.comboStart * entry.victim2.length);
+                            length2 = entry.attacker2.length * (1f - entry.comboStart) / Mathf.Max(0.01f, playerAnim.speed);
+                            second = true;
+                            time = 0f;
                         }
-                        if (part == 0) playerShown = Vector3.Lerp(from, to, move.Evaluate(time / length));
-                        if (last && !bled && time / length >= bloodAt) { KillBlood(victim, act, playerFacing); bled = true; }
-                        if (cam) AimKillCam(playerShown, va.transform.localPosition, entry != null ? entry.camOffset : Vector3.zero);
-                        yield return null;
+                        else if (time >= length) break;
                     }
+                    else if (time >= length2) break;
+                    float t = second ? time / length2 : time / length;
+                    if ((!chained || second) && !bled && t >= bloodAt) { KillBlood(victim, act, playerFacing); bled = true; }
+                    yield return null;
                 }
                 if (!bled) KillBlood(victim, act, playerFacing);
                 playerShown = to;
-                EndKillCam();
+                if (cam) yield return FlyOut();
                 if (entry != null && entry.victimFallsAfter) StartCoroutine(Topple(va.transform, playerFacing)); // still on their feet
                 // Hold on the body, easing onto where the rules have you, still facing it.
                 for (float time = 0f; time < takedownHold; time += Time.deltaTime)
@@ -1460,7 +1523,7 @@ namespace RailTracer
             return (kb != null && kb.anyKey.wasPressedThisFrame) || (m != null && (m.leftButton.wasPressedThisFrame || m.rightButton.wasPressedThisFrame));
         }
 
-        // Cuts in: remembers your view exactly and hides the HUD until EndKillCam.
+        // Starts a kill cam: remembers your view exactly and hides the HUD until EndKillCam.
         void BeginKillCam()
         {
             if (camming) return;
@@ -1472,29 +1535,95 @@ namespace RailTracer
             hud.SetVisible(false);
         }
 
-        // Low and close on the pair, side-on to both (or the takedown's own offset, in the pair's space).
-        void AimKillCam(Vector3 a, Vector3 b, Vector3 offset)
+        // Where to film a pair (`a` and `b`, root space) from: low and close, side-on (or the takedown's own offset,
+        // in the pair's space), trying other angles until nothing solid is between the camera and the pair.
+        (Vector3 pos, Vector3 look) KillCamPose(Vector3 a, Vector3 b, Vector3 offset)
         {
             var mid = (a + b) / 2f + Vector3.up * FigureHeight * 0.5f;
             var along = b - a;
             along.y = 0f;
             var pair = Quaternion.LookRotation(along.sqrMagnitude > 1e-6f ? along : Vector3.forward);
-            if (offset == Vector3.zero)
-            {
-                // the side nearer the camera you had, so it doesn't swing through the near wall
-                var side = pair * Vector3.right;
-                if (Vector3.Dot(side, savedCamRot * Vector3.back) < 0f) side = -side;
-                offset = Quaternion.Inverse(pair) * (side * killCamDistance + Vector3.up * killCamHeight);
-            }
-            cam.transform.position = root.TransformPoint(mid + pair * offset);
-            cam.transform.LookAt(root.TransformPoint(mid));
+            var tries = new List<Vector3>();
+            if (offset != Vector3.zero) tries.Add(pair * offset);
+            // the side nearer the view you had first, then three-quarter views, the other side, and finally from above
+            var side = pair * Vector3.right;
+            if (Vector3.Dot(side, savedCamRot * Vector3.back) < 0f) side = -side;
+            foreach (var yaw in new[] { 0f, 35f, -35f, 70f, -70f, 180f, 145f, -145f })
+                tries.Add(Quaternion.Euler(0f, yaw, 0f) * side * killCamDistance + Vector3.up * killCamHeight);
+            tries.Add(savedCamRot * Vector3.back * killCamDistance * 1.3f + Vector3.up * killCamHeight * 2f);
+            foreach (var t in tries)
+                if (!CamBlocked(mid, mid + t)) return (mid + t, mid);
+            return (mid + tries[tries.Count - 1], mid);
         }
 
-        // Cuts back to exactly the view you had.
+        // Would the shot from `pos` to `mid` look through a wall, the floor, luggage or a seat back? The camera-side
+        // wall only casts shadows (cutaway), so looking through it is fine.
+        bool CamBlocked(Vector3 mid, Vector3 pos)
+        {
+            for (float k = 0.15f; k <= 1.001f; k += 0.08f)
+            {
+                var p = Vector3.Lerp(mid, pos, k);
+                if (p.y < 0.2f || p.z > 0.42f || p.x < -0.42f || p.x > c.W - 0.58f) return true; // floor, far wall, end walls
+                if (!cutawayNearWall && p.z < -(c.H - 1) - 0.42f) return true;
+                var cell = new Cell(Mathf.RoundToInt(p.x), Mathf.RoundToInt(-p.z));
+                if (c.IsSolid(cell) && p.y < 2.2f) return true;
+                if (c.IsSeat(cell) && p.y < 1.05f) return true;
+            }
+            return false;
+        }
+
+        void SetCam((Vector3 pos, Vector3 look) pose)
+        {
+            cam.transform.position = root.TransformPoint(pose.pos);
+            cam.transform.LookAt(root.TransformPoint(pose.look));
+        }
+
+        // Flies the camera in to `pose` (smoothly, on real time, so slow-mo doesn't drag it), then holds a beat.
+        // Any input skips both (camSkip).
+        IEnumerator FlyIn((Vector3 pos, Vector3 look) pose)
+        {
+            Vector3 p0 = cam.transform.position;
+            var r0 = cam.transform.rotation;
+            var p1 = root.TransformPoint(pose.pos);
+            var r1 = Quaternion.LookRotation(root.TransformPoint(pose.look) - p1);
+            for (float time = 0f; time < killCamFlyIn; time += Time.unscaledDeltaTime)
+            {
+                if (time > 0f && SkipPressed()) { camSkip = true; break; }
+                float k = Mathf.SmoothStep(0f, 1f, time / killCamFlyIn);
+                cam.transform.SetPositionAndRotation(Vector3.Lerp(p0, p1, k), Quaternion.Slerp(r0, r1, k));
+                yield return null;
+            }
+            SetCam(pose);
+            for (float time = 0f; time < killCamPause && !camSkip; time += Time.unscaledDeltaTime)
+            {
+                if (time > 0f && SkipPressed()) camSkip = true;
+                yield return null;
+            }
+        }
+
+        // Flies back to exactly the view you had, then ends the cam.
+        IEnumerator FlyOut()
+        {
+            if (!camming) yield break;
+            Time.timeScale = 1f;
+            Vector3 p0 = cam.transform.position;
+            var r0 = cam.transform.rotation;
+            var p1 = root.TransformPoint(savedFocus) - savedCamRot * Vector3.forward * savedDistance;
+            for (float time = 0f; time < killCamFlyOut && !camSkip; time += Time.unscaledDeltaTime)
+            {
+                float k = Mathf.SmoothStep(0f, 1f, time / killCamFlyOut);
+                cam.transform.SetPositionAndRotation(Vector3.Lerp(p0, p1, k), Quaternion.Slerp(r0, savedCamRot, k));
+                yield return null;
+            }
+            EndKillCam();
+        }
+
+        // Back to exactly the view you had, at once (also on a restart mid-cam).
         void EndKillCam()
         {
             if (!camming) return;
-            camming = false;
+            camming = camSkip = false;
+            Time.timeScale = 1f;
             focus = savedFocus;
             camDistance = savedDistance;
             cam.transform.rotation = savedCamRot;
@@ -1502,20 +1631,23 @@ namespace RailTracer
             hud.SetVisible(true);
         }
 
-        // Rail grab and throw (placeholder animations for now): a short cut-in on the spot, following `target`.
-        IEnumerator SceneKillCam(System.Func<Vector3> target, Vector3 spot)
+        // Rail grab and throw (placeholder animations for now): fly in on the spot (the pair lined up `along`), watch
+        // `target` for sceneCamTime at `slowMo`, fly back.
+        IEnumerator SceneKillCam(System.Func<Vector3> target, Vector3 spot, Vector3 along, float slowMo)
         {
             busy = true;
             BeginKillCam();
-            var flat = savedCamRot * Vector3.forward;
-            flat.y = 0f;
-            for (float time = 0f; time < sceneCamTime && !(time > 0f && SkipPressed()); time += Time.deltaTime)
+            var pose = KillCamPose(spot - along * 0.5f, spot + along * 0.5f, Vector3.zero);
+            yield return FlyIn(pose);
+            Time.timeScale = slowMo;
+            for (float time = 0f; time < sceneCamTime && !camSkip; time += Time.unscaledDeltaTime)
             {
-                var at = target();
-                AimKillCam(at - flat * 0.5f, at + flat * 0.5f, Vector3.zero);
+                if (time > 0f && SkipPressed()) camSkip = true;
+                SetCam((pose.pos, target() + Vector3.up * FigureHeight * 0.4f));
                 yield return null;
             }
-            EndKillCam();
+            Time.timeScale = 1f;
+            yield return FlyOut();
             busy = false;
         }
 
@@ -1638,6 +1770,7 @@ namespace RailTracer
         IEnumerator EnemyPhase()
         {
             busy = true;
+            if (testMode) { c.EndPlayerTurn(); c.StartPlayerTurn(); busy = false; yield break; } // the dummies never act
             Poll(); // cards from the player's move first
             while (tut.Active) yield return null;
             c.EndPlayerTurn();
@@ -1669,6 +1802,32 @@ namespace RailTracer
             }
             c.StartPlayerTurn();
             if (followCamera) { yield return new WaitForSeconds(enemyStepDelay); camTarget = playerShown; }
+            busy = false;
+        }
+
+        // Broken enemies still fleeing when the level is won run out of the carriage before the end card.
+        IEnumerator FleersOut()
+        {
+            busy = true;
+            for (int turn = 0; turn < 12; turn++)
+            {
+                var fleers = c.enemies.Where(e => e.state == EnemyState.Broken && e.fleeing).ToList();
+                if (fleers.Count == 0) break;
+                foreach (var e in fleers)
+                {
+                    if (followCamera) camTarget = shown[e];
+                    c.EnemyAct(e);
+                    if (!routes.TryGetValue(e, out var route)) routes[e] = route = new Queue<Vector3>();
+                    if (e.walked != null) { Follow(route, e.walked); e.walked = null; }
+                    while (route.Count > 0 || (shown[e] - World(e.pos)).sqrMagnitude > 1e-3f)
+                    {
+                        if (followCamera) camTarget = shown[e];
+                        yield return null;
+                    }
+                    if (e.state == EnemyState.Fled) { yield return new WaitForSeconds(0.3f); gone.Add(e); }
+                }
+            }
+            if (followCamera) camTarget = playerShown;
             busy = false;
         }
 

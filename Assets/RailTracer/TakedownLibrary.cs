@@ -18,6 +18,9 @@ namespace RailTracer
         public TakedownStance stance;
         public AnimationClip attacker, victim;
         public AnimationClip attacker2, victim2;                 // a follow-up played straight after (a combo); empty = none
+        [Range(0f, 1f)] public float comboFrom = 0.85f;          // combo: the point in the first clip where the second blends in
+        [Range(0f, 1f)] public float comboStart = 0.1f;          // combo: where in the second clip it starts (skips its wind-up)
+        public float comboBlend = 0.25f;                         // combo: cross-fade length (seconds)
         public bool victimFallsAfter;                            // the last victim clip ends standing: topple them after it
         public bool needsCover;                                  // only with half cover beside the victim, and then always chosen
         public float coverShift = 0.45f;                         // the pair moves this far towards that cover (metres at full size)

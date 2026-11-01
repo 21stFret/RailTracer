@@ -61,7 +61,9 @@ namespace RailTracer
             // A "Finisher" state on both controllers, on a placeholder clip the game overrides with each takedown's
             // own (Resources/Takedowns): you return to your idle after it, the victim stays down.
             if (AddTakedown(Dir + "Player.controller", Placeholder("Finisher Attacker"), "Finisher", "Idle", "CrouchIdle")
-                | AddTakedown(Dir + "Enemy.controller", Placeholder("Finisher Victim"), "Finisher"))
+                | AddTakedown(Dir + "Enemy.controller", Placeholder("Finisher Victim"), "Finisher")
+                | AddTakedown(Dir + "Player.controller", Placeholder("Finisher Attacker 2"), "Finisher2", "Idle", "CrouchIdle") // a combo's second clip
+                | AddTakedown(Dir + "Enemy.controller", Placeholder("Finisher Victim 2"), "Finisher2"))
             {
                 AssetDatabase.SaveAssets();
                 Debug.Log("Rail Tracer: \"Finisher\" states added.");

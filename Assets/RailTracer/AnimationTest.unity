@@ -1,0 +1,343 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!29 &1
+OcclusionCullingSettings:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_OcclusionBakeSettings:
+    smallestOccluder: 5
+    smallestHole: 0.25
+    backfaceThreshold: 100
+  m_SceneGUID: 00000000000000000000000000000000
+  m_OcclusionCullingData: {fileID: 0}
+--- !u!104 &2
+RenderSettings:
+  m_ObjectHideFlags: 0
+  serializedVersion: 10
+  m_Fog: 0
+  m_FogColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
+  m_FogMode: 3
+  m_FogDensity: 0.01
+  m_LinearFogStart: 0
+  m_LinearFogEnd: 300
+  m_AmbientSkyColor: {r: 0.212, g: 0.227, b: 0.259, a: 1}
+  m_AmbientEquatorColor: {r: 0.114, g: 0.125, b: 0.133, a: 1}
+  m_AmbientGroundColor: {r: 0.047, g: 0.043, b: 0.035, a: 1}
+  m_AmbientIntensity: 0.5
+  m_AmbientMode: 0
+  m_SubtractiveShadowColor: {r: 0.42, g: 0.478, b: 0.627, a: 1}
+  m_SkyboxMaterial: {fileID: 10304, guid: 0000000000000000f000000000000000, type: 0}
+  m_HaloStrength: 0.5
+  m_FlareStrength: 1
+  m_FlareFadeSpeed: 3
+  m_HaloTexture: {fileID: 0}
+  m_SpotCookie: {fileID: 10001, guid: 0000000000000000e000000000000000, type: 0}
+  m_DefaultReflectionMode: 0
+  m_DefaultReflectionResolution: 128
+  m_ReflectionBounces: 1
+  m_ReflectionIntensity: 0.3
+  m_CustomReflection: {fileID: 0}
+  m_Sun: {fileID: 0}
+  m_UseRadianceAmbientProbe: 0
+--- !u!157 &3
+LightmapSettings:
+  m_ObjectHideFlags: 0
+  serializedVersion: 13
+  m_BakeOnSceneLoad: 0
+  m_GISettings:
+    serializedVersion: 2
+    m_BounceScale: 1
+    m_IndirectOutputScale: 1
+    m_AlbedoBoost: 1
+    m_EnvironmentLightingMode: 0
+    m_EnableBakedLightmaps: 1
+    m_EnableRealtimeLightmaps: 0
+  m_LightmapEditorSettings:
+    serializedVersion: 12
+    m_Resolution: 2
+    m_BakeResolution: 40
+    m_AtlasSize: 1024
+    m_AO: 0
+    m_AOMaxDistance: 1
+    m_CompAOExponent: 1
+    m_CompAOExponentDirect: 0
+    m_ExtractAmbientOcclusion: 0
+    m_Padding: 2
+    m_LightmapParameters: {fileID: 0}
+    m_LightmapsBakeMode: 1
+    m_TextureCompression: 1
+    m_ReflectionCompression: 2
+    m_MixedBakeMode: 2
+    m_BakeBackend: 2
+    m_PVRSampling: 1
+    m_PVRDirectSampleCount: 32
+    m_PVRSampleCount: 512
+    m_PVRBounces: 2
+    m_PVREnvironmentSampleCount: 256
+    m_PVREnvironmentReferencePointCount: 2048
+    m_PVRFilteringMode: 1
+    m_PVRDenoiserTypeDirect: 1
+    m_PVRDenoiserTypeIndirect: 1
+    m_PVRDenoiserTypeAO: 1
+    m_PVRFilterTypeDirect: 0
+    m_PVRFilterTypeIndirect: 0
+    m_PVRFilterTypeAO: 0
+    m_PVREnvironmentMIS: 1
+    m_PVRCulling: 1
+    m_PVRFilteringGaussRadiusDirect: 1
+    m_PVRFilteringGaussRadiusIndirect: 1
+    m_PVRFilteringGaussRadiusAO: 1
+    m_PVRFilteringAtrousPositionSigmaDirect: 0.5
+    m_PVRFilteringAtrousPositionSigmaIndirect: 2
+    m_PVRFilteringAtrousPositionSigmaAO: 1
+    m_ExportTrainingData: 0
+    m_TrainingDataDestination: TrainingData
+    m_LightProbeSampleCountMultiplier: 4
+  m_LightingDataAsset: {fileID: 20201, guid: 0000000000000000f000000000000000, type: 0}
+  m_LightingSettings: {fileID: 0}
+--- !u!196 &4
+NavMeshSettings:
+  serializedVersion: 2
+  m_ObjectHideFlags: 0
+  m_BuildSettings:
+    serializedVersion: 3
+    agentTypeID: 0
+    agentRadius: 0.5
+    agentHeight: 2
+    agentSlope: 45
+    agentClimb: 0.4
+    ledgeDropHeight: 0
+    maxJumpAcrossDistance: 0
+    minRegionArea: 2
+    manualCellSize: 0
+    cellSize: 0.16666667
+    manualTileSize: 0
+    tileSize: 256
+    buildHeightMesh: 0
+    maxJobWorkers: 0
+    preserveTilesOutsideBounds: 0
+    debug:
+      m_Flags: 0
+  m_NavMeshData: {fileID: 0}
+--- !u!1 &100
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 101}
+  - component: {fileID: 102}
+  m_Layer: 0
+  m_Name: RailTracer
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &101
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 100}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &102
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 100}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7d1f3c2a9b8e4f60a1b2c3d4e5f60718, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  tuning:
+    moveRange: 4
+    enemyMoveRange: 3
+    patrolMoveRange: 2
+    crouchMoveCost: 2
+    sightRange: 8
+    toughSightRange: 10
+    searchSpotRange: 2
+    quietNoise: 1
+    brutalNoise: 99
+    railNoise: 8
+    shoutNoise: 6
+    shakenAt: 30
+    panickedAt: 60
+    brokenAt: 100
+    smallTerror: 10
+    mediumTerror: 25
+    largeTerror: 45
+    unseenTerror: 35
+    hitChance: 0.85
+    shakenHitChance: 0.35
+    wildHitChance: 0.3
+    meleeHitChance: 0.9
+    halfCoverHitMult: 0.75
+    shotDamage: 15
+    maxHp: 30
+    maxLegend: 100
+    quietLegend: 10
+    brutalLegend: 30
+    railLegend: 25
+    leapRange: 3
+    throwRange: 3
+    leapTerror: 40
+    railBoost: 1.5
+    shakenHesitate: 0.4
+    panicReactChance: 0.5
+    searchTurns: 3
+    searchRadius: 2
+    guardTurnEvery: 3
+  skillTable: {fileID: 0}
+  seed: 10
+  testMode: 1
+  enemyStepDelay: 0.4
+  useTrainKit: 1
+  cutawayNearWall: 1
+  lampHeight: 2.1
+  lampInset: 0.3
+  lampColor: {r: 1, g: 0.78, b: 0.5, a: 1}
+  lampIntensity: 3
+  lampRange: 4.5
+  lampAngle: 80
+  lampTilt: 80
+  lampShadows: 1
+  lampModule: Lamp_Wall
+  tintedParts:
+  - Suit
+  - Pants
+  - Tie
+  conductorSuitColor: {r: 0.66, g: 0.56, b: 0.42, a: 1}
+  weakSuitColor: {r: 0.035, g: 0.035, b: 0.04, a: 1}
+  strongSuitColor: {r: 0.5, g: 0.05, b: 0.06, a: 1}
+  brokenColor: {r: 0.22, g: 0.22, b: 0.22, a: 1}
+  skinParts:
+  - Body
+  skinColor: {r: 0.78, g: 0.58, b: 0.45, a: 1}
+  shoesColor: {r: 0.03, g: 0.03, b: 0.03, a: 1}
+  hairColor: {r: 0.4, g: 0.24, b: 0.12, a: 1}
+  bloodOverlayColor: {r: 0.45, g: 0.03, b: 0.03, a: 1}
+  bloodPatternScale: 6
+  bloodSpreadSpeed: 0.5
+  debugLegend: 0
+  debugLeapWait: 0
+  debugRailWait: 0
+  debugThrowWait: 0
+  followCamera: 1
+  showBloodTiles: 1
+  panSpeed: 1.2
+  zoomSpeed: 0.09
+  characterScale: 1
+  unitSpeed: 5
+  flipLength: 1
+  hopClimbTime: 0.45
+  hopWalkSpeed: 3
+  takedownHold: 0.5
+  takedownMove:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 0.06646387
+      value: 0.027272902
+      inSlope: 0.51947206
+      outSlope: 0.51947206
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 1
+    - serializedVersion: 3
+      time: 0.19116306
+      value: 0.9612809
+      inSlope: 0.16293806
+      outSlope: 0.16293806
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.2195584
+    - serializedVersion: 3
+      time: 1
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  quietKillMove:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0.05
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 0.22854355
+      value: 0.9998145
+      inSlope: 0.019915503
+      outSlope: 0.019915503
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 1
+      outWeight: 0.4279395
+    - serializedVersion: 3
+      time: 0.3
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  quietKillReach: 1
+  quietKillBloodAt: 0.62
+  quietVictimFacesAway: 1
+  snatchTime: 0.25
+  takedownBloodAt: 0.6
+  emberColor: {r: 1, g: 0.35, b: 0.08, a: 1}
+  emberEmission: 1.5
+  emberLightIntensity: 0.1
+  emberLightRange: 0.15
+  emberLightHeight: 0.08
+  cigarSmoke: 1
+  propAmount: 1.55
+  ashtrayBrassSmoothness: 0.5
+  ashtrayBrassNormal: 0.5
+--- !u!1660057539 &9223372036854775807
+SceneRoots:
+  m_ObjectHideFlags: 0
+  m_Roots:
+  - {fileID: 101}
