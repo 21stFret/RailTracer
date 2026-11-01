@@ -46,7 +46,7 @@ MonoBehaviour:
     victimFallsAfter: 0
     needsCover: 0
     coverShift: 0.45
-    victimOffset: {x: 0, y: 0, z: 1.5}
+    victimOffset: {x: 0, y: 0, z: 1.3}
     victimYaw: 180
     speed: 1
     bloodAt: 0.5
