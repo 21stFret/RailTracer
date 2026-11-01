@@ -1423,7 +1423,7 @@ namespace RailTracer
                     }
                     at = land;
                 }
-                // Each clip plays in place (root motion discarded) so nobody drifts into the seats. A brutal kill: you
+                // The transforms stay put while a clip plays (a finisher's own travel is in its pose). A brutal kill: you
                 // step in to the victim (the finisher's own spacing), then onto their tile once it's done (the rules
                 // moved you there). A stealth kill: you never move (the old clip closes in partway and back).
                 var to = brutal ? (entry != null ? at - gap : at) : entry != null ? from : Vector3.Lerp(from, at, quietKillReach);
@@ -1446,6 +1446,17 @@ namespace RailTracer
                 {
                     Override(playerAnim, "Finisher Attacker 2", entry.attacker2);
                     Override(va, "Finisher Victim 2", entry.victim2);
+                }
+                // A finisher carries its own moves: step in to its start first, then both stand still while it plays.
+                if (entry != null && (to - playerShown).sqrMagnitude > 1e-4f)
+                {
+                    var start = playerShown;
+                    for (float time = 0f; time < 0.2f; time += Time.deltaTime)
+                    {
+                        playerShown = Vector3.Lerp(start, to, Mathf.SmoothStep(0f, 1f, time / 0.2f));
+                        yield return null;
+                    }
+                    playerShown = to;
                 }
                 bool cam = brutal && KillCamOn;
                 if (cam)
@@ -1475,7 +1486,7 @@ namespace RailTracer
                     }
                     if (!second)
                     {
-                        if (!cam) playerShown = Vector3.Lerp(from, to, move.Evaluate(Mathf.Min(1f, time / length)));
+                        if (entry == null) playerShown = Vector3.Lerp(from, to, move.Evaluate(Mathf.Min(1f, time / length))); // the old pair glides in
                         if (chained && time / length >= entry.comboFrom)
                         {
                             playerAnim.CrossFadeInFixedTime(combo, entry.comboBlend, 0, entry.comboStart * entry.attacker2.length);

@@ -6,7 +6,8 @@ using UnityEngine;
 namespace RailTracer
 {
     // Brutal Finishers (knife set): every clip as Humanoid on the Unreal mannequin's avatar, starting after the two
-    // bind-pose frames, in place (the game owns position). Then Resources/Takedowns, the library the kills pick
+    // bind-pose frames, with all their travel kept in the pose (a pair only lines up if both keep their moves). Then
+    // Resources/Takedowns, the library the kills pick
     // from, if it doesn't exist yet (edit it freely; delete it to regenerate). Runs after each script reload and
     // whenever a clip in the pack imports.
     static class FinisherSetup
@@ -61,12 +62,12 @@ namespace RailTracer
             var clips = mi.clipAnimations.Length > 0 ? mi.clipAnimations : mi.defaultClipAnimations;
             foreach (var c in clips)
             {
-                dirty |= c.firstFrame < FirstFrame || c.loopTime || !c.lockRootRotation || !c.lockRootHeightY || c.lockRootPositionXZ || c.keepOriginalPositionXZ;
+                dirty |= c.firstFrame < FirstFrame || c.loopTime || !c.lockRootRotation || !c.lockRootHeightY || !c.lockRootPositionXZ || !c.keepOriginalPositionXZ;
                 c.firstFrame = Mathf.Max(c.firstFrame, FirstFrame);
                 c.loopTime = false;
                 c.lockRootRotation = c.lockRootHeightY = true; // turns and drops stay in the pose
                 c.keepOriginalOrientation = c.keepOriginalPositionY = true;
-                c.lockRootPositionXZ = c.keepOriginalPositionXZ = false; // travel becomes root motion, discarded: in place
+                c.lockRootPositionXZ = c.keepOriginalPositionXZ = true; // travel baked into the pose, from the clip's own origin
             }
             if (!dirty) return;
             mi.clipAnimations = clips;

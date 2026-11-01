@@ -120,6 +120,7 @@ Hover label: name, role, one state line ("Searching · Shaken", "Panicked · Fre
   - Stealth, crouched: Heart Stab. Stealth, standing: Shove Neck Slice (quick).
   - Brutal, at random: Duck and Back Stab, or the Slash Combo (mid-section slash, then face slash cross-faded in on the "Finisher2" states: Combo From / Combo Start / Combo Blend on the entry; the victim topples after).
   - Brutal with half cover (a seat) straight out from the victim's tile: always Shove to Table, the pair turned to face that seat.
-  - Each entry can be tagged Guard / Heavy / Any (all Any for now). The victim offset per entry still needs tuning in Play mode.
+  - The clips keep their own travel in the pose (imported with root XZ baked from the original position), so a pair lines up through the whole clip once its start offset is right. The exported clips start with both characters on the same spot, so each entry's Victim Offset and Victim Yaw still need setting in the animation test scene.
+  - Each entry can be tagged Guard / Heavy / Any (all Any for now).
 - Ghosts: the move-preview ghost and the last-seen ghost are see-through outlines (last-seen fainter). The last-seen ghost marks only where an enemy actually last saw you.
 - Keys: 1–8 skills, Shift leap, Ctrl hop, G grab, C crouch, Z undo, V all senses, B blood outlines, L log, H controls, R restart, N new train (after a run), Esc pause.
