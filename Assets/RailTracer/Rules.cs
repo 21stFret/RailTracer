@@ -56,6 +56,7 @@ namespace RailTracer
         public int quietNoise = 1, brutalNoise = 99, railNoise = 8, shoutNoise = 6;
         public int shakenAt = 30, panickedAt = 60, brokenAt = 100;
         public int smallTerror = 10, mediumTerror = 25, largeTerror = 45;
+        public int bodyFearSmall = 10, bodyFearLarge = 45; // finding a stealth kill / a rail-grab or thrown body (brutal or shot: mediumTerror)
         public int unseenTerror = 35; // a body dragged or an enemy snatched away by something unseen: less than a kill seen
         public float hitChance = 0.65f, shakenHitChance = 0.35f, wildHitChance = 0.3f, meleeHitChance = 0.8f;
         public float halfCoverHitMult = 0.5f;
@@ -113,7 +114,10 @@ namespace RailTracer
         public bool InPlay => state == EnemyState.Active;
     }
 
-    public class Body { public Enemy who; public Cell pos; public bool hung; } // hung: out of a window (rail grab), can't be grabbed
+    // How the body was made: finding it frightens by how gory it is (Carriage.BodyFear).
+    public enum BodyKind { Stealth, Brutal, Rail, Thrown, Shot }
+
+    public class Body { public Enemy who; public Cell pos; public bool hung; public BodyKind kind; } // hung: out of a window (rail grab), can't be grabbed
 
     // Blood on the floor: one per kill or throw, or one growing trail per drag (tiles oldest to newest).
     public class Stain { public List<Cell> tiles = new List<Cell>(); public bool trail; }
@@ -512,8 +516,8 @@ namespace RailTracer
             {
                 if (e.found.Contains(b) || !Sees(e, b.pos, true)) continue;
                 e.found.Add(b);
-                Log($"{Name(e)} finds the body of {Name(b.who)}!");
-                AddTerror(e, t.mediumTerror);
+                Log($"{Name(e)} found {Name(b.who)}'s body ({b.kind.ToString().ToLower()}).");
+                AddTerror(e, BodyFear(b));
                 if (!e.InPlay) return true;
                 if (e.awareness != Awareness.Combat) Searching(e, Clue.Body);
                 if (e.awareness == Awareness.Searching) { e.lastKnown = b.pos; e.hunt = Hunt.Sweep; e.searchLeft = t.searchTurns; e.trail = null; }
@@ -533,6 +537,9 @@ namespace RailTracer
             }
             return false;
         }
+
+        public int BodyFear(Body b) =>
+            b.kind == BodyKind.Stealth ? t.bodyFearSmall : b.kind == BodyKind.Rail || b.kind == BodyKind.Thrown ? t.bodyFearLarge : t.mediumTerror;
 
         void FollowTrail(Enemy e, Stain s, int from, Clue clue)
         {
@@ -947,6 +954,7 @@ namespace RailTracer
             var b = held;
             Drop();
             b.pos = c;
+            b.kind = BodyKind.Thrown;
             acted = true;
             throwWait = Def(SkillId.Throw).cooldown;
             Log($"You hurl {Name(b.who)} across the carriage!");
@@ -1191,7 +1199,7 @@ namespace RailTracer
                 : a == Act.QuietKill ? $"You silently kill {Name(e)}."
                 : a == Act.RailGrab ? $"You hold {Name(e)} against the passing rails."
                 : $"You butcher {Name(e)}.");
-            var b = new Body { who = e, pos = e.pos };
+            var b = new Body { who = e, pos = e.pos, kind = a == Act.QuietKill ? BodyKind.Stealth : a == Act.RailGrab ? BodyKind.Rail : BodyKind.Brutal };
             bodies.Add(b);
             return b;
         }
@@ -1543,7 +1551,7 @@ namespace RailTracer
                     {
                         var v = EnemyAt(hit);
                         v.state = EnemyState.Dead;
-                        bodies.Add(new Body { who = v, pos = v.pos });
+                        bodies.Add(new Body { who = v, pos = v.pos, kind = BodyKind.Shot });
                         Bleed(v.pos, false);
                         Log($"{Name(e)} fires wildly and kills {Name(v)}!");
                     }

@@ -295,7 +295,7 @@ namespace RailTracer
             head.fontStyle = FontStyles.UpperCase;
             head.color = Bone;
             head.text = "Paused";
-            for (int i = 0; i < 4; i++) pauseItems.Add(Label(pause, "", 18, Bone, 1.5f));
+            for (int i = 0; i < 5; i++) pauseItems.Add(Label(pause, "", 18, Bone, 1.5f));
             pause.gameObject.SetActive(false);
         }
 

@@ -22,6 +22,13 @@ namespace RailTracer
         public float lampInset = 0.3f;    // in from the wall, so the light isn't inside it
         public Color lampColor = new Color(1f, 0.78f, 0.5f);
         public float lampIntensity = 3f, lampRange = 4.5f, lampAngle = 80f;
+        // The legend reddens the carriage: lamp colour and brightness (x lampIntensity) at legend 0 (lampColor), 25, 50, 75 and 100,
+        // blended over about a second. Lamps and ambient only: every overlay is unlit, so it never changes.
+        public Color[] legendLampColors = { new Color(1f, 0.78f, 0.5f), new Color(1f, 0.66f, 0.38f), new Color(1f, 0.42f, 0.26f), new Color(1f, 0.22f, 0.13f), new Color(0.8f, 0.05f, 0.04f) };
+        public float[] legendLampLevels = { 1f, 0.8f, 0.65f, 0.5f, 0.45f };
+        readonly List<Light> lamps = new List<Light>();
+        Color shownLampColor; float shownLampLevel = -1f;
+        Color baseAmbient; float baseAmbientIntensity;
         [Range(0f, 90f)] public float lampTilt = 80f; // degrees below horizontal: 90 = straight down
         public bool lampShadows = true;        public string lampModule = "Lamp_Wall"; // placed at each lamp once the train kit has a module by this name
 
@@ -160,6 +167,13 @@ namespace RailTracer
         public float quietKillBloodAt = 0.5f;
         public bool quietVictimFacesAway = true; // grabbed from behind; untick if the clip expects them facing you
         public float snatchTime = 0.25f;         // the snatch: the victim is yanked onto your tile this fast, then the stealth kill plays
+        TakedownLibrary takedowns;               // Resources/Takedowns: the finishers kills choose from (else the old pair)
+        // Kill cam: brutal kills (as long as the finisher), rail grabs and throws cut in close; any input skips it.
+        const string KillCamKey = "RailTracer.KillCam";
+        static bool KillCamOn => PlayerPrefs.GetInt(KillCamKey, 1) == 1;
+        public float killCamDistance = 1.9f, killCamHeight = 0.55f, sceneCamTime = 1.2f;
+        bool camming, camSkip;
+        Vector3 savedFocus; float savedDistance; Quaternion savedCamRot;
 
         // Blood: Resources/Blood/BloodKit (made by Editor/BloodSetup.cs). Stains are parented to the carriage,
         // so they last the whole match and a restart starts the train clean.
@@ -190,6 +204,9 @@ namespace RailTracer
         {
             characterModel = Resources.Load<GameObject>("Anim/Character");
             enemyController = Resources.Load<RuntimeAnimatorController>("Anim/Enemy");
+            takedowns = Resources.Load<TakedownLibrary>("Takedowns");
+            baseAmbient = RenderSettings.ambientLight;
+            baseAmbientIntensity = RenderSettings.ambientIntensity;
             playerController = Resources.Load<RuntimeAnimatorController>("Anim/Player");
             if (!HasModels) Debug.LogWarning("Rail Tracer: character or controllers missing from Resources/Anim (run Rail Tracer > Set Up Animations), using capsules.");
             fabric = Resources.Load<Material>("Materials/Fabric");
@@ -224,7 +241,10 @@ namespace RailTracer
 
         void Build()
         {
+            EndKillCam(); // restarted mid-cam
             if (root) Destroy(root.gameObject);
+            lamps.Clear();
+            shownLampLevel = -1f; // snap to the new legend
             root = new GameObject("Carriage").transform;
             views.Clear();
             anims.Clear();
@@ -331,14 +351,14 @@ namespace RailTracer
             gone.Clear();
             if (!HasModels) return;
             playerBody.enabled = false;
-            playerAnim = Character(characterModel, playerController);
+            playerAnim = Character(characterModel, new AnimatorOverrideController(playerController)); // its "Finisher" takes each takedown's clip
             Colour(playerAnim, tintedParts, conductorSuitColor);
             AddBloodOverlay(playerAnim);
             shownBlood = 0f;
             foreach (var e in c.enemies)
             {
                 views[e].body.enabled = views[e].nose.enabled = false;
-                var a = anims[e] = Character(characterModel, enemyController);
+                var a = anims[e] = Character(characterModel, new AnimatorOverrideController(enemyController));
                 a.Play(0, 0, Random.value); // out of sync so they don't bob together
                 if (a.parameters.Any(p => p.name == "Armed")) armed.Add(a);
             }
@@ -504,6 +524,7 @@ namespace RailTracer
                 var mount = new Vector3(x, lampHeight, wall + inward * 0.04f);
                 var pos = model ? mount + new Vector3(0f, -0.05f, inward * 0.24f) : new Vector3(x, lampHeight, wall + inward * lampInset);
                 var light = new GameObject("Seat Lamp").AddComponent<Light>();
+                lamps.Add(light);
                 light.transform.SetParent(root, false);
                 light.transform.localPosition = pos;
                 light.transform.localRotation = Quaternion.Euler(lampTilt, sideA ? 180f : 0f, 0f); // tipped down, facing into the car
@@ -971,7 +992,12 @@ namespace RailTracer
                 var target = c.EnemyAt(hover.Value);
                 var kill = KillMode;
                 bool paired = false, used = false;
-                if (throwing) used = c.held != null && c.Throw(hover.Value);
+                if (throwing)
+                {
+                    var thrown = c.held;
+                    used = thrown != null && c.Throw(hover.Value);
+                    if (used && KillCamOn && anims.TryGetValue(thrown.who, out var ta)) StartCoroutine(SceneKillCam(() => ta.transform.localPosition, World(hover.Value)));
+                }
                 else if (target != null)
                 {
                     if (kill.HasValue && c.Perform(kill.Value, target))
@@ -979,6 +1005,7 @@ namespace RailTracer
                         used = true;
                         pendingAct = kill;
                         paired = kill == Act.BrutalKill || kill == Act.QuietKill;
+                        if (kill == Act.RailGrab && KillCamOn) { var w = World(c.bodies[c.bodies.Count - 1].pos); StartCoroutine(SceneKillCam(() => w, w)); }
                     }
                 }
                 else if (leaping) used = c.Leap(hover.Value);
@@ -987,6 +1014,7 @@ namespace RailTracer
                 if (used) selected = null;
                 if (paired) StartCoroutine(PairedKill(target, kill.Value)); // the turn only ends when you end it
             }
+            LegendLighting();
             foreach (var o in c.shotsFired) ShotEffect(o);
             c.shotsFired.Clear();
             DetectBlood();
@@ -1142,14 +1170,15 @@ namespace RailTracer
         {
             if (!hud.PauseOpen) return false;
             var at = mouse != null ? mouse.position.ReadValue() : Vector2.zero;
-            int hit = hud.RefreshPause(new[] { "Resume", $"Tutorial tips: {(tut.Skipped ? "Off" : "On")}", "Restart", "New train" }, at);
+            int hit = hud.RefreshPause(new[] { "Resume", $"Tutorial tips: {(tut.Skipped ? "Off" : "On")}", $"Kill cam: {(KillCamOn ? "On" : "Off")}", "Restart", "New train" }, at);
             if (kb != null && kb.escapeKey.wasPressedThisFrame) hud.ShowPause(false);
             else if (mouse != null && mouse.leftButton.wasPressedThisFrame)
             {
                 if (hit == 0) hud.ShowPause(false);
                 else if (hit == 1) tut.SetTips(tut.Skipped);
-                else if (hit == 2) { StopAllCoroutines(); Build(); }
-                else if (hit == 3) NewTrain();
+                else if (hit == 2) { PlayerPrefs.SetInt(KillCamKey, KillCamOn ? 0 : 1); PlayerPrefs.Save(); }
+                else if (hit == 3) { StopAllCoroutines(); Build(); }
+                else if (hit == 4) NewTrain();
             }
             return true;
         }
@@ -1287,21 +1316,32 @@ namespace RailTracer
         {
             busy = true;
             bool brutal = act == Act.BrutalKill;
-            string state = brutal ? "Takedown" : "StealthKill";
+            // A finisher from the library (guard or heavy set), played on the "Finisher" states; else the old pair.
+            var entry = takedowns ? takedowns.Pick(brutal ? KillKind.Brutal : KillKind.Stealth, victim.tough) : null;
+            string state = entry != null ? "Finisher" : brutal ? "Takedown" : "StealthKill";
             int hash = Animator.StringToHash(state);
             if (playerAnim && anims.TryGetValue(victim, out var va) && playerAnim.HasState(0, hash) && va.HasState(0, hash))
             {
+                if (entry != null)
+                {
+                    Override(playerAnim, "Finisher Attacker", entry.attacker);
+                    Override(va, "Finisher Victim", entry.victim);
+                }
                 takedownVictim = victim;
                 Vector3 from = playerShown, at = shown[victim];
                 var dir = at - from;
                 dir.y = 0;
                 playerFacing = dir.normalized;
-                // The snatch: the rules already put the victim on your tile. Yank them across, then kill them there.
-                bool snatch = !brutal && victim.pos == c.player;
-                if (snatch)
+                var look = Quaternion.LookRotation(playerFacing);
+                // Where the victim stands from you, and which way they face.
+                var gap = entry != null ? look * (entry.victimOffset * characterScale) : playerFacing * 0.45f;
+                var victimRot = entry != null ? look * Quaternion.Euler(0f, entry.victimYaw, 0f)
+                    : Quaternion.LookRotation(!brutal && quietVictimFacesAway ? playerFacing : -playerFacing);
+                // Every stealth kill: the rules already put the victim on your tile. Yank them across, then kill them there.
+                if (!brutal)
                 {
-                    var land = from + playerFacing * 0.45f;
-                    va.transform.localRotation = Quaternion.LookRotation(quietVictimFacesAway ? playerFacing : -playerFacing);
+                    var land = from + gap;
+                    va.transform.localRotation = victimRot;
                     for (float time = 0f; time < snatchTime; time += Time.deltaTime)
                     {
                         float k = time / snatchTime;
@@ -1310,40 +1350,144 @@ namespace RailTracer
                     }
                     at = land;
                 }
-                // Each clip plays in place (root motion discarded) so nobody drifts into the seats. The victim stays on
-                // their own tile: facing you for the takedown, back to you for the stealth kill. You glide onto their
-                // tile for a brutal kill (the rules moved you there), or close in partway for a quiet one.
-                var to = brutal ? at : snatch ? from : Vector3.Lerp(from, at, quietKillReach);
+                // Each clip plays in place (root motion discarded) so nobody drifts into the seats. A brutal kill: you
+                // step in to the victim (the finisher's own spacing), then onto their tile once it's done (the rules
+                // moved you there). A stealth kill: you never move (the old clip closes in partway and back).
+                var to = brutal ? (entry != null ? at - gap : at) : entry != null ? from : Vector3.Lerp(from, at, quietKillReach);
+                var end = brutal ? World(c.player) : from;
                 var move = brutal ? takedownMove : quietKillMove;
-                float bloodAt = brutal ? takedownBloodAt : quietKillBloodAt;
+                float bloodAt = entry != null ? entry.bloodAt : brutal ? takedownBloodAt : quietKillBloodAt;
                 va.transform.localPosition = at;
-                va.transform.localRotation = Quaternion.LookRotation(!brutal && quietVictimFacesAway ? playerFacing : -playerFacing);
+                va.transform.localRotation = victimRot;
                 va.transform.localScale = Vector3.one * characterScale;
+                playerAnim.speed = va.speed = entry != null ? entry.speed : 1f;
                 playerAnim.Play(hash, 0, 0f);
                 va.Play(hash, 0, 0f);
                 yield return null; // let the state start so its length is known
                 float length = playerAnim.GetCurrentAnimatorStateInfo(0).length;
+                bool cam = brutal && KillCamOn;
+                if (cam) BeginKillCam();
                 bool bled = false;
                 for (float time = 0f; time < length; time += Time.deltaTime)
                 {
+                    if (cam && SkipPressed()) { playerAnim.Play(hash, 0, 1f); va.Play(hash, 0, 1f); break; } // straight to the end state
                     playerShown = Vector3.Lerp(from, to, move.Evaluate(time / length));
                     if (!bled && time / length >= bloodAt) { KillBlood(victim, act, playerFacing); bled = true; }
+                    if (cam) AimKillCam(playerShown, va.transform.localPosition, entry != null ? entry.camOffset : Vector3.zero);
                     yield return null;
                 }
                 if (!bled) KillBlood(victim, act, playerFacing);
                 playerShown = to;
-                // Hold on the body. After a quiet kill, ease back onto your own tile meanwhile, still facing it.
+                EndKillCam();
+                // Hold on the body, easing onto where the rules have you, still facing it.
                 for (float time = 0f; time < takedownHold; time += Time.deltaTime)
                 {
-                    playerShown = Vector3.Lerp(to, from, Mathf.SmoothStep(0f, 1f, time / takedownHold));
+                    playerShown = Vector3.Lerp(to, end, Mathf.SmoothStep(0f, 1f, time / takedownHold));
                     yield return null;
                 }
-                playerShown = brutal ? to : from;
+                playerShown = end;
+                playerAnim.speed = va.speed = 1f;
                 pairedKills.Add(victim);
                 takedownVictim = null;
             }
             yield return FreeShots();
             busy = false;
+        }
+
+        static void Override(Animator a, string slot, AnimationClip clip)
+        {
+            if (a.runtimeAnimatorController is AnimatorOverrideController o) o[slot] = clip;
+        }
+
+        // ---- Kill cam ----
+
+        static bool SkipPressed()
+        {
+            var kb = Keyboard.current;
+            var m = Mouse.current;
+            return (kb != null && kb.anyKey.wasPressedThisFrame) || (m != null && (m.leftButton.wasPressedThisFrame || m.rightButton.wasPressedThisFrame));
+        }
+
+        // Cuts in: remembers your view exactly and hides the HUD until EndKillCam.
+        void BeginKillCam()
+        {
+            if (camming) return;
+            camming = true;
+            savedFocus = focus;
+            savedDistance = camDistance;
+            savedCamRot = cam.transform.rotation;
+            camTarget = null;
+            hud.SetVisible(false);
+        }
+
+        // Low and close on the pair, side-on to both (or the takedown's own offset, in the pair's space).
+        void AimKillCam(Vector3 a, Vector3 b, Vector3 offset)
+        {
+            var mid = (a + b) / 2f + Vector3.up * FigureHeight * 0.5f;
+            var along = b - a;
+            along.y = 0f;
+            var pair = Quaternion.LookRotation(along.sqrMagnitude > 1e-6f ? along : Vector3.forward);
+            if (offset == Vector3.zero)
+            {
+                // the side nearer the camera you had, so it doesn't swing through the near wall
+                var side = pair * Vector3.right;
+                if (Vector3.Dot(side, savedCamRot * Vector3.back) < 0f) side = -side;
+                offset = Quaternion.Inverse(pair) * (side * killCamDistance + Vector3.up * killCamHeight);
+            }
+            cam.transform.position = root.TransformPoint(mid + pair * offset);
+            cam.transform.LookAt(root.TransformPoint(mid));
+        }
+
+        // Cuts back to exactly the view you had.
+        void EndKillCam()
+        {
+            if (!camming) return;
+            camming = false;
+            focus = savedFocus;
+            camDistance = savedDistance;
+            cam.transform.rotation = savedCamRot;
+            cam.transform.position = focus - cam.transform.forward * camDistance;
+            hud.SetVisible(true);
+        }
+
+        // Rail grab and throw (placeholder animations for now): a short cut-in on the spot, following `target`.
+        IEnumerator SceneKillCam(System.Func<Vector3> target, Vector3 spot)
+        {
+            busy = true;
+            BeginKillCam();
+            var flat = savedCamRot * Vector3.forward;
+            flat.y = 0f;
+            for (float time = 0f; time < sceneCamTime && !(time > 0f && SkipPressed()); time += Time.deltaTime)
+            {
+                var at = target();
+                AimKillCam(at - flat * 0.5f, at + flat * 0.5f, Vector3.zero);
+                yield return null;
+            }
+            EndKillCam();
+            busy = false;
+        }
+
+        // ---- Legend lighting ----
+
+        // Steps at 25, 50, 75 and 100, blended over about a second (snaps on a new carriage).
+        void LegendLighting()
+        {
+            int tier = Mathf.Clamp(c.legend / 25, 0, legendLampColors.Length - 1);
+            var col = tier == 0 ? lampColor : legendLampColors[tier]; // legend 0: the lamps as set above
+            float level = legendLampLevels[Mathf.Min(tier, legendLampLevels.Length - 1)];
+            if (shownLampLevel < 0f) { shownLampColor = col; shownLampLevel = level; }
+            float k = 1f - Mathf.Exp(-4f * Time.deltaTime);
+            shownLampColor = Color.Lerp(shownLampColor, col, k);
+            shownLampLevel = Mathf.Lerp(shownLampLevel, level, k);
+            foreach (var l in lamps)
+            {
+                if (!l) continue;
+                l.color = shownLampColor;
+                l.intensity = lampIntensity * shownLampLevel;
+            }
+            var tint = Color.Lerp(Color.white, shownLampColor, 0.5f);
+            RenderSettings.ambientLight = baseAmbient * tint;
+            RenderSettings.ambientIntensity = baseAmbientIntensity * shownLampLevel;
         }
 
         // A brutal kill's free shots, after the kill: the camera cuts to each shooter in turn, who fires.

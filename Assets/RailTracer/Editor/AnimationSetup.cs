@@ -58,6 +58,14 @@ namespace RailTracer
                 AssetDatabase.SaveAssets();
                 Debug.Log("Rail Tracer: paired kill states added to the controllers.");
             }
+            // A "Finisher" state on both controllers, on a placeholder clip the game overrides with each takedown's
+            // own (Resources/Takedowns): you return to your idle after it, the victim stays down.
+            if (AddTakedown(Dir + "Player.controller", Placeholder("Finisher Attacker"), "Finisher", "Idle", "CrouchIdle")
+                | AddTakedown(Dir + "Enemy.controller", Placeholder("Finisher Victim"), "Finisher"))
+            {
+                AssetDatabase.SaveAssets();
+                Debug.Log("Rail Tracer: \"Finisher\" states added.");
+            }
             // The bloodied leap past the normal range plays "StylishFlip" (Game picks it over "Flip").
             var stylish = MixamoClip(Mixamo + "Stylish Flip.fbx", false);
             if (stylish && AddTakedown(Dir + "Player.controller", stylish, "StylishFlip", "Idle", "CrouchIdle"))
@@ -317,6 +325,17 @@ namespace RailTracer
             }
             EditorUtility.SetDirty(ac);
             return true;
+        }
+
+        // An empty clip in Resources/Anim for a state the game fills at runtime (AnimatorOverrideController).
+        static AnimationClip Placeholder(string name)
+        {
+            string path = Dir + name + ".anim";
+            var clip = AssetDatabase.LoadAssetAtPath<AnimationClip>(path);
+            if (clip) return clip;
+            clip = new AnimationClip { name = name };
+            AssetDatabase.CreateAsset(clip, path);
+            return clip;
         }
 
         // Down on their knees, then a begging loop. Nothing leads in: Game cross-fades to "BegStart" when they break.

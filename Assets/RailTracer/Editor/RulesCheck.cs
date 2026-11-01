@@ -527,6 +527,7 @@ namespace RailTracer
                   && seesBody.clue == Clue.Movement, "saw them vanish: searches where they stood");
 
             Update14(t);
+            BodyFear(t);
 
             Generated(t);
             Scenarios(t);
@@ -622,7 +623,8 @@ namespace RailTracer
             c.EndPlayerTurn();
             c.EnemyAct(patroller);
             Check(patroller.walked.Count == 2 && patroller.pos == new Cell(6, 1), "4: stops where it finds the body");
-            Check(patroller.awareness == Awareness.Searching && patroller.hunt == Hunt.Sweep && patroller.terror == t.mediumTerror, "4: medium terror, searching nearby");
+            Check(patroller.awareness == Awareness.Searching && patroller.hunt == Hunt.Sweep && patroller.terror == t.bodyFearSmall, "4: a stealth kill's body: small terror, searching nearby");
+            Check(c.log.Contains($"{c.Name(patroller)} found {c.Name(victim)}'s body (stealth)."), "4: the log names the tier");
 
             // 5. Drag the body away out of the enemy's sight: it sees the body move, takes the big spike, follows the trail.
             c = new Carriage(new[] { "......S.", "..LL....", "........", "........" }, t, 1);
@@ -683,6 +685,32 @@ namespace RailTracer
             c = new Carriage(new[] { ".PL....", "......." }, t, 1);
             c.legend = Blood(t, SkillId.Stealth);
             Check(c.KillOutcome(Act.QuietKill, c.Spawn(3, 0, 1, 0, 0)) == null, "9-10/5: luggage blocks the snatch");
+        }
+
+        // Update 15: body fear by how the body was made.
+        static void BodyFear(Tuning t)
+        {
+            var c = new Carriage(new[] { "P......", "......." }, t, 1);
+            c.legend = Unlock(t, SkillId.Rail);
+            var v = c.Spawn(1, 0, 1, 0, 0);
+            c.Perform(Act.RailGrab, v);
+            Check(c.bodies[0].kind == BodyKind.Rail && c.BodyFear(c.bodies[0]) == t.bodyFearLarge, "rail grab body: large");
+            c = new Carriage(new[] { "P......", "......." }, t, 1);
+            c.legend = Unlock(t, SkillId.Brutal);
+            c.Perform(Act.BrutalKill, c.Spawn(1, 0, 1, 0, 0));
+            Check(c.bodies[0].kind == BodyKind.Brutal && c.BodyFear(c.bodies[0]) == t.mediumTerror, "brutal body: medium");
+            c = new Carriage(new[] { "P......", "......." }, t, 1);
+            c.Perform(Act.QuietKill, c.Spawn(1, 0, 1, 0, 0));
+            var b = c.bodies[0];
+            Check(b.kind == BodyKind.Stealth && c.BodyFear(b) == t.bodyFearSmall, "stealth body: small");
+            c.Spawn(6, 1, 1, 0, 0);
+            c.Grab();
+            c.Move(new Cell(1, 0));
+            Check(b.kind == BodyKind.Stealth, "dragging keeps the kind");
+            c.legend = Unlock(t, SkillId.Throw);
+            c.StartPlayerTurn();
+            c.Throw(new Cell(4, 1));
+            Check(b.kind == BodyKind.Thrown && c.BodyFear(b) == t.bodyFearLarge, "thrown body: large");
         }
 
         // Update 14's post-build checks that the rules can answer (the rest are in Play mode).

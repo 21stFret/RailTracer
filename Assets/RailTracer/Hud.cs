@@ -172,6 +172,9 @@ namespace RailTracer
         int[] terror; // 0, Shaken, Panicked, Broken thresholds
         int tagCount;
 
+        Canvas hudCanvas;
+        public void SetVisible(bool on) => hudCanvas.enabled = on; // the kill cam hides it
+
         public bool CardUp => card.gameObject.activeSelf && cardFading < 0f;
         public bool CardVisible => card.gameObject.activeSelf;
         public bool CardDismissable => cardDismissable;
@@ -190,7 +193,7 @@ namespace RailTracer
             white = Sprite.Create(Texture2D.whiteTexture, new Rect(0, 0, 4, 4), new Vector2(0.5f, 0.5f)); // Filled images need a sprite
             foreach (var s in Resources.LoadAll<Sprite>("UI/Icons")) icons[s.name] = s;
 
-            var canvas = new GameObject("HUD", typeof(Canvas), typeof(CanvasScaler)).GetComponent<Canvas>();
+            var canvas = hudCanvas = new GameObject("HUD", typeof(Canvas), typeof(CanvasScaler)).GetComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             canvas.sortingOrder = 10;
             var scaler = canvas.GetComponent<CanvasScaler>();
