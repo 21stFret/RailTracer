@@ -76,25 +76,27 @@ namespace RailTracer
         static AnimationClip Clip(string stem) =>
             AssetDatabase.LoadAllAssetsAtPath(Pack + "AnimSeq_Paired_Knife_" + stem + ".FBX").OfType<AnimationClip>().FirstOrDefault(c => !c.name.StartsWith("__preview__"));
 
-        // The first pick (Alex chooses the final ones): quick knife work for stealth, the most violent for brutal,
-        // longer ones for heavies.
+        // Alex's picks: stealth by stance, brutal at random, the table shove whenever half cover is beside the victim.
         static void BuildLibrary()
         {
             var lib = ScriptableObject.CreateInstance<TakedownLibrary>();
-            void Add(string stem, KillKind kind, TakedownFor target)
+            void Add(string name, KillKind kind, string stem, TakedownStance stance = TakedownStance.Any, string combo = null, bool cover = false)
             {
                 var a = Clip(stem + "_Att");
                 var v = Clip(stem + "_Vic");
-                if (a && v) lib.takedowns.Add(new Takedown { name = stem.Replace('_', ' '), kind = kind, target = target, attacker = a, victim = v });
+                if (!a || !v) return;
+                lib.takedowns.Add(new Takedown
+                {
+                    name = name, kind = kind, stance = stance, attacker = a, victim = v, needsCover = cover,
+                    attacker2 = combo != null ? Clip(combo + "_Att") : null, victim2 = combo != null ? Clip(combo + "_Vic") : null,
+                    victimFallsAfter = combo != null, // the slash combo leaves them standing
+                });
             }
-            Add("Stab_MidSection", KillKind.Stealth, TakedownFor.Guard);
-            Add("Slash_MidSection", KillKind.Stealth, TakedownFor.Guard);
-            Add("Neck_Stab", KillKind.Stealth, TakedownFor.Guard);
-            Add("DuckNBackStab", KillKind.Stealth, TakedownFor.Heavy);
-            Add("Slash_Face", KillKind.Brutal, TakedownFor.Guard);
-            Add("Shove_NeckSlice_Quick", KillKind.Brutal, TakedownFor.Guard);
-            Add("Shove_toTable_Stab_Quick", KillKind.Brutal, TakedownFor.Heavy);
-            Add("Stab_Heart", KillKind.Brutal, TakedownFor.Heavy);
+            Add("Heart Stab (crouched)", KillKind.Stealth, "Stab_Heart", TakedownStance.Crouched);
+            Add("Shove Neck Slice (standing)", KillKind.Stealth, "Shove_NeckSlice_Quick", TakedownStance.Standing);
+            Add("Duck and Back Stab", KillKind.Brutal, "DuckNBackStab");
+            Add("Slash Combo", KillKind.Brutal, "Slash_MidSection", combo: "Slash_Face");
+            Add("Shove to Table (half cover)", KillKind.Brutal, "Shove_toTable_Stab_Quick", cover: true);
             if (lib.takedowns.Count == 0) return; // clips not imported yet: try again next run
             AssetDatabase.CreateAsset(lib, Library);
             AssetDatabase.SaveAssets();

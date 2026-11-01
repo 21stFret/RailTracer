@@ -1338,22 +1338,33 @@ namespace RailTracer
         {
             busy = true;
             bool brutal = act == Act.BrutalKill;
-            // A finisher from the library (guard or heavy set), played on the "Finisher" states; else the old pair.
-            var entry = takedowns ? takedowns.Pick(brutal ? KillKind.Brutal : KillKind.Stealth, victim.tough) : null;
+            // Half cover straight out from the victim's tile (the one furthest from you): finishers that use it come first.
+            var away = (shown.TryGetValue(victim, out var vs) ? vs : World(victim.pos)) - playerShown;
+            Vector3? coverDir = null;
+            foreach (var d in new[] { new Cell(1, 0), new Cell(-1, 0), new Cell(0, 1), new Cell(0, -1) })
+            {
+                var side = new Vector3(d.x, 0f, -d.y);
+                if (c.IsSeat(new Cell(victim.pos.x + d.x, victim.pos.y + d.y)) && (coverDir == null || Vector3.Dot(side, away) > Vector3.Dot(coverDir.Value, away)))
+                    coverDir = side;
+            }
+            // A finisher from the library (guard or heavy set, your stance), played on the "Finisher" states; else the old pair.
+            var entry = takedowns ? takedowns.Pick(brutal ? KillKind.Brutal : KillKind.Stealth, victim.tough, c.crouched, coverDir.HasValue) : null;
             string state = entry != null ? "Finisher" : brutal ? "Takedown" : "StealthKill";
             int hash = Animator.StringToHash(state);
             if (playerAnim && anims.TryGetValue(victim, out var va) && playerAnim.HasState(0, hash) && va.HasState(0, hash))
             {
-                if (entry != null)
-                {
-                    Override(playerAnim, "Finisher Attacker", entry.attacker);
-                    Override(va, "Finisher Victim", entry.victim);
-                }
                 takedownVictim = victim;
                 Vector3 from = playerShown, at = shown[victim];
                 var dir = at - from;
                 dir.y = 0;
                 playerFacing = dir.normalized;
+                // A cover finisher (shoved over a seat): the pair turns to face the seat and moves towards it.
+                bool useCover = entry != null && entry.needsCover && coverDir.HasValue;
+                if (useCover)
+                {
+                    playerFacing = coverDir.Value;
+                    at += coverDir.Value * entry.coverShift * characterScale;
+                }
                 var look = Quaternion.LookRotation(playerFacing);
                 // Where the victim stands from you, and which way they face.
                 var gap = entry != null ? look * (entry.victimOffset * characterScale) : playerFacing * 0.45f;
@@ -1383,24 +1394,44 @@ namespace RailTracer
                 va.transform.localRotation = victimRot;
                 va.transform.localScale = Vector3.one * characterScale;
                 playerAnim.speed = va.speed = entry != null ? entry.speed : 1f;
-                playerAnim.Play(hash, 0, 0f);
-                va.Play(hash, 0, 0f);
-                yield return null; // let the state start so its length is known
-                float length = playerAnim.GetCurrentAnimatorStateInfo(0).length;
                 bool cam = brutal && KillCamOn;
                 if (cam) BeginKillCam();
-                bool bled = false;
-                for (float time = 0f; time < length; time += Time.deltaTime)
+                // One clip, or a combo of two back to back (the blood flies in the last).
+                int parts = entry != null && entry.attacker2 && entry.victim2 ? 2 : 1;
+                bool bled = false, skipped = false;
+                for (int part = 0; part < parts && !skipped; part++)
                 {
-                    if (cam && SkipPressed()) { playerAnim.Play(hash, 0, 1f); va.Play(hash, 0, 1f); break; } // straight to the end state
-                    playerShown = Vector3.Lerp(from, to, move.Evaluate(time / length));
-                    if (!bled && time / length >= bloodAt) { KillBlood(victim, act, playerFacing); bled = true; }
-                    if (cam) AimKillCam(playerShown, va.transform.localPosition, entry != null ? entry.camOffset : Vector3.zero);
-                    yield return null;
+                    if (entry != null)
+                    {
+                        Override(playerAnim, "Finisher Attacker", part == 0 ? entry.attacker : entry.attacker2);
+                        Override(va, "Finisher Victim", part == 0 ? entry.victim : entry.victim2);
+                    }
+                    playerAnim.Play(hash, 0, 0f);
+                    va.Play(hash, 0, 0f);
+                    yield return null; // let the state start so its length is known
+                    float length = playerAnim.GetCurrentAnimatorStateInfo(0).length;
+                    bool last = part == parts - 1;
+                    for (float time = 0f; time < length; time += Time.deltaTime)
+                    {
+                        if (cam && SkipPressed())
+                        {
+                            // Straight to the end state (the combo's last clip).
+                            if (!last) { Override(playerAnim, "Finisher Attacker", entry.attacker2); Override(va, "Finisher Victim", entry.victim2); }
+                            playerAnim.Play(hash, 0, 1f);
+                            va.Play(hash, 0, 1f);
+                            skipped = true;
+                            break;
+                        }
+                        if (part == 0) playerShown = Vector3.Lerp(from, to, move.Evaluate(time / length));
+                        if (last && !bled && time / length >= bloodAt) { KillBlood(victim, act, playerFacing); bled = true; }
+                        if (cam) AimKillCam(playerShown, va.transform.localPosition, entry != null ? entry.camOffset : Vector3.zero);
+                        yield return null;
+                    }
                 }
                 if (!bled) KillBlood(victim, act, playerFacing);
                 playerShown = to;
                 EndKillCam();
+                if (entry != null && entry.victimFallsAfter) StartCoroutine(Topple(va.transform, playerFacing)); // still on their feet
                 // Hold on the body, easing onto where the rules have you, still facing it.
                 for (float time = 0f; time < takedownHold; time += Time.deltaTime)
                 {

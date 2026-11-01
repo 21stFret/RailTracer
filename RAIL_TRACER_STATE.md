@@ -112,6 +112,10 @@ Hover label: name, role, one state line ("Searching · Shaken", "Panicked · Fre
 
 - Kill cam on brutal kills (as long as the finisher), rail grabs and throws (1.2 s); any input skips it; Pause menu "Kill cam: On/Off" (default On). The HUD hides during it.
 - The carriage lamps redden with legend, stepping at 25, 50, 75 and 100 and blending over about a second. Overlays never change.
-- Finishers: Brutal Finishers knife clips (Humanoid on the mannequin avatar) picked from `Resources/Takedowns` by kill type and Guard / Heavy / Any. The victim offset per entry still needs tuning in Play mode.
+- Finishers: Brutal Finishers knife clips (Humanoid on the mannequin avatar) in `Resources/Takedowns`, Alex's picks:
+  - Stealth, crouched: Heart Stab. Stealth, standing: Shove Neck Slice (quick).
+  - Brutal, at random: Duck and Back Stab, or the Slash Combo (mid-section slash, then face slash; the victim topples after).
+  - Brutal with half cover (a seat) straight out from the victim's tile: always Shove to Table, the pair turned to face that seat.
+  - Each entry can be tagged Guard / Heavy / Any (all Any for now). The victim offset per entry still needs tuning in Play mode.
 - Ghosts: the move-preview ghost and the last-seen ghost are see-through outlines (last-seen fainter). The last-seen ghost marks only where an enemy actually last saw you.
 - Keys: 1–8 skills, Shift leap, Ctrl hop, G grab, C crouch, Z undo, V all senses, B blood outlines, L log, H controls, R restart, N new train (after a run), Esc pause.
