@@ -21,10 +21,13 @@ MonoBehaviour:
     victim: {fileID: 8993902097722301239, guid: c89388cae16cb174da4beff3a98478bc, type: 3}
     attacker2: {fileID: 0}
     victim2: {fileID: 0}
+    comboFrom: 0.85
+    comboStart: 0.1
+    comboBlend: 0.25
     victimFallsAfter: 0
     needsCover: 0
     coverShift: 0.45
-    victimOffset: {x: 0, y: 0, z: 0.9}
+    victimOffset: {x: 0, y: 0, z: 1.5}
     victimYaw: 180
     speed: 1
     bloodAt: 0.5
@@ -37,10 +40,13 @@ MonoBehaviour:
     victim: {fileID: 8993902097722301239, guid: e15db6fe689c87f4789c7bf3523aef59, type: 3}
     attacker2: {fileID: 0}
     victim2: {fileID: 0}
+    comboFrom: 0.85
+    comboStart: 0.1
+    comboBlend: 0.25
     victimFallsAfter: 0
     needsCover: 0
     coverShift: 0.45
-    victimOffset: {x: 0, y: 0, z: 0.9}
+    victimOffset: {x: 0, y: 0, z: 1.5}
     victimYaw: 180
     speed: 1
     bloodAt: 0.5
@@ -53,10 +59,13 @@ MonoBehaviour:
     victim: {fileID: 8993902097722301239, guid: 0a4de35ed7f77ba4face489805193709, type: 3}
     attacker2: {fileID: 0}
     victim2: {fileID: 0}
+    comboFrom: 0.85
+    comboStart: 0.1
+    comboBlend: 0.25
     victimFallsAfter: 0
     needsCover: 0
     coverShift: 0.45
-    victimOffset: {x: 0, y: 0, z: 0.9}
+    victimOffset: {x: 0, y: 0, z: 1.5}
     victimYaw: 180
     speed: 1
     bloodAt: 0.5
@@ -69,10 +78,13 @@ MonoBehaviour:
     victim: {fileID: 8993902097722301239, guid: 41ac199bfa6357f4a9a4ab75d2f59b82, type: 3}
     attacker2: {fileID: 8993902097722301239, guid: 86f94bb5d1e0fe3408cdae9746334dcc, type: 3}
     victim2: {fileID: 8993902097722301239, guid: a499aff48b631d44194e72e8383764b4, type: 3}
+    comboFrom: 0.85
+    comboStart: 0.1
+    comboBlend: 0.25
     victimFallsAfter: 1
     needsCover: 0
     coverShift: 0.45
-    victimOffset: {x: 0, y: 0, z: 0.9}
+    victimOffset: {x: 0, y: 0, z: 1.5}
     victimYaw: 180
     speed: 1
     bloodAt: 0.5
@@ -85,10 +97,13 @@ MonoBehaviour:
     victim: {fileID: 8993902097722301239, guid: 25e4963988ed05e42bcbaa00caf8eb20, type: 3}
     attacker2: {fileID: 0}
     victim2: {fileID: 0}
+    comboFrom: 0.85
+    comboStart: 0.1
+    comboBlend: 0.25
     victimFallsAfter: 0
     needsCover: 1
     coverShift: 0.45
-    victimOffset: {x: 0, y: 0, z: 0.9}
+    victimOffset: {x: 0, y: 0, z: 1.5}
     victimYaw: 180
     speed: 1
     bloodAt: 0.5

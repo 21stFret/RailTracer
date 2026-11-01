@@ -168,9 +168,9 @@ MonoBehaviour:
     enemyMoveRange: 3
     patrolMoveRange: 2
     crouchMoveCost: 2
-    sightRange: 8
-    toughSightRange: 10
-    searchSpotRange: 2
+    guardSight: 7
+    heavySight: 8
+    searchNoticeRange: 1
     quietNoise: 1
     brutalNoise: 99
     railNoise: 8
@@ -181,12 +181,15 @@ MonoBehaviour:
     smallTerror: 10
     mediumTerror: 25
     largeTerror: 45
+    bodyFearSmall: 10
+    bodyFearLarge: 45
     unseenTerror: 35
     hitChance: 0.85
     shakenHitChance: 0.35
     wildHitChance: 0.3
     meleeHitChance: 0.9
     halfCoverHitMult: 0.75
+    leapHitPenalty: 0.25
     shotDamage: 15
     maxHp: 30
     maxLegend: 100
@@ -194,14 +197,15 @@ MonoBehaviour:
     brutalLegend: 30
     railLegend: 25
     leapRange: 3
-    throwRange: 3
+    throwDistance: 5
     leapTerror: 40
     railBoost: 1.5
     shakenHesitate: 0.4
-    panicReactChance: 0.5
+    panicFreezeChance: 0.5
+    brokenFleeChance: 0.5
     searchTurns: 3
     searchRadius: 2
-    guardTurnEvery: 3
+    guardTurnInterval: 2
   skillTable: {fileID: 0}
   seed: 10
   testMode: 1
@@ -214,6 +218,18 @@ MonoBehaviour:
   lampIntensity: 3
   lampRange: 4.5
   lampAngle: 80
+  legendLampColors:
+  - {r: 1, g: 0.78, b: 0.5, a: 1}
+  - {r: 1, g: 0.66, b: 0.38, a: 1}
+  - {r: 1, g: 0.42, b: 0.26, a: 1}
+  - {r: 1, g: 0.22, b: 0.13, a: 1}
+  - {r: 0.8, g: 0.05, b: 0.04, a: 1}
+  legendLampLevels:
+  - 1
+  - 0.95
+  - 0.9
+  - 0.85
+  - 0.8
   lampTilt: 80
   lampShadows: 1
   lampModule: Lamp_Wall
@@ -238,12 +254,14 @@ MonoBehaviour:
   debugRailWait: 0
   debugThrowWait: 0
   followCamera: 1
-  showBloodTiles: 1
+  bloodOutlines: 0
   panSpeed: 1.2
   zoomSpeed: 0.09
   characterScale: 1
   unitSpeed: 5
   flipLength: 1
+  stylishFlipLength: 1.4
+  endTurnHold: 0.5
   hopClimbTime: 0.45
   hopWalkSpeed: 3
   takedownHold: 0.5
@@ -326,7 +344,19 @@ MonoBehaviour:
   quietKillBloodAt: 0.62
   quietVictimFacesAway: 1
   snatchTime: 0.25
+  killCamDistance: 1.9
+  killCamHeight: 0.55
+  sceneCamTime: 1.2
+  killCamFlyIn: 0.45
+  killCamPause: 0.2
+  killCamFlyOut: 0.35
+  killCamSlowMo: 1
+  throwCamSlowMo: 0.5
   takedownBloodAt: 0.6
+  railSillHeight: 0.55
+  railLean: 80
+  freeShotPause: 0.55
+  muzzleColor: {r: 1, g: 0.75, b: 0.35, a: 1}
   emberColor: {r: 1, g: 0.35, b: 0.08, a: 1}
   emberEmission: 1.5
   emberLightIntensity: 0.1

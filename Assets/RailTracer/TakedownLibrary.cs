@@ -24,7 +24,7 @@ namespace RailTracer
         public bool victimFallsAfter;                            // the last victim clip ends standing: topple them after it
         public bool needsCover;                                  // only with half cover beside the victim, and then always chosen
         public float coverShift = 0.45f;                         // the pair moves this far towards that cover (metres at full size)
-        public Vector3 victimOffset = new Vector3(0f, 0f, 0.9f); // where the victim stands, in your space (metres at full size; scaled with the characters)
+        public Vector3 victimOffset = new Vector3(0f, 0f, 1.5f); // where the victim stands, in your space (metres at full size; scaled with the characters). The pack's pairs: 1.5 m apart, facing
         public float victimYaw = 180f;                           // the victim's facing relative to yours: 180 = facing you
         public float speed = 1f;                                 // playback speed of both clips
         [Range(0f, 1f)] public float bloodAt = 0.5f;             // point in the clip where the blood flies
