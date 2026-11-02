@@ -180,6 +180,8 @@ namespace RailTracer
         // Blood: Resources/Blood/BloodKit (made by Editor/BloodSetup.cs). Stains are parented to the carriage,
         // so they last the whole match and a restart starts the train clean.
         public float takedownBloodAt = 0.45f; // point in the takedown clip (0..1) where the blood flies
+        // Kill blood: straight casts from this high above each stained tile (a crouched stealth kill lower), this far out.
+        public float bloodCastStanding = 1.8f, bloodCastCrouched = 1f, bloodCastReach = 1.5f;
         BloodKit blood;
         Canvas screenCanvas;
         readonly Dictionary<Enemy, EnemyState> lastState = new Dictionary<Enemy, EnemyState>();
@@ -1717,37 +1719,26 @@ namespace RailTracer
         void KillBlood(Enemy e, Act? how, Vector3 dir, Vector3? chestAt = null)
         {
             if (!blood) return;
-            decaled.Add(e.pos);
             var at = chestAt.HasValue ? new Vector3(chestAt.Value.x, 0f, chestAt.Value.z) : World(e.pos);
             var chest = chestAt ?? at + Vector3.up * FigureHeight * 0.6f;
-            switch (how)
+            // The splash effect (it fades), the big gore one for a brutal kill; blood on the glass for a rail grab.
+            if (how == Act.RailGrab) dir = e.pos.y == 0 ? Vector3.forward : Vector3.back;
+            else if (how == null) { var r = Random.insideUnitCircle.normalized; dir = new Vector3(r.x, 0f, r.y); }
+            blood.Splash(root, chest, dir, how == Act.BrutalKill);
+            // The stains that stay: straight casts from every tile the kill bloodied (a crouched stealth kill casts lower).
+            bool low = how == Act.QuietKill && c.crouched;
+            Stains(e.pos, low ? bloodCastCrouched : bloodCastStanding, how == Act.BrutalKill ? blood.poolScale : blood.spatterScale);
+        }
+
+        // Straight-cast stains (BloodKit.TileSplat) on each tile of the newest stain on `tile`; `centre` sizes the
+        // floor stain on that tile itself, the rest get spatter.
+        void Stains(Cell tile, float height, float centre)
+        {
+            var stain = c.stains.LastOrDefault(s => !s.trail && s.tiles.Contains(tile));
+            foreach (var t in stain != null ? stain.tiles : new List<Cell> { tile })
             {
-                case Act.QuietKill:
-                    blood.Splash(root, chest, dir, false);
-                    blood.Decal(root, at, Vector3.down, blood.spatterScale);
-                    blood.Spray(root, chest, dir, blood.quietRays, blood.spatterScale);
-                    break;
-                case Act.BrutalKill:
-                    blood.Spray(root, chest, dir, blood.brutalRays, blood.smearScale); // before the guts exist to block it
-                    blood.Decal(root, at, Vector3.down, blood.poolScale);
-                    blood.Splash(root, chest, dir, true);
-                    break;
-                case Act.RailGrab:
-                {
-                    // Blood on the glass: leans towards the window wall beside the victim.
-                    var glass = e.pos.y == 0 ? Vector3.forward : Vector3.back;
-                    blood.Splash(root, chest, glass, false);
-                    blood.Decal(root, at, Vector3.down, blood.spatterScale);
-                    blood.Spray(root, chest, glass * 2f, blood.railRays, blood.smearScale * 1.4f);
-                    break;
-                }
-                default:
-                    var spray = Random.insideUnitCircle.normalized;
-                    var away = new Vector3(spray.x, 0, spray.y);
-                    blood.Splash(root, chest, away, false);
-                    blood.Decal(root, at, Vector3.down, blood.spatterScale);
-                    blood.Spray(root, chest, away, blood.shotRays, blood.spatterScale);
-                    break;
+                blood.TileSplat(root, World(t), height, bloodCastReach, t == tile ? centre : blood.spatterScale, blood.smearScale);
+                decaled.Add(t);
             }
         }
 
@@ -2236,9 +2227,7 @@ namespace RailTracer
                     dir.y = 0f;
                     dir = dir.sqrMagnitude > 1e-6f ? dir.normalized : Vector3.forward;
                     blood.Splash(root, land + Vector3.up * 0.4f, dir, true);
-                    blood.Decal(root, land, Vector3.down, blood.poolScale);
-                    blood.Spray(root, land + Vector3.up * 0.5f, dir, blood.shotRays, blood.smearScale);
-                    decaled.Add(b.pos);
+                    Stains(b.pos, bloodCastCrouched, blood.poolScale);
                 }
             }
         }

@@ -114,6 +114,12 @@ Hover label: name, role, one state line ("Searching · Shaken", "Panicked · Fre
 
 In the game too, finisher blood now comes from the victim's chest bone (where the clip has carried them), not above their tile.
 
+## Blood
+
+- A kill (and a thrown body's landing) bloodies tiles by the rules: stealth 1, brutal 5 (the tile and its open neighbours), rail grab every open tile within 1 of the window.
+- The splash effect comes from the victim's chest (the big gore one for a brutal kill, towards the glass for a rail grab).
+- The stains that stay: from each bloodied tile, five straight casts from 1.8 m up (1 m for a crouched stealth kill; a thrown body 1 m), down and out along the grid up to 1.5 m (Game: Blood Cast Standing / Crouched / Reach). A floor or wall gets a stain square-on; a seat gets one at 45 degrees into the cushion fold (down and towards its back); window glass gets one stuck to the sash. The kill tile's floor gets a pool for a brutal kill or a thrown body, spatter otherwise; walls get smears. Drag trails keep a floor stain per tile.
+
 ## Camera, HUD and presentation
 
 - Kill cam on brutal kills (as long as the finisher), rail grabs and throws (1.2 s): the camera flies in (0.45 s), holds a beat (0.2 s), plays the shot from a fixed angle, then flies back to your exact view (0.35 s). The angle is low and side-on, trying other angles until no wall, floor, luggage or seat back is in the way (or a takedown's own Cam Offset). Slow motion: Kill Cam Slow Mo (brutal and rail, default 1 = none), Throw Cam Slow Mo (0.5). Any input skips it; Pause menu "Kill cam: On/Off" (default On). The HUD hides during it.

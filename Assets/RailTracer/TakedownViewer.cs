@@ -12,6 +12,7 @@ namespace RailTracer
     {
         public float holdAfter = 1f;   // the end pose stays this long
         public float resetPause = 0.4f; // back to idle this long before the next one
+        public float bloodCastStanding = 1.8f, bloodCastCrouched = 1f, bloodCastReach = 1.5f; // as on the Game component
         TakedownLibrary library;
         BloodKit blood;      // the game's blood (Resources/Blood/BloodKit), fired at each takedown's Blood At
         Transform bloodRoot; // this loop's stains, cleared on the next
@@ -113,10 +114,10 @@ namespace RailTracer
                     length = time + t.attacker2.length * (1f - t.comboStart) / Mathf.Max(0.01f, t.speed);
                     chained = false;
                 }
-                if (!bled && lastFrom >= 0f && (time - lastFrom) / (length - lastFrom) >= t.bloodAt) { Bleed(t.kind); bled = true; }
+                if (!bled && lastFrom >= 0f && (time - lastFrom) / (length - lastFrom) >= t.bloodAt) { Bleed(t); bled = true; }
                 yield return null;
             }
-            if (!bled) Bleed(t.kind);
+            if (!bled) Bleed(t);
             for (float time = 0f; time < holdAfter && !jump; time += Time.deltaTime) yield return null;
             attacker.speed = victim.speed = 1f;
             attacker.Play("Idle", 0, 0f);
@@ -124,8 +125,8 @@ namespace RailTracer
             for (float time = 0f; time < resetPause && !jump; time += Time.deltaTime) yield return null;
         }
 
-        // The game's kill blood (Game.KillBlood) from the victim's chest: brutal kills spray and pool, stealth kills less.
-        void Bleed(KillKind kind)
+        // The game's kill blood (Game.KillBlood): the splash from the victim's chest, then straight-cast stains.
+        void Bleed(Takedown t)
         {
             bloodFlash = Time.time;
             if (!blood) return;
@@ -135,18 +136,15 @@ namespace RailTracer
             var dir = victim.transform.position - attacker.transform.position;
             dir.y = 0f;
             dir = dir.sqrMagnitude > 1e-4f ? dir.normalized : Vector3.forward;
-            if (kind == KillKind.Brutal)
-            {
-                blood.Spray(bloodRoot, chest, dir, blood.brutalRays, blood.smearScale);
-                blood.Decal(bloodRoot, floor, Vector3.down, blood.poolScale);
-                blood.Splash(bloodRoot, chest, dir, true);
-            }
-            else
-            {
-                blood.Splash(bloodRoot, chest, dir, false);
-                blood.Decal(bloodRoot, floor, Vector3.down, blood.spatterScale);
-                blood.Spray(bloodRoot, chest, dir, blood.quietRays, blood.spatterScale);
-            }
+            bool brutal = t.kind == KillKind.Brutal;
+            blood.Splash(bloodRoot, chest, dir, brutal);
+            // As in the game: the victim's tile (1 m grid), and for a brutal kill the four next to it, cast from stance height.
+            var tile = new Vector3(Mathf.Round(floor.x), 0f, Mathf.Round(floor.z));
+            float height = t.stance == TakedownStance.Crouched ? bloodCastCrouched : bloodCastStanding;
+            blood.TileSplat(bloodRoot, tile, height, bloodCastReach, brutal ? blood.poolScale : blood.spatterScale, blood.smearScale);
+            if (brutal)
+                foreach (var d in new[] { Vector3.left, Vector3.right, Vector3.forward, Vector3.back })
+                    blood.TileSplat(bloodRoot, tile + d, height, bloodCastReach, blood.spatterScale, blood.smearScale);
         }
 
         static void Override(Animator a, string slot, AnimationClip clip)

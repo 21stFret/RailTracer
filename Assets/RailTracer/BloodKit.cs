@@ -17,12 +17,6 @@ namespace RailTracer
         [Header("Persistent projected decals")]
         public GameObject[] decals;
         public float poolScale = 0.8f, spatterScale = 0.35f, smearScale = 0.45f, dripScale = 0.25f;
-        [Header("Spray: rays from the chest, a stain wherever one hits (walls, seats, luggage, floor)")]
-        public int brutalRays = 18, shotRays = 7, railRays = 7, quietRays = 3;
-        public float sprayReach = 3.5f;  // metres
-        [Range(0f, 2f)] public float sprayAway = 0.7f; // how much the spray leans away from the killer
-        [Range(-1f, 1f)] public float sprayMaxRise = 0.3f; // highest a ray aims (y of its direction before normalising)
-        [Range(0f, 1f)] public float sprayAlongRay = 0.5f; // stain angle: 0 = square-on to the surface, 1 = along the ray
         [Tooltip("How deep the projection box reaches through the surface (m). Shallow keeps it off nearby seat sides.")]
         public float projectDepth = 0.3f;
         [Tooltip("Projection depth for stains on window glass (m): inside the sash, clear of the wall faces it slides past.")]
@@ -70,26 +64,30 @@ namespace RailTracer
             decal.transform.localScale = new Vector3(scale, scale, projectDepth / prefabDepth);
         }
 
-        // `rays` random directions from `origin`, leaning along `away` and kept low (nobody sees the ceiling); each hit
-        // leaves a stain flat on that surface, smaller the further it flew.
-        public void Spray(Transform parent, Vector3 origin, Vector3 away, int rays, float scale)
+        // Kill blood on one tile: five straight casts from `height` above its centre, down and out along the grid (left,
+        // right, forward, back, up to `reach`). Each hit leaves a stain square-on to the floor or wall it hit, or at 45
+        // degrees into the fold of a seat (down and towards its back), or stuck to a window's glass.
+        public void TileSplat(Transform parent, Vector3 centre, float height, float reach, float floorScale, float wallScale)
         {
-            for (int i = 0; i < rays; i++)
+            var from = centre + Vector3.up * height;
+            foreach (var dir in new[] { Vector3.down, Vector3.left, Vector3.right, Vector3.forward, Vector3.back })
             {
-                var dir = Random.onUnitSphere + away * sprayAway;
-                dir.y = Mathf.Clamp(dir.y, -1f, sprayMaxRise);
-                if (!Physics.Raycast(origin, dir.normalized, out var hit, sprayReach, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore)) continue;
-                if (hit.normal.y < -0.3f) continue; // ceilings and undersides
-                // Between square-on to the surface and along the flight: part way splits a stain across a corner
-                // (seat and backrest) instead of laying it flat on one face.
-                var facing = Vector3.Slerp(-hit.normal, dir.normalized, sprayAlongRay);
-                float s = scale * Mathf.Lerp(1f, 0.5f, hit.distance / sprayReach);
-                // On a window: stuck to the sash so it slides with it, square-on and only as deep as the glass, so the
-                // box never reaches the wall faces the sash drops past.
+                bool down = dir == Vector3.down;
+                if (!Physics.Raycast(from, dir, out var hit, down ? height + 0.5f : reach, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore)) continue;
+                float scale = down ? floorScale : wallScale;
                 var sash = hit.collider.GetComponentInParent<SlidingWindow>();
-                if (sash) Decal(sash.transform, hit.point, -hit.normal, s, glassDepth);
-                else Decal(parent, hit.point, facing, s);
+                if (sash) { Decal(sash.transform, hit.point, -hit.normal, scale, glassDepth); continue; }
+                var seat = SeatOf(hit.collider.transform);
+                Decal(parent, hit.point, seat ? (Vector3.down + seat.forward).normalized : -hit.normal, scale);
             }
+        }
+
+        // The seat bank a collider belongs to (the kit's "Seat_..." pieces; their back is at local +Z), or null.
+        static Transform SeatOf(Transform t)
+        {
+            for (; t; t = t.parent)
+                if (t.name.StartsWith("Seat")) return t;
+            return null;
         }
 
         public void Screen(Transform canvas)
