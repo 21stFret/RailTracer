@@ -13,8 +13,6 @@ namespace RailTracer
         public Tuning tuning = new Tuning();
         public SkillTable skillTable; // empty = Resources/SkillTable
         public int seed; // 0 = random each run
-        [Tooltip("The animation test: you beside three dummies and a body, every skill unlocked, nobody acts; R resets.")]
-        public bool testMode;
         public float enemyStepDelay = 0.4f;
         public bool useTrainKit = true;      // off = the white-box carriage
         public bool cutawayNearWall = true;  // camera-side wall casts shadows but isn't drawn
@@ -68,19 +66,6 @@ namespace RailTracer
             new[] { 10, 2, -1, 0, 1, 0 }, new[] { 12, 0, 0, 1, 0, 0 }, new[] { 15, 4, 0, -1, 1, 0 },
             new[] { 18, 2, -1, 0, 0, 1 }, new[] { 21, 1, 0, 1, 1, 0 }, new[] { 24, 3, 0, -1, 0, 1 },
         };
-
-        // The animation test carriage: you at (4,1), every dummy facing away so any kill works on it. Above you at the
-        // window (rail grab; a seat beside it, so its brutal kill is the table shove), left of you with a seat beyond it
-        // (the table shove), below you in the open aisle (the other brutal kills), and a body up-left to throw.
-        static readonly string[] TestMap =
-        {
-            "..S..S..S..S.WS..SL.S..SL.",
-            "..S.PS..S..S.WS..S..S..S..",
-            "..........................",
-            "..S..S..S..S.WS..S..S..S..",
-            "..S..S.LS..S.WS..S.LS..S..",
-        };
-        static readonly int[][] TestSpawns = { new[] { 4, 0, 0, -1, 0, 0 }, new[] { 3, 1, -1, 0, 0, 0 }, new[] { 4, 2, 0, 1, 0, 0 }, new[] { 3, 0, 1, 0, 0, 0 } };
 
         // Patrol routes by spawn index (waypoints walked in a loop); everyone else guards their spot, turning now and then.
         static readonly Dictionary<int, Cell[]> FirstPatrols = new Dictionary<int, Cell[]>
@@ -289,7 +274,6 @@ namespace RailTracer
             bodyOffset.Clear();
             takedownVictim = null;
             selected = null;
-            if (testMode) { Map = TestMap; Spawns = TestSpawns; Patrols = new Dictionary<int, Cell[]>(); }
             c = new Carriage(Map, tuning, seed != 0 ? seed : Random.Range(1, int.MaxValue));
             for (int i = 0; i < Spawns.Length; i++)
             {
@@ -297,16 +281,7 @@ namespace RailTracer
                 c.Spawn(s[0], s[1], s[2], s[3], s[4], s[5] == 1, Patrols.TryGetValue(i, out var route) ? route.ToList() : null);
             }
             c.NameEnemies();
-            if (testMode)
-            {
-                // The last spawn is the body to throw; every skill unlocked.
-                var dead = c.enemies[c.enemies.Count - 1];
-                dead.state = EnemyState.Dead;
-                c.bodies.Add(new Body { who = dead, pos = dead.pos, kind = BodyKind.Brutal });
-                c.legend = tuning.maxLegend;
-                hud.ShowCard("Animation test", "Kill the dummies.", "R resets.", "1-8 skills  /  C crouch  /  G grab the body, 7 throws  /  Space: next turn", 4f, true);
-            }
-            else hud.ShowCard($"Carriage {carriageNo}", "A carriage full of gunmen.", "Break their nerve.", null, 3f, true);
+            hud.ShowCard($"Carriage {carriageNo}", "A carriage full of gunmen.", "Break their nerve.", null, 3f, true);
             endShown = false;
             walkQueued = false;
             taken.Clear();
@@ -978,7 +953,7 @@ namespace RailTracer
                 kb = null;
                 mouse = null;
             }
-            else if ((!testMode && TutorialStep(kb, mouse)) || PauseStep(kb, mouse) || LogStep(kb, mouse))
+            else if (TutorialStep(kb, mouse) || PauseStep(kb, mouse) || LogStep(kb, mouse))
             {
                 kb = null;
                 mouse = null;
@@ -1082,7 +1057,7 @@ namespace RailTracer
                 c.log.Skip(Mathf.Max(0, c.log.Count - 8)).ToList());
             // The level is won the moment nobody is left fighting; anyone broken and fleeing still runs out first.
             if (c.Won && !busy && !endShown && c.enemies.Exists(e => e.state == EnemyState.Broken && e.fleeing)) StartCoroutine(FleersOut());
-            if (c.Over && !busy && !endShown && !tut.Active && !testMode)
+            if (c.Over && !busy && !endShown && !tut.Active)
             {
                 endShown = true;
                 if (c.Won) hud.ShowCard($"Carriage {carriageNo} cleared", "The assassin washes up", "and steps out as the conductor.", "R to ride again  /  N for a new train", 0f, true, TicketStates());
@@ -1185,7 +1160,7 @@ namespace RailTracer
         // move has resolved, and in the enemy turn after each enemy acts.
         void Poll()
         {
-            if (tut.Skipped || c == null || testMode) return;
+            if (tut.Skipped || c == null) return;
             foreach (var e in c.enemies)
             {
                 if (!e.InPlay) continue;
@@ -1781,7 +1756,6 @@ namespace RailTracer
         IEnumerator EnemyPhase()
         {
             busy = true;
-            if (testMode) { c.EndPlayerTurn(); c.StartPlayerTurn(); busy = false; yield break; } // the dummies never act
             Poll(); // cards from the player's move first
             while (tut.Active) yield return null;
             c.EndPlayerTurn();

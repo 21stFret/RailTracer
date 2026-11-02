@@ -110,7 +110,7 @@ Hover label: name, role, one state line ("Searching · Shaken", "Panicked · Fre
 
 ## Animation test
 
-`Assets/RailTracer/AnimationTest.unity`: the main scene with the Game component's Test Mode on. You stand at (4,1) with three dummies facing away (at the window above you, beside a seat to your left, in the open aisle below) and a body to throw; legend 100, nobody acts (Space just starts a new turn), no tutorial or end card; R resets.
+`Assets/RailTracer/AnimationTest.unity`: no train, just an attacker and a victim on a bare floor at full size, playing every takedown in `Resources/Takedowns` in a row on a loop, spaced and turned by each entry's Victim Offset / Victim Yaw (edits show on the next play). Left / right arrows: previous / next; R: replay; Space: pause; right-drag orbits, scroll zooms.
 
 ## Camera, HUD and presentation
 
