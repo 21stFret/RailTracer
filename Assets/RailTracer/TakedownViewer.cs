@@ -13,6 +13,9 @@ namespace RailTracer
         public float holdAfter = 1f;   // the end pose stays this long
         public float resetPause = 0.4f; // back to idle this long before the next one
         TakedownLibrary library;
+        BloodKit blood;      // the game's blood (Resources/Blood/BloodKit), fired at each takedown's Blood At
+        Transform bloodRoot; // this loop's stains, cleared on the next
+        float bloodFlash = -9f;
         Animator attacker, victim;
         Camera cam;
         int index;
@@ -23,6 +26,8 @@ namespace RailTracer
         void Start()
         {
             library = Resources.Load<TakedownLibrary>("Takedowns");
+            blood = Resources.Load<BloodKit>("Blood/BloodKit");
+            bloodRoot = new GameObject("Blood").transform;
             var model = Resources.Load<GameObject>("Anim/Character");
             var playerController = Resources.Load<RuntimeAnimatorController>("Anim/Player");
             var enemyController = Resources.Load<RuntimeAnimatorController>("Anim/Enemy");
@@ -75,9 +80,10 @@ namespace RailTracer
         }
 
         // One takedown, as the game plays it: the victim placed from the attacker, both clips together, a combo's second
-        // clip cross-faded in, then the end pose held.
+        // clip cross-faded in, the blood at Blood At (of the last clip), then the end pose held.
         IEnumerator Play(Takedown t)
         {
+            foreach (Transform stain in bloodRoot) Destroy(stain.gameObject);
             attacker.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
             victim.transform.SetPositionAndRotation(t.victimOffset, Quaternion.Euler(0f, t.victimYaw, 0f));
             Override(attacker, "Finisher Attacker", t.attacker);
@@ -92,8 +98,10 @@ namespace RailTracer
             attacker.speed = victim.speed = t.speed;
             attacker.Play(finisher, 0, 0f);
             victim.Play(finisher, 0, 0f);
-            label = $"{index + 1}/{library.takedowns.Count}  {t.name}   offset {t.victimOffset}  yaw {t.victimYaw}" + (chained ? "  (combo)" : "");
+            label = $"{index + 1}/{library.takedowns.Count}  {t.name}   offset {t.victimOffset}  yaw {t.victimYaw}  blood at {t.bloodAt:0.00}" + (chained ? "  (combo: of the second clip)" : "");
             float length = t.attacker.length / Mathf.Max(0.01f, t.speed);
+            float lastFrom = chained ? -1f : 0f; // when the clip the blood belongs to started
+            bool bled = false;
             for (float time = 0f; time < length; time += Time.deltaTime)
             {
                 if (jump) yield break;
@@ -101,16 +109,44 @@ namespace RailTracer
                 {
                     attacker.CrossFadeInFixedTime(combo, t.comboBlend, 0, t.comboStart * t.attacker2.length);
                     victim.CrossFadeInFixedTime(combo, t.comboBlend, 0, t.comboStart * t.victim2.length);
+                    lastFrom = time;
                     length = time + t.attacker2.length * (1f - t.comboStart) / Mathf.Max(0.01f, t.speed);
                     chained = false;
                 }
+                if (!bled && lastFrom >= 0f && (time - lastFrom) / (length - lastFrom) >= t.bloodAt) { Bleed(t.kind); bled = true; }
                 yield return null;
             }
+            if (!bled) Bleed(t.kind);
             for (float time = 0f; time < holdAfter && !jump; time += Time.deltaTime) yield return null;
             attacker.speed = victim.speed = 1f;
             attacker.Play("Idle", 0, 0f);
             victim.Play("Idle", 0, 0f);
             for (float time = 0f; time < resetPause && !jump; time += Time.deltaTime) yield return null;
+        }
+
+        // The game's kill blood (Game.KillBlood) from the victim's chest: brutal kills spray and pool, stealth kills less.
+        void Bleed(KillKind kind)
+        {
+            bloodFlash = Time.time;
+            if (!blood) return;
+            var bone = victim.GetBoneTransform(HumanBodyBones.Chest);
+            var chest = bone ? bone.position : victim.transform.position + Vector3.up * 1.1f;
+            var floor = new Vector3(chest.x, 0f, chest.z);
+            var dir = victim.transform.position - attacker.transform.position;
+            dir.y = 0f;
+            dir = dir.sqrMagnitude > 1e-4f ? dir.normalized : Vector3.forward;
+            if (kind == KillKind.Brutal)
+            {
+                blood.Spray(bloodRoot, chest, dir, blood.brutalRays, blood.smearScale);
+                blood.Decal(bloodRoot, floor, Vector3.down, blood.poolScale);
+                blood.Splash(bloodRoot, chest, dir, true);
+            }
+            else
+            {
+                blood.Splash(bloodRoot, chest, dir, false);
+                blood.Decal(bloodRoot, floor, Vector3.down, blood.spatterScale);
+                blood.Spray(bloodRoot, chest, dir, blood.quietRays, blood.spatterScale);
+            }
         }
 
         static void Override(Animator a, string slot, AnimationClip clip)
@@ -151,6 +187,7 @@ namespace RailTracer
         {
             GUI.Label(new Rect(16, 12, 1200, 24), label);
             GUI.Label(new Rect(16, 34, 1200, 24), "Left / Right: previous / next   R: replay   Space: pause   Right-drag: orbit   Scroll: zoom");
+            if (Time.time - bloodFlash < 0.6f) GUI.Label(new Rect(16, 56, 300, 24), "BLOOD");
         }
     }
 }

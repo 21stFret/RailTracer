@@ -110,7 +110,9 @@ Hover label: name, role, one state line ("Searching · Shaken", "Panicked · Fre
 
 ## Animation test
 
-`Assets/RailTracer/AnimationTest.unity`: no train, just an attacker and a victim on a bare floor at full size, replaying one takedown from `Resources/Takedowns` on a loop until you switch, spaced and turned by each entry's Victim Offset / Victim Yaw (edits show on the next play). Left / right arrows: previous / next; R: replay; Space: pause; right-drag orbits, scroll zooms.
+`Assets/RailTracer/AnimationTest.unity`: no train, just an attacker and a victim on a bare floor at full size, replaying one takedown from `Resources/Takedowns` on a loop until you switch, spaced and turned by each entry's Victim Offset / Victim Yaw (edits show on the next play). The game's kill blood fires at each entry's Blood At (of the last clip, for a combo), from the victim's chest, and "BLOOD" flashes on screen; stains clear each loop. Left / right arrows: previous / next; R: replay; Space: pause; right-drag orbits, scroll zooms.
+
+In the game too, finisher blood now comes from the victim's chest bone (where the clip has carried them), not above their tile.
 
 ## Camera, HUD and presentation
 

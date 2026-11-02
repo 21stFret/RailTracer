@@ -1474,10 +1474,10 @@ namespace RailTracer
                     }
                     else if (time >= length2) break;
                     float t = second ? time / length2 : time / length;
-                    if ((!chained || second) && !bled && t >= bloodAt) { KillBlood(victim, act, playerFacing); bled = true; }
+                    if ((!chained || second) && !bled && t >= bloodAt) { KillBlood(victim, act, playerFacing, Chest(va)); bled = true; }
                     yield return null;
                 }
-                if (!bled) KillBlood(victim, act, playerFacing);
+                if (!bled) KillBlood(victim, act, playerFacing, Chest(va));
                 playerShown = to;
                 if (cam) yield return FlyOut();
                 if (entry != null && entry.victimFallsAfter) StartCoroutine(Topple(va.transform, playerFacing)); // still on their feet
@@ -1493,6 +1493,12 @@ namespace RailTracer
                 takedownVictim = null;
             }
             busy = false;
+        }
+
+        Vector3? Chest(Animator a)
+        {
+            var bone = a.GetBoneTransform(HumanBodyBones.Chest);
+            return bone ? root.InverseTransformPoint(bone.position) : (Vector3?)null;
         }
 
         static void Override(Animator a, string slot, AnimationClip clip)
@@ -1706,13 +1712,14 @@ namespace RailTracer
             lastHits = c.hitsTaken;
         }
 
-        // `how` null = shot by someone else's gun. `dir` points from the killer through the victim.
-        void KillBlood(Enemy e, Act? how, Vector3 dir)
+        // `how` null = shot by someone else's gun. `dir` points from the killer through the victim. `chestAt`: the victim's
+        // chest where a finisher has carried it (root space); else above its tile.
+        void KillBlood(Enemy e, Act? how, Vector3 dir, Vector3? chestAt = null)
         {
             if (!blood) return;
             decaled.Add(e.pos);
-            var at = World(e.pos);
-            var chest = at + Vector3.up * FigureHeight * 0.6f;
+            var at = chestAt.HasValue ? new Vector3(chestAt.Value.x, 0f, chestAt.Value.z) : World(e.pos);
+            var chest = chestAt ?? at + Vector3.up * FigureHeight * 0.6f;
             switch (how)
             {
                 case Act.QuietKill:
