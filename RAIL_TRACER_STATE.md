@@ -110,7 +110,7 @@ Hover label: name, role, one state line ("Searching · Shaken", "Panicked · Fre
 
 ## Animation test
 
-`Assets/RailTracer/AnimationTest.unity`: no train, just an attacker and a victim on a bare floor at full size, playing every takedown in `Resources/Takedowns` in a row on a loop, spaced and turned by each entry's Victim Offset / Victim Yaw (edits show on the next play). Left / right arrows: previous / next; R: replay; Space: pause; right-drag orbits, scroll zooms.
+`Assets/RailTracer/AnimationTest.unity`: no train, just an attacker and a victim on a bare floor at full size, replaying one takedown from `Resources/Takedowns` on a loop until you switch, spaced and turned by each entry's Victim Offset / Victim Yaw (edits show on the next play). Left / right arrows: previous / next; R: replay; Space: pause; right-drag orbits, scroll zooms.
 
 ## Camera, HUD and presentation
 

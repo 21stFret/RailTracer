@@ -4,9 +4,9 @@ using UnityEngine.InputSystem;
 
 namespace RailTracer
 {
-    // The animation test scene: every takedown in Resources/Takedowns, one after another on a loop, attacker and victim
-    // on a bare floor at full size, spaced and turned by each entry's Victim Offset / Victim Yaw (read fresh each
-    // play, so edits to the asset show on the next one). Left / right arrows: previous / next. R: replay. Space: pause.
+    // The animation test scene: one takedown from Resources/Takedowns at a time, replaying on a loop, attacker and victim
+    // on a bare floor at full size, spaced and turned by the entry's Victim Offset / Victim Yaw (read fresh each play,
+    // so edits to the asset show on the next loop). Left / right arrows: previous / next. R: replay now. Space: pause.
     // Right-drag orbits, scroll zooms.
     public class TakedownViewer : MonoBehaviour
     {
@@ -71,7 +71,6 @@ namespace RailTracer
                 jump = false;
                 if (t.attacker && t.victim) yield return Play(t);
                 else { label = $"{index + 1}/{list.Count}  {t.name}: missing a clip, skipped"; yield return new WaitForSeconds(0.5f); }
-                if (!jump) index++;
             }
         }
 
