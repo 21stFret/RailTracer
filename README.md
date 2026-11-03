@@ -7,3 +7,4 @@ Unity 6000.4.11f1 (URP), turn-based stealth. Current rules and tuning: `RAIL_TRA
 - `Assets/Synty/` (Synty Animation Base Locomotion and Synty models)
 - `Assets/RVFX/`
 - `Assets/Animations/Game/Brutal_Finishers_Hand_and_Knife/` (Brutal Finishers - Hand and Knife, RamsterZ, exported to FBX)
+- `Assets/Animations/Game/StealthFinishers_KnifeAndHand/` (Stealth Finishers - Knife and Hand, exported to FBX)

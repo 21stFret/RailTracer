@@ -13,6 +13,7 @@ namespace RailTracer
     static class FinisherSetup
     {
         const string Pack = "Assets/Animations/Game/Brutal_Finishers_Hand_and_Knife/Animations/Paired_Knife/";
+        const string StealthPack = "Assets/Animations/Game/StealthFinishers_KnifeAndHand/Animations/"; // Stealth Finishers - Knife and Hand
         const string Mannequin = "Assets/Animations/SK_Mannequin.FBX";
         const string Library = "Assets/RailTracer/Resources/Takedowns.asset";
         const int FirstFrame = 2; // frames 0-1 are the bind pose
@@ -24,7 +25,7 @@ namespace RailTracer
         {
             static void OnPostprocessAllAssets(string[] imported, string[] deleted, string[] moved, string[] movedFrom)
             {
-                if (imported.Any(p => p.StartsWith(Pack) || p == Mannequin)) EditorApplication.delayCall += Run;
+                if (imported.Any(p => p.StartsWith(Pack) || p.StartsWith(StealthPack) || p == Mannequin)) EditorApplication.delayCall += Run;
             }
         }
 
@@ -34,7 +35,9 @@ namespace RailTracer
             if (!Directory.Exists(Pack) || !File.Exists(Mannequin)) return;
             var avatar = MannequinAvatar();
             if (!avatar) return;
-            foreach (var path in Directory.GetFiles(Pack, "*.FBX").Select(p => p.Replace('\\', '/'))) Humanoid(path, avatar);
+            foreach (var pack in new[] { Pack, StealthPack })
+                if (Directory.Exists(pack))
+                    foreach (var path in Directory.GetFiles(pack, "*.FBX").Select(p => p.Replace('\\', '/'))) Humanoid(path, avatar);
             if (!File.Exists(Library)) BuildLibrary();
         }
 
