@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 16.15 (4 Nov 2026).
+Last updated: Update 16.16 (4 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -132,7 +132,7 @@ In the game too, finisher blood now comes from the victim's chest bone (where th
 
 ## Camera, HUD and presentation
 
-- Kill cam on brutal kills (as long as the finisher), rail grabs and throws (1.2 s): the camera flies in (0.45 s), holds a beat (0.2 s), plays the shot from a fixed angle, then flies back to your exact view (0.35 s). The angle is low and side-on, trying other angles until no wall, floor, luggage or seat back is in the way (or a takedown's own Cam Offset). Slow motion: Kill Cam Slow Mo (brutal and rail, default 1 = none), Throw Cam Slow Mo (0.5). Any input skips it; Pause menu "Kill cam: On/Off" (default On). The HUD hides during it.
+- Kill cam on brutal kills (as long as the finisher), rail grabs and throws (1.2 s): the camera flies in (0.45 s), holds a beat (0.2 s), plays the shot from a fixed angle, then flies back to your exact view (0.35 s). The angle is low and side-on, trying other angles until no wall, floor, luggage or seat back is in the way (or a takedown's own Cam Offset). Slow motion: Kill Cam Slow Mo (brutal and rail, default 1 = none), Throw Cam Slow Mo (0.5). It can't be skipped; Pause menu "Kill cam: On/Off" (default On). The HUD hides during it.
 - The carriage lamps redden with legend, stepping at 25, 50, 75 and 100 and blending over about a second. Overlays never change.
 - Finishers: Brutal Finishers knife clips (Humanoid on the mannequin avatar) in `Resources/Takedowns`, Alex's picks:
   - Stealth, crouched (random): Heart Stab, plus the Stealth Finishers pack: Grab Flip Head Stomp, Karate Chop KO, Neck Break, Grab Flip Stab, Neck Stab (from behind), Spin Stab, Thigh and Neck Stab (start values: 1 m apart, victim facing away; still to tune). Stealth, standing: Shove Neck Slice (quick).

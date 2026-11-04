@@ -168,13 +168,13 @@ namespace RailTracer
         public bool quietVictimFacesAway = true; // grabbed from behind; untick if the clip expects them facing you
         public float snatchTime = 0.25f;         // the snatch: the victim is yanked onto your tile this fast, then the stealth kill plays
         TakedownLibrary takedowns;               // Resources/Takedowns: the finishers kills choose from (else the old pair)
-        // Kill cam: brutal kills (as long as the finisher), rail grabs and throws cut in close; any input skips it.
+        // Kill cam: brutal kills (as long as the finisher), rail grabs and throws cut in close (no skipping: it always plays out).
         const string KillCamKey = "RailTracer.KillCam";
         static bool KillCamOn => PlayerPrefs.GetInt(KillCamKey, 1) == 1;
         public float killCamDistance = 1.9f, killCamHeight = 0.55f, sceneCamTime = 1.2f;
         public float killCamFlyIn = 0.45f, killCamPause = 0.2f, killCamFlyOut = 0.35f; // seconds (real time)
         [Range(0.1f, 1f)] public float killCamSlowMo = 1f, throwCamSlowMo = 0.5f;       // game speed during the shot
-        bool camming, camSkip;
+        bool camming;
         Vector3 savedFocus; float savedDistance; Quaternion savedCamRot;
 
         // Blood: Resources/Blood/BloodKit (made by Editor/BloodSetup.cs). Stains are parented to the carriage,
@@ -1448,15 +1448,6 @@ namespace RailTracer
                 Vector3? anchor = null;
                 for (float time = 0f; ; time += Time.deltaTime)
                 {
-                    if (cam && (camSkip || SkipPressed()))
-                    {
-                        // Straight to the end state (the combo's last clip).
-                        int h = chained ? combo : hash;
-                        playerAnim.Play(h, 0, 1f);
-                        va.Play(h, 0, 1f);
-                        camSkip = true;
-                        break;
-                    }
                     if (!second)
                     {
                         if (entry == null) playerShown = Vector3.Lerp(from, to, move.Evaluate(Mathf.Min(1f, time / length))); // the old pair glides in
@@ -1525,13 +1516,6 @@ namespace RailTracer
 
         // ---- Kill cam ----
 
-        static bool SkipPressed()
-        {
-            var kb = Keyboard.current;
-            var m = Mouse.current;
-            return (kb != null && kb.anyKey.wasPressedThisFrame) || (m != null && (m.leftButton.wasPressedThisFrame || m.rightButton.wasPressedThisFrame));
-        }
-
         // Starts a kill cam: remembers your view exactly and hides the HUD until EndKillCam.
         void BeginKillCam()
         {
@@ -1588,7 +1572,6 @@ namespace RailTracer
         }
 
         // Flies the camera in to `pose` (smoothly, on real time, so slow-mo doesn't drag it), then holds a beat.
-        // Any input skips both (camSkip).
         IEnumerator FlyIn((Vector3 pos, Vector3 look) pose)
         {
             Vector3 p0 = cam.transform.position;
@@ -1597,17 +1580,12 @@ namespace RailTracer
             var r1 = Quaternion.LookRotation(root.TransformPoint(pose.look) - p1);
             for (float time = 0f; time < killCamFlyIn; time += Time.unscaledDeltaTime)
             {
-                if (time > 0f && SkipPressed()) { camSkip = true; break; }
                 float k = Mathf.SmoothStep(0f, 1f, time / killCamFlyIn);
                 cam.transform.SetPositionAndRotation(Vector3.Lerp(p0, p1, k), Quaternion.Slerp(r0, r1, k));
                 yield return null;
             }
             SetCam(pose);
-            for (float time = 0f; time < killCamPause && !camSkip; time += Time.unscaledDeltaTime)
-            {
-                if (time > 0f && SkipPressed()) camSkip = true;
-                yield return null;
-            }
+            for (float time = 0f; time < killCamPause; time += Time.unscaledDeltaTime) yield return null;
         }
 
         // Flies back to exactly the view you had, then ends the cam.
@@ -1618,7 +1596,7 @@ namespace RailTracer
             Vector3 p0 = cam.transform.position;
             var r0 = cam.transform.rotation;
             var p1 = root.TransformPoint(savedFocus) - savedCamRot * Vector3.forward * savedDistance;
-            for (float time = 0f; time < killCamFlyOut && !camSkip; time += Time.unscaledDeltaTime)
+            for (float time = 0f; time < killCamFlyOut; time += Time.unscaledDeltaTime)
             {
                 float k = Mathf.SmoothStep(0f, 1f, time / killCamFlyOut);
                 cam.transform.SetPositionAndRotation(Vector3.Lerp(p0, p1, k), Quaternion.Slerp(r0, savedCamRot, k));
@@ -1631,7 +1609,7 @@ namespace RailTracer
         void EndKillCam()
         {
             if (!camming) return;
-            camming = camSkip = false;
+            camming = false;
             Time.timeScale = 1f;
             focus = savedFocus;
             camDistance = savedDistance;
@@ -1649,9 +1627,8 @@ namespace RailTracer
             var pose = KillCamPose(spot - along * 0.5f, spot + along * 0.5f, Vector3.zero);
             yield return FlyIn(pose);
             Time.timeScale = slowMo;
-            for (float time = 0f; time < sceneCamTime && !camSkip; time += Time.unscaledDeltaTime)
+            for (float time = 0f; time < sceneCamTime; time += Time.unscaledDeltaTime)
             {
-                if (time > 0f && SkipPressed()) camSkip = true;
                 SetCam((pose.pos, target() + Vector3.up * FigureHeight * 0.4f));
                 yield return null;
             }
