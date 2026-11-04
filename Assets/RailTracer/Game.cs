@@ -1273,9 +1273,10 @@ namespace RailTracer
                 bool threat = threats.TryGetValue(e, out int pct); // will fire on what you're aiming
                 // What they'll do if you end your turn where you are (or where the aimed move ends).
                 var at = previewLanding ?? c.player;
-                // Red only while they can see you where you stand now (or a berserk heavy): a fighter you've slipped
-                // out of sight of shows white "?" at once, as it will drop to searching at its turn.
-                bool red = e.berserk || (e.awareness == Awareness.Combat && c.CanSee(e, c.player));
+                // Red only while they can see you where you stand now, or where the aimed move ends (anyone not
+                // startled who sees you fights), or a berserk heavy. A fighter you've slipped out of sight of shows
+                // white "?" at once, as it will drop to searching at its turn.
+                bool red = !broken && (e.berserk || (e.InPlay && e.awareness != Awareness.Startled && c.CanSee(e, at)));
                 int shownAwareness = broken ? 4 : red ? (int)Awareness.Combat
                     : e.awareness == Awareness.Combat ? (int)Awareness.Searching : (int)e.awareness;
                 string icon = broken || e.awareness == Awareness.Startled ? null
