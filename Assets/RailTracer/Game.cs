@@ -1273,14 +1273,19 @@ namespace RailTracer
                 bool threat = threats.TryGetValue(e, out int pct); // will fire on what you're aiming
                 // What they'll do if you end your turn where you are (or where the aimed move ends).
                 var at = previewLanding ?? c.player;
+                // Red only while they can see you where you stand now (or a berserk heavy): a fighter you've slipped
+                // out of sight of shows white "?" at once, as it will drop to searching at its turn.
+                bool red = e.berserk || (e.awareness == Awareness.Combat && c.CanSee(e, c.player));
+                int shownAwareness = broken ? 4 : red ? (int)Awareness.Combat
+                    : e.awareness == Awareness.Combat ? (int)Awareness.Searching : (int)e.awareness;
                 string icon = broken || e.awareness == Awareness.Startled ? null
                     : c.PanicTurn(e) && e.panic == Panic.WildFire ? "wildfire"
-                    : e.awareness != Awareness.Combat && !e.berserk ? null // a searcher keeps its "?": icons are for red chips
+                    : !red ? null // a white chip keeps its "?": icons are for red chips
                     : c.Charges(e, at) ? "charge"
                     : c.WillShoot(e, at) ? "crosshair" : null;
                 int plate = e.tough && !broken ? (c.StageOf(e) >= Stage.Shaken ? 2 : 1) : 0; // cracked once they can be killed
                 bool notYet = KillMode.HasValue && plate == 1;
-                chips[e] = hud.AddTag(sp, k, broken ? 4 : (int)e.awareness, e.terror, e.hasSeen, hover == e.pos || threat, c.Name(e), role, c.StatusText(e),
+                chips[e] = hud.AddTag(sp, k, shownAwareness, e.terror, e.hasSeen, hover == e.pos || threat, c.Name(e), role, c.StatusText(e),
                     threat ? $"Hit {pct}%" : c.IntentText(e), threat, icon, plate, notYet);
             }
             hud.EndTags();

@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 16.11 (3 Nov 2026).
+Last updated: Update 16.12 (4 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -54,7 +54,7 @@ Kill details:
 | Unaware | Black, white outline (ring icon) | Start; a search running out | Any sighting, noise, blood, body, shout or gunfire |
 | Searching | White, "?" | A noise, blood, a body, a shout or gunfire; a fighter losing sight of you at its turn | Seeing you (combat); after the 3-turn look-around ("gave up the search") |
 | Startled | White, "!" | Never saw you, then sees a leap landing or a brutal kill | Its next turn: loses it, then searches where it saw you |
-| Combat | Red | The moment it sees you (checked on every tile you move through), unless startled | Losing sight of you, at its own turn: it drops to Searching where it last saw you |
+| Combat | Red, only while it can see you where you stand (redrawn every frame, so every step) | The moment it sees you (checked on every tile you move through), unless startled | Losing sight of you, at its own turn: it drops to Searching where it last saw you. Its chip turns white "?" the moment you are out of its sight |
 | Broken | White flag | Terror 100 | Never (out of play, killable) |
 
 Chip icons (what they'll do if you end your turn where you are, or where the aimed move ends). Crosshair and charge show only on red (combat) chips and berserk heavies; a searcher keeps its "?":
