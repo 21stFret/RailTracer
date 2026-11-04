@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 16 (1 Nov 2026).
+Last updated: Update 16.11 (3 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -15,6 +15,7 @@ Inspector; the saved scene matches these.
 | 14 (playtest fixes: sight, cover, kill split, intents, log panel, previews) | Done. Later changed: start-tile reaction fire removed (Alex), label kept as "Hit %" (Alex) |
 | 15 (kill polish) | Done, not yet seen in Play mode. Kill cam, lamps, body fear, takedown library |
 | 16 (behaviour and readability) | Done, not yet seen in Play mode |
+| 16.11 (legend every 10, chip and zone fixes) | Done, not yet seen in Play mode |
 | Still needed (art) | Rail grab, demon throw and crouched drag-down animations; knife mesh (on hold); unarmed finishers (skipped for now) |
 
 ## Turn
@@ -22,6 +23,7 @@ Inspector; the saved scene matches these.
 - 4 moves and 1 action per turn. Crouched or dragging a body costs 2 moves a tile.
 - End the turn by holding Space (0.5 s). Undo (Z) until you act, are seen or move a body.
 - Your legend (0–100) grows from kills only: stealth kill +10, rail grab +25, brutal kill +30. It is also a shield: hits drain it before health.
+- Thresholds every 10, notched on the bar at 10–90: brutal unlock 10, hop Bloodied 20, rail unlock 30, stealth Bloodied 40, brutal Bloodied 50, rail Bloodied 60, leap Bloodied 70, demon throw 80, dread 90. Above 90 is overspill: still capped at 100 and still a shield, so it protects dread.
 - Health 30. A hit does 15.
 
 ## Skills
@@ -29,13 +31,13 @@ Inspector; the saved scene matches these.
 | Key | Skill | Cost | Cooldown | Range | Unlock | Bloodied |
 | --- | --- | --- | --- | --- | --- | --- |
 | 1 | Grab and drag | Free | none | A body on your tile or next to you (not one hung out of a window) | 0 | none |
-| 2 | Leap | Needs all 4 moves unspent; uses them all | 3 | 3 tiles, line of sight, clear flight over seats (not luggage or walls) | 0 | 75: double range (6); the stylish flip plays past 3 |
-| 3 | Window hop | All moves, once a turn | none | The next booth's window, same side | 0 | 25: costs no moves |
-| 4 | Stealth kill | Action | none | The 4 tiles straight next to you | 0 | 35: diagonals too, plus the snatch (2 tiles straight, not past luggage or people) |
+| 2 | Leap | Needs all 4 moves unspent; uses them all | 3 | 3 tiles, line of sight, clear flight over seats (not luggage or walls) | 0 | 70: double range (6); the stylish flip plays past 3 |
+| 3 | Window hop | All moves, once a turn | none | The next booth's window, same side | 0 | 20: costs no moves |
+| 4 | Stealth kill | Action | none | The 4 tiles straight next to you | 0 | 40: diagonals too, plus the snatch (2 tiles straight, not past luggage or people) |
 | 5 | Brutal kill | Action; uses all moves | 2 (blocked next turn; the box shows 1) | The 8 tiles round you | 10 | 50: refreshes your leap |
-| 6 | Rail grab | Action | 2 | The 8 tiles round you; you or they at a window | 25 | 60: bigger terror (×1.5) and medium instead of small for those who only hear it |
-| 7 | Demon throw | Action, body held | 3 | 5 tiles, line of sight | 85 | 85 |
-| 8 | Dread | Passive | none | none | 100 | Anyone who sees you is at least Shaken |
+| 6 | Rail grab | Action | 2 | The 8 tiles round you; you or they at a window | 30 | 60: bigger terror (×1.5) and medium instead of small for those who only hear it |
+| 7 | Demon throw | Action, body held | 3 | 5 tiles, line of sight | 80 | 80 |
+| 8 | Dread | Passive | none | none | 90 | Anyone who sees you is at least Shaken |
 
 Kill details:
 
@@ -55,7 +57,7 @@ Kill details:
 | Combat | Red | The moment it sees you (checked on every tile you move through), unless startled | Losing sight of you, at its own turn: it drops to Searching where it last saw you |
 | Broken | White flag | Terror 100 | Never (out of play, killable) |
 
-Chip icons (what they'll do if you end your turn where you are, or where the aimed move ends):
+Chip icons (what they'll do if you end your turn where you are, or where the aimed move ends). Crosshair and charge show only on red (combat) chips and berserk heavies; a searcher keeps its "?":
 
 - **Crosshair:** a guard that sees you and will shoot (not one hesitating, startled or on a panic turn).
 - **Charge:** a heavy that sees you, or any berserk heavy. Heavies don't shoot: they charge 3 tiles a turn and melee (90%) when next to you.
@@ -102,7 +104,7 @@ Hover label: name, role, one state line ("Searching · Shaken", "Panicked · Fre
 - From searching and combat enemies with their shot unspent this turn (not on a panicked guard's freeze turn).
 - Triggers on stepping onto a tile they see you on (not the tile you start on), every tile of a leap's arc and its landing, a hop's landing tile, and standing up. Once per enemy per turn; a shot ends a walk there.
 - Shots at a leaping player are 25 points lower (85% becomes 60%).
-- Shown on the floor as one red dashed line round the whole watched area. The move preview marks the tile in red and highlights the shooter with its hit chance.
+- Shown on the floor as a faint red tint on every watched tile (Game "Zone Tint", 0.12) and one red dashed line round the outer edge only: seats and the tiles they hide, up to 2 tiles between watched ones in a row or column, count as inside the line but stay untinted. The move preview marks the tile in red and highlights the shooter with its hit chance.
 
 ## Hits
 

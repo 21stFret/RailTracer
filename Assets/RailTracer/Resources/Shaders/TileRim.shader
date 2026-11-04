@@ -12,6 +12,7 @@ Shader "RailTracer/TileRim"
         _Soft ("Inner edge softness (antialiasing)", Range(0.001, 0.05)) = 0.006
         _Strength ("Alpha boost", Range(1, 4)) = 2
         _Opacity ("Opacity at the inner edge (the fade starts here)", Range(0, 1)) = 0.5
+        _FillColor ("Whole-tile tint under the rim (the reaction zone)", Color) = (0, 0, 0, 0)
     }
     SubShader
     {
@@ -32,6 +33,7 @@ Shader "RailTracer/TileRim"
             CBUFFER_START(UnityPerMaterial)
                 half4 _Color;
                 half _Inset, _Width, _Soft, _Strength, _Opacity;
+                half4 _FillColor;
             CBUFFER_END
 
             struct Attributes { float4 positionOS : POSITION; float2 uv : TEXCOORD0; };
@@ -54,7 +56,9 @@ Shader "RailTracer/TileRim"
                 half fade = saturate((edge - _Inset) / _Width);
                 half outer = fade * fade;
                 half inner = 1 - smoothstep(_Inset + _Width - _Soft, _Inset + _Width + _Soft, edge);
-                return half4(_Color.rgb, saturate(_Color.a * _Strength) * _Opacity * outer * inner);
+                half rim = saturate(_Color.a * _Strength) * _Opacity * outer * inner;
+                // The rim over the tint: rim colour where the rim is, the tint's colour and alpha elsewhere.
+                return half4(lerp(_FillColor.rgb, _Color.rgb, rim), rim + _FillColor.a * (1 - rim));
             }
             ENDHLSL
         }

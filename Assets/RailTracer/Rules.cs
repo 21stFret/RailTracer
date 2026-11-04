@@ -31,13 +31,13 @@ namespace RailTracer
         public static SkillDef[] Defaults() => new[]
         {
             new SkillDef { name = "Grab and drag", shortName = "Drag", description = "Grab a body for free. Drag it at half speed." },
-            new SkillDef { name = "Leap", shortName = "Leap", bloodied = 75, cooldown = 3, description = "Leap over seats to close in. Startles anyone who has never seen you. 3-turn cooldown.", upgrade = "Double leap range." },
-            new SkillDef { name = "Window hop", shortName = "Hop", bloodied = 25, description = "Out one window, in through the next. Unseen outside.", upgrade = "Hop without using your move." },
-            new SkillDef { name = "Stealth kill", shortName = "Stealth", bloodied = 35, description = "Kill anyone who can't see you: pulled onto your tile, you stay in cover.", upgrade = "Snatch: yank an enemy 2 tiles away onto your tile, over seats." },
+            new SkillDef { name = "Leap", shortName = "Leap", bloodied = 70, cooldown = 3, description = "Leap over seats to close in. Startles anyone who has never seen you. 3-turn cooldown.", upgrade = "Double leap range." },
+            new SkillDef { name = "Window hop", shortName = "Hop", bloodied = 20, description = "Out one window, in through the next. Unseen outside.", upgrade = "Hop without using your move." },
+            new SkillDef { name = "Stealth kill", shortName = "Stealth", bloodied = 40, description = "Kill anyone who can't see you: pulled onto your tile, you stay in cover.", upgrade = "Snatch: yank an enemy 2 tiles away onto your tile, over seats." },
             new SkillDef { name = "Brutal kill", shortName = "Brutal", unlock = 10, bloodied = 50, cooldown = 2, description = "Butcher them where everyone can see. Uses up your moves.", upgrade = "A brutal kill refreshes your leap." },
-            new SkillDef { name = "Rail grab", shortName = "Rail", unlock = 25, bloodied = 60, cooldown = 2, description = "Hold an enemy against the passing track.", upgrade = "Bigger terror, more blood." },
-            new SkillDef { name = "Demon throw", shortName = "Throw", unlock = 85, bloodied = 85, cooldown = 3, description = "Hurl a held body. Blood and terror where it lands." },
-            new SkillDef { name = "Dread", shortName = "Dread", unlock = 100, bloodied = 100, description = "Passive. Anyone who sees you is at least Shaken." },
+            new SkillDef { name = "Rail grab", shortName = "Rail", unlock = 30, bloodied = 60, cooldown = 2, description = "Hold an enemy against the passing track.", upgrade = "Bigger terror, more blood." },
+            new SkillDef { name = "Demon throw", shortName = "Throw", unlock = 80, bloodied = 80, cooldown = 3, description = "Hurl a held body. Blood and terror where it lands." },
+            new SkillDef { name = "Dread", shortName = "Dread", unlock = 90, bloodied = 90, description = "Passive. Anyone who sees you is at least Shaken." },
         };
     }
     public enum Intent { None, Hold, Return, Patrol, Shoot, Hesitate, Investigate, Follow, Charge, Melee, Search, Startled, Freeze, Flee, WildFire }
@@ -806,7 +806,7 @@ namespace RailTracer
             CanMove && leapWait == 0 && held == null && movesLeft == t.moveRange && !Blocked(c) && !Occupied(c)
             && Dist2(player, c) <= LeapRange * LeapRange && LineOfSight(player, c, false) && ClearFlight(player, c);
 
-        // Bloodied (75): twice as far.
+        // Bloodied (70): twice as far.
         public int LeapRange => Bloodied(SkillId.Leap) ? t.leapRange * 2 : t.leapRange;
 
         // The leap flies straight from tile centre to tile centre, a body's width wide: it may pass over seats but

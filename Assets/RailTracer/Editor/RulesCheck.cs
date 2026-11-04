@@ -218,7 +218,7 @@ namespace RailTracer
             Check(c.Perform(Act.QuietKill, victim), "standing stealth kill");
             Check(witness.awareness == Awareness.Combat && witness.terror == t.mediumTerror && witness.hasSeen, "witness sees you do it");
 
-            // Brutal kill locked at 0, unlocked by the first stealth kill (legend 10); rail grab at 25.
+            // Brutal kill locked at 0, unlocked by the first stealth kill (legend 10); rail grab at 30.
             c = new Carriage(new[] { "P.....", "......" }, t, 1);
             victim = c.Spawn(1, 0, 1, 0, 0);
             var second = c.Spawn(0, 1, 0, 1, 0);
@@ -228,7 +228,7 @@ namespace RailTracer
             Check(c.legend == Unlock(t, SkillId.Brutal) && c.CantAct(Act.BrutalKill, second) == null, "brutal kill unlocked after the first stealth kill");
             Check(c.CantAct(Act.RailGrab, second) != null, "rail grab still locked at 10");
             c.legend = Unlock(t, SkillId.Rail);
-            Check(c.CantAct(Act.RailGrab, second) == null, "rail grab unlocked at 25");
+            Check(c.CantAct(Act.RailGrab, second) == null, "rail grab unlocked at 30");
             c.ToggleCrouch();
             Check(c.CantAct(Act.BrutalKill, second) == null, "brutal from a crouch is allowed");
             c.ToggleCrouch();
@@ -308,18 +308,18 @@ namespace RailTracer
             Check(c.Hop(new Cell(3, 0)) && c.movesLeft == 0, "hop costs the move");
             c.StartPlayerTurn();
             c.legend = Blood(t, SkillId.Hop);
-            Check(c.Hop(new Cell(6, 0)) && c.movesLeft == t.moveRange, "free at 25");
+            Check(c.Hop(new Cell(6, 0)) && c.movesLeft == t.moveRange, "free at 20");
             PlaceBody(c, 7, 0);
             c.Grab();
             Check(!c.CanHopTo(new Cell(3, 0)), "bodies don't go through windows");
 
-            // Demon throw at 85: blood where it lands, big terror for those who see it.
+            // Demon throw at 80: blood where it lands, big terror for those who see it.
             c = new Carriage(new[] { "P.......", "........" }, t, 1);
             PlaceBody(c, 1, 0);
             var watcher = c.Spawn(7, 0, -1, 0, 0);
             c.Grab();
             c.legend = Unlock(t, SkillId.Throw) - 1;
-            Check(!c.CanThrowTo(new Cell(3, 0)), "throw needs 85 legend");
+            Check(!c.CanThrowTo(new Cell(3, 0)), "throw needs 80 legend");
             c.legend = Unlock(t, SkillId.Throw);
             Check(c.Throw(new Cell(3, 0)) && c.held == null && c.BodyAt(new Cell(3, 0)) != null, "thrown");
             Check(watcher.terror == t.largeTerror && c.IsBloody(new Cell(3, 0)) && c.IsBloody(new Cell(4, 0)), "terror and blood where it lands");
@@ -379,7 +379,7 @@ namespace RailTracer
             Check(c.KillOutcome(Act.QuietKill, victim) == (c.player, c.player), "stealth preview: you stay, the body lands on your tile");
 
             // The table matches the handoff (slot order, unlocks, Bloodied points, cooldowns).
-            int[] unlocks = { 0, 0, 0, 0, 10, 25, 85, 100 }, bloodied = { -1, 75, 25, 35, 50, 60, 85, 100 }, cools = { 0, 3, 0, 0, 2, 2, 3, 0 };
+            int[] unlocks = { 0, 0, 0, 0, 10, 30, 80, 90 }, bloodied = { -1, 70, 20, 40, 50, 60, 80, 90 }, cools = { 0, 3, 0, 0, 2, 2, 3, 0 };
             for (int i = 0; i < 8; i++)
                 Check(t.skills[i].unlock == unlocks[i] && t.skills[i].bloodied == bloodied[i] && t.skills[i].cooldown == cools[i], "skill table row " + (i + 1));
 

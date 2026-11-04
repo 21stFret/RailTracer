@@ -84,7 +84,7 @@ namespace RailTracer
         Transform root;
         Renderer[,] tiles;
         Renderer playerBody;
-        readonly Dictionary<Enemy, (Renderer body, Renderer nose, Renderer react)> views = new Dictionary<Enemy, (Renderer, Renderer, Renderer)>();
+        readonly Dictionary<Enemy, (Renderer body, Renderer nose)> views = new Dictionary<Enemy, (Renderer, Renderer)>();
         SkillId? selected; // hotkeys 1-8; no kill selected = clicking an enemy does nothing
         bool busy, showAllSenses, leaping, hopping, throwing, endShown;
         SkillHud hud;
@@ -338,8 +338,7 @@ namespace RailTracer
             playerBody = Box(Vector3.zero, new Vector3(0.6f, 0.5f, 0.6f), Color.white, PrimitiveType.Capsule);
             foreach (var e in c.enemies)
                 views[e] = (Box(Vector3.zero, new Vector3(0.6f, 0.5f, 0.6f), SuitColor(e), PrimitiveType.Capsule),
-                            Box(Vector3.zero, new Vector3(0.15f, 0.15f, 0.3f), Color.black),
-                            Box(Vector3.zero, new Vector3(0.25f, 0.25f, 0.25f), ReactCol, PrimitiveType.Sphere));
+                            Box(Vector3.zero, new Vector3(0.15f, 0.15f, 0.3f), Color.black));
 
             playerShown = new Vector3(c.player.x, 0, -c.player.y);
             focus = playerShown; // a new game or restart starts on you
@@ -1276,6 +1275,7 @@ namespace RailTracer
                 var at = previewLanding ?? c.player;
                 string icon = broken || e.awareness == Awareness.Startled ? null
                     : c.PanicTurn(e) && e.panic == Panic.WildFire ? "wildfire"
+                    : e.awareness != Awareness.Combat && !e.berserk ? null // a searcher keeps its "?": icons are for red chips
                     : c.Charges(e, at) ? "charge"
                     : c.WillShoot(e, at) ? "crosshair" : null;
                 int plate = e.tough && !broken ? (c.StageOf(e) >= Stage.Shaken ? 2 : 1) : 0; // cracked once they can be killed
@@ -1912,13 +1912,11 @@ namespace RailTracer
             foreach (var kv in views)
             {
                 var e = kv.Key;
-                var (body, nose, react) = kv.Value;
+                var (body, nose) = kv.Value;
                 bool present = e.state == EnemyState.Active || e.state == EnemyState.Broken || e == takedownVictim
                     || (e.state == EnemyState.Fled && !gone.Contains(e)); // a fleer stays in sight until out of the door
                 body.gameObject.SetActive(present);
                 nose.gameObject.SetActive(e.InPlay);
-                react.gameObject.SetActive(c.WillReact(e));
-                react.transform.localPosition = new Vector3(e.pos.x, FigureHeight + 0.3f, -e.pos.y);
                 if (anims.TryGetValue(e, out var anim))
                 {
                     if (e.state == EnemyState.Dead && e != takedownVictim) { Corpse(e, anim); continue; }
@@ -2125,7 +2123,11 @@ namespace RailTracer
         }
 
         // Reaction fire zone: every tile a ready gun (searching or fighting) would see you on as you stand or crouch,
-        // drawn as one red dashed line round the whole area (overlaps merged: only its outer edges).
+        // tinted faint red, with one red dashed line round the whole area: overlaps merged, and the small gaps seats
+        // leave (the seat and the tile it hides, up to zoneGap tiles between watched ones in a row or column) count as
+        // inside, so only the outer edge is drawn. The gaps themselves stay untinted: you're hidden there.
+        public float zoneTint = 0.12f;
+        const int zoneGap = 2; // ponytail: gap fill by straight runs; a flood fill if bigger shadows leave stray lines
         void SyncZone()
         {
             var watched = new HashSet<Cell>();
@@ -2147,12 +2149,27 @@ namespace RailTracer
                 tex.Apply();
                 dashMat = new Material(Shader.Find("Sprites/Default")) { mainTexture = tex, mainTextureScale = new Vector2(4f, 1f) }; // 4 dashes a tile
             }
+            var tint = Fill(DangerRed, zoneTint);
+            for (int x = 0; x < c.W; x++)
+                for (int y = 0; y < c.H; y++)
+                    tiles[x, y].material.SetColor("_FillColor", watched.Contains(new Cell(x, y)) ? tint : Color.clear);
+            var inside = new HashSet<Cell>(watched);
+            foreach (var cell in watched)
+                foreach (var d in new[] { new Cell(1, 0), new Cell(0, 1) })
+                    for (int k = 1; k <= zoneGap + 1; k++)
+                    {
+                        var far = new Cell(cell.x + d.x * k, cell.y + d.y * k);
+                        if (!c.InBounds(far)) break;
+                        if (!watched.Contains(far)) continue;
+                        for (int j = 1; j < k; j++) inside.Add(new Cell(cell.x + d.x * j, cell.y + d.y * j));
+                        break;
+                    }
             int n = 0;
             var sides = new[] { new Cell(1, 0), new Cell(-1, 0), new Cell(0, 1), new Cell(0, -1) };
-            foreach (var cell in watched)
+            foreach (var cell in inside)
                 foreach (var d in sides)
                 {
-                    if (watched.Contains(new Cell(cell.x + d.x, cell.y + d.y))) continue;
+                    if (inside.Contains(new Cell(cell.x + d.x, cell.y + d.y))) continue;
                     if (n == zoneLines.Count)
                     {
                         var lr = Line(DangerRed, 0.045f);

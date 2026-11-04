@@ -25,21 +25,21 @@ MonoBehaviour:
     description: 'Leap over seats to close in. Startles anyone who has never seen you. 3-turn cooldown.'
     upgrade: 'Double leap range.'
     unlock: 0
-    bloodied: 75
+    bloodied: 70
     cooldown: 3
   - name: 'Window hop'
     shortName: 'Hop'
     description: 'Out one window, in through the next. Unseen outside.'
     upgrade: 'Hop without using your move.'
     unlock: 0
-    bloodied: 25
+    bloodied: 20
     cooldown: 0
   - name: 'Stealth kill'
     shortName: 'Stealth'
     description: 'Kill anyone who can't see you: pulled onto your tile, you stay in cover.'
     upgrade: 'Snatch: yank an enemy 2 tiles away onto your tile, over seats.'
     unlock: 0
-    bloodied: 35
+    bloodied: 40
     cooldown: 0
   - name: 'Brutal kill'
     shortName: 'Brutal'
@@ -52,20 +52,20 @@ MonoBehaviour:
     shortName: 'Rail'
     description: 'Hold an enemy against the passing track.'
     upgrade: 'Bigger terror, more blood.'
-    unlock: 25
+    unlock: 30
     bloodied: 60
     cooldown: 2
   - name: 'Demon throw'
     shortName: 'Throw'
     description: 'Hurl a held body. Blood and terror where it lands.'
     upgrade: ''
-    unlock: 85
-    bloodied: 85
+    unlock: 80
+    bloodied: 80
     cooldown: 3
   - name: 'Dread'
     shortName: 'Dread'
     description: 'Passive. Anyone who sees you is at least Shaken.'
     upgrade: ''
-    unlock: 100
-    bloodied: 100
+    unlock: 90
+    bloodied: 90
     cooldown: 0
