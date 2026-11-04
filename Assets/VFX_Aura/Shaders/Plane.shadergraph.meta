@@ -1,0 +1,17 @@
+fileFormatVersion: 2
+guid: 3e49eb07af8a9f746b490e13097782d4
+ScriptedImporter:
+  internalIDToNameTable: []
+  externalObjects: {}
+  serializedVersion: 2
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+  script: {fileID: 11500000, guid: 625f186215c104763be7675aa2d941aa, type: 3}
+AssetOrigin:
+  serializedVersion: 1
+  productId: 311346
+  packageName: 25 Magic Aura
+  packageVersion: 1.0
+  assetPath: Assets/VFX_Aura/Shaders/Plane.shadergraph
+  uploadId: 733377

@@ -46,6 +46,12 @@ namespace RailTracer
         public Color bloodOverlayColor = new Color(0.45f, 0.03f, 0.03f); // multiplied over the player as the legend fills
         public float bloodPatternScale = 6f, bloodSpreadSpeed = 0.5f;
         Material bloodOverlay;
+        // The demon aura (Resources/Effects/Demon Aura) round your feet: fades in with the same eased legend as the
+        // blood on you, from nothing at auraFrom (of the full legend) to the prefab's own colours at auraFull.
+        [Range(0f, 1f)] public float auraFrom = 0.1f, auraFull = 1f;
+        ParticleSystem[] aura;
+        ParticleSystem.MinMaxGradient[] auraColors;
+        float auraShown = -1f;
         float shownBlood;
         Light sun;
 
@@ -362,6 +368,7 @@ namespace RailTracer
             playerAnim = Character(characterModel, new AnimatorOverrideController(playerController)); // its "Finisher" takes each takedown's clip
             Colour(playerAnim, tintedParts, conductorSuitColor);
             AddBloodOverlay(playerAnim);
+            AddAura(playerAnim.transform);
             shownBlood = 0f;
             foreach (var e in c.enemies)
             {
@@ -2284,6 +2291,50 @@ namespace RailTracer
             // Soaks up as the legend fills, washes back when you're hurt; eased so a kill spreads rather than pops.
             shownBlood = Mathf.MoveTowards(shownBlood, c.legend / (float)tuning.maxLegend, bloodSpreadSpeed * Time.deltaTime);
             if (bloodOverlay) bloodOverlay.SetFloat("_Amount", shownBlood);
+            SyncAura(Mathf.InverseLerp(auraFrom, auraFull, shownBlood));
+        }
+
+        void AddAura(Transform player)
+        {
+            var prefab = Resources.Load<GameObject>("Effects/Demon Aura");
+            if (!prefab) { aura = null; return; }
+            aura = Instantiate(prefab, player, false).GetComponentsInChildren<ParticleSystem>();
+            auraColors = aura.Select(p => p.main.startColor).ToArray();
+            auraShown = -1f;
+        }
+
+        // Every system's start colour at `k` of its alpha (new particles only, so it eases in); stopped at nothing.
+        void SyncAura(float k)
+        {
+            if (aura == null || Mathf.Abs(k - auraShown) < 0.005f) return;
+            auraShown = k;
+            for (int i = 0; i < aura.Length; i++)
+            {
+                var main = aura[i].main;
+                main.startColor = Faded(auraColors[i], k);
+            }
+            var top = aura[0];
+            if (k <= 0f && top.isEmitting) top.Stop(true, ParticleSystemStopBehavior.StopEmitting);
+            else if (k > 0f && !top.isPlaying) top.Play(true);
+        }
+
+        static ParticleSystem.MinMaxGradient Faded(ParticleSystem.MinMaxGradient g, float k)
+        {
+            Color A(Color c) => new Color(c.r, c.g, c.b, c.a * k);
+            Gradient G(Gradient src)
+            {
+                if (src == null) return null;
+                var o = new Gradient { mode = src.mode };
+                o.SetKeys(src.colorKeys, src.alphaKeys.Select(a => new GradientAlphaKey(a.alpha * k, a.time)).ToArray());
+                return o;
+            }
+            switch (g.mode)
+            {
+                case ParticleSystemGradientMode.Color: return new ParticleSystem.MinMaxGradient(A(g.color));
+                case ParticleSystemGradientMode.TwoColors: return new ParticleSystem.MinMaxGradient(A(g.colorMin), A(g.colorMax));
+                case ParticleSystemGradientMode.TwoGradients: return new ParticleSystem.MinMaxGradient(G(g.gradientMin), G(g.gradientMax));
+                default: return new ParticleSystem.MinMaxGradient(G(g.gradient)) { mode = g.mode };
+            }
         }
 
         // The window hop as it looks: the window slides up, you climb out, walk along the outside of the carriage,

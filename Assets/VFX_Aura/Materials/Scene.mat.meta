@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: fb05a17ac40a1884583c825d3f0b354d
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 311346
+  packageName: 25 Magic Aura
+  packageVersion: 1.0
+  assetPath: Assets/VFX_Aura/Materials/Scene.mat
+  uploadId: 733377
