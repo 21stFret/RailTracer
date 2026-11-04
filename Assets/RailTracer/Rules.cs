@@ -1224,6 +1224,9 @@ namespace RailTracer
                 e.sweepLook = Dirs[rng.Next(4)];
                 e.sweepPick = rng.NextDouble();
             }
+            // Anyone who ended the enemy turn looking at you (a searcher that turned your way) is fighting you now.
+            foreach (var e in enemies)
+                if (e.InPlay && e.awareness != Awareness.Combat && e.awareness != Awareness.Startled && CanSee(e, player)) Fight(e);
         }
 
         public bool Won => enemies.TrueForAll(e => e.state != EnemyState.Active);

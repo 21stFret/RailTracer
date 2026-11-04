@@ -697,6 +697,15 @@ namespace RailTracer
         // Update 16: awareness, searching, panic, sight and leap shots.
         static void Update16(Tuning t)
         {
+            // A searcher that turned to face you during its turn: red at the start of yours.
+            {
+                var sc = new Carriage(new[] { "P....", "....." }, t, 1);
+                var looker = sc.Spawn(3, 0, -1, 0, 0);
+                looker.awareness = Awareness.Searching;
+                sc.StartPlayerTurn();
+                Check(looker.awareness == Awareness.Combat, "turn start: a searcher looking at you is fighting you");
+            }
+
             // An unaware guard who spots you mid-move turns red but doesn't fire; at its turn, still seeing you, it shoots.
             var c = new Carriage(new[] { "P....", "....." }, t, 1);
             var g = c.Spawn(3, 1, 0, -1, 0);

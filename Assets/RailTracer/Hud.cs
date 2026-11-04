@@ -697,9 +697,10 @@ namespace RailTracer
             g.chipBg.color = combat ? Blood : white ? Bone : broken ? Alpha(Black, 0.7f) : Black;
             g.chipBorder.color = combat ? Blood : broken ? LockedBox : Bone;
             var ink = white ? Black : broken ? Grey : Bone;
-            bool glyph = white && icon == null;
+            bool freeze = icon == "freeze"; // a panicked freeze turn: "!", the same as startled (loses the turn)
+            bool glyph = (white && icon == null) || freeze;
             g.glyph.gameObject.SetActive(glyph);
-            g.glyph.text = awareness == 1 ? "?" : "!";
+            g.glyph.text = awareness == 1 && !freeze ? "?" : "!";
             g.glyph.color = ink;
             g.icon.enabled = !glyph && (broken || icon != null || awareness == 0);
             if (g.icon.enabled) g.icon.sprite = IconSprite(broken ? "flag" : icon ?? "ring");

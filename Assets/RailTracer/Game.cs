@@ -892,23 +892,9 @@ namespace RailTracer
             return m;
         }
 
-        static Material Transparent(Color col)
-        {
-            var shader = Shader.Find("Universal Render Pipeline/Unlit");
-            if (!shader) return new Material(Shader.Find("Sprites/Default"));
-            var m = new Material(shader);
-            m.SetFloat("_Surface", 1f); // transparent
-            m.SetFloat("_Blend", 0f);   // alpha
-            m.SetFloat("_SrcBlend", (float)BlendMode.SrcAlpha);
-            m.SetFloat("_DstBlend", (float)BlendMode.OneMinusSrcAlpha);
-            m.SetFloat("_SrcBlendAlpha", (float)BlendMode.One);
-            m.SetFloat("_DstBlendAlpha", (float)BlendMode.OneMinusSrcAlpha);
-            m.SetFloat("_ZWrite", 0f);
-            m.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
-            m.renderQueue = (int)RenderQueue.Transparent;
-            m.color = col;
-            return m;
-        }
+        // Plain see-through colour. Sprites/Default is always in a build (URP's Unlit was stripped from one, so the
+        // empty hat hooks fell back to opaque white fedoras).
+        static Material Transparent(Color col) => new Material(Shader.Find("Sprites/Default")) { color = col };
 
         Renderer Box(Vector3 pos, Vector3 scale, Color col, PrimitiveType type = PrimitiveType.Cube, bool solid = false)
         {
@@ -1280,7 +1266,7 @@ namespace RailTracer
                 int shownAwareness = broken ? 4 : red ? (int)Awareness.Combat
                     : e.awareness == Awareness.Combat ? (int)Awareness.Searching : (int)e.awareness;
                 string icon = broken || e.awareness == Awareness.Startled ? null
-                    : c.PanicTurn(e) && e.panic == Panic.WildFire ? "wildfire"
+                    : c.PanicTurn(e) ? (e.panic == Panic.WildFire ? "wildfire" : "freeze") // a freeze shows "!", like startled
                     : !red ? null // a white chip keeps its "?": icons are for red chips
                     : c.Charges(e, at) ? "charge"
                     : c.WillShoot(e, at) ? "crosshair" : null;
@@ -1489,12 +1475,23 @@ namespace RailTracer
                 playerShown = to;
                 if (cam) yield return FlyOut();
                 if (entry != null && entry.victimFallsAfter) StartCoroutine(Topple(va.transform, playerFacing)); // still on their feet
-                // Hold on the body, easing onto where the rules have you, still facing it.
+                // Hold on the body, easing onto where the rules have you, still facing it. The corpse slides with it so
+                // its hips end over the centre of the body's tile (the finisher's travel is in the pose, not the transform).
+                var bodyTile = c.bodies.Find(b => b.who == victim)?.pos ?? victim.pos;
+                var hips = va.GetBoneTransform(HumanBodyBones.Hips);
+                Vector3 OffCentre()
+                {
+                    if (!hips) return Vector3.zero;
+                    var d = World(bodyTile) - root.InverseTransformPoint(hips.position);
+                    return new Vector3(d.x, 0f, d.z);
+                }
                 for (float time = 0f; time < takedownHold; time += Time.deltaTime)
                 {
                     playerShown = Vector3.Lerp(to, end, Mathf.SmoothStep(0f, 1f, time / takedownHold));
+                    va.transform.localPosition += OffCentre() * Mathf.Clamp01(Time.deltaTime / Mathf.Max(0.01f, takedownHold - time));
                     yield return null;
                 }
+                va.transform.localPosition += OffCentre();
                 playerShown = end;
                 playerAnim.speed = va.speed = 1f;
                 pairedKills.Add(victim);
@@ -1840,7 +1837,7 @@ namespace RailTracer
             // With a kill selected the grid shows its attack range instead of where you can walk.
             var reach = busy || senses || aiming || kill.HasValue ? new HashSet<Cell>() : c.Reachable();
             // The move or leap under the mouse: per tile, seen or not, and who fires.
-            var preview = busy || senses || !hover.HasValue || hopping || throwing ? null
+            var preview = busy || c.Over || senses || !hover.HasValue || hopping || throwing ? null
                 : leaping ? (c.CanLeapTo(hover.Value) ? c.LeapPreview(hover.Value) : null)
                 : c.MovePreview(hover.Value);
             reactTile = preview?.Where(p => p.shooter != null).Select(p => (Cell?)p.tile).FirstOrDefault();
@@ -2070,12 +2067,13 @@ namespace RailTracer
             else previewGhost.localPosition = end + Vector3.up * (c.crouched ? 0.3f : 0.5f);
         }
 
-        // "?" on the floor wherever a searcher is going to look (a noise, blood, a body, a glimpse of movement), one per
-        // spot, gone once nobody is. Never where they saw you: that's the last-seen ghost.
+        // "?" on the floor wherever a searcher is going to go and look (a noise, blood, a body, a glimpse of movement),
+        // one per spot, gone once nobody is. Never where they saw you (that's the last-seen ghost), and never for one
+        // looking around where it stands after a shout or gunfire (its arrow shows that).
         void SyncClues()
         {
             var ghostAt = c.LastSeen;
-            var spots = new HashSet<Cell>(c.enemies.Where(e => e.InPlay && e.awareness == Awareness.Searching && e.lastKnown.HasValue && e.lastKnown != ghostAt)
+            var spots = new HashSet<Cell>(c.enemies.Where(e => e.InPlay && e.awareness == Awareness.Searching && e.hunt != Hunt.Look && e.lastKnown.HasValue && e.lastKnown != ghostAt)
                 .Select(e => e.lastKnown.Value));
             foreach (var s in spots) if (!clueMarks.ContainsKey(s)) clueMarks[s] = ClueMark(s);
             foreach (var kv in clueMarks) kv.Value.SetActive(spots.Contains(kv.Key));
@@ -2111,7 +2109,7 @@ namespace RailTracer
                 route.enabled = e.InPlay && e.route != null && e.awareness == Awareness.Unaware;
                 // Only on the turn before the enemy actually turns or moves that way (the rules' own plan).
                 var plan = c.PlannedTurn(e);
-                arrow.enabled = e.InPlay && !busy && plan.HasValue;
+                arrow.enabled = e.InPlay && !busy && !c.Over && plan.HasValue;
                 if (!arrow.enabled) continue;
                 var f = plan.Value;
                 var dir = new Vector3(f.x, 0f, -f.y);

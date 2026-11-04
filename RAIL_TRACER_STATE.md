@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 16.13 (4 Nov 2026).
+Last updated: Update 16.14 (4 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -21,6 +21,7 @@ Inspector; the saved scene matches these.
 ## Turn
 
 - 4 moves and 1 action per turn. Crouched or dragging a body costs 2 moves a tile.
+- At the start of your turn, anyone not startled who can see you (a searcher that turned your way) is in combat.
 - End the turn by holding Space (0.5 s). Undo (Z) until you act, are seen or move a body.
 - Your legend (0–100) grows from kills only: stealth kill +10, rail grab +25, brutal kill +30. It is also a shield: hits drain it before health.
 - Thresholds every 10, notched on the bar at 10–90: brutal unlock 10, hop Bloodied 20, rail unlock 30, stealth Bloodied 40, brutal Bloodied 50, rail Bloodied 60, leap Bloodied 70, demon throw 80, dread 90. Above 90 is overspill: still capped at 100 and still a shield, so it protects dread.
@@ -62,6 +63,7 @@ Chip icons (what they'll do if you end your turn where you are, or where the aim
 - **Crosshair:** a guard that sees you and will shoot (not one hesitating, startled or on a panic turn).
 - **Charge:** a heavy that sees you, or any berserk heavy. Heavies don't shoot: they charge 3 tiles a turn and melee (90%) when next to you.
 - **Wild fire:** a panicked guard on a wild fire turn.
+- **"!" on a freeze turn:** a panicked guard freezing (loses the turn, like startled).
 - **Armour plate** on toughs: whole while calm (can't be killed), cracked once Shaken. Targeting a kill on an unshaken tough shows "Not yet" over it.
 - Terror segments: three (Shaken, Panicked, Broken), white outline on red and black chips, black on white. The eye: has seen you (it can't be startled).
 
@@ -74,6 +76,7 @@ Hover label: name, role, one state line ("Searching · Shaken", "Panicked · Fre
 - **Searching** does one of three things:
   1. **Go to the spot** (a noise, a body, where it saw you).
   2. **Follow a blood trail** to the newest part it can see right now (the "?" marker moves with it).
+  - A "?" on the floor marks where a searcher will go and look; none for looking around in place (shout or gunfire) and none on the last-seen ghost.
   3. **Look around** for 3 turns: at the spot (moving within 2 tiles of it), or where it stands if it heard a shout or gunfire. A floor arrow shows the tile it will stand on and the way it will face next turn.
   Then it gives up and walks back.
 - **Shouting:** the first enemy to see you shouts and comes looking itself (it's in combat). Unaware listeners within 6 tiles turn white, face the shout and look around where they stand.
@@ -115,6 +118,10 @@ Hover label: name, role, one state line ("Searching · Shaken", "Panicked · Fre
 `Assets/RailTracer/AnimationTest.unity`: no train, just an attacker and a victim on a bare floor at full size, replaying one takedown from `Resources/Takedowns` on a loop until you switch, spaced and turned by each entry's Victim Offset / Victim Yaw (edits show on the next play). The game's kill blood fires at each entry's Blood At (of the last clip, for a combo), from the victim's chest, and "BLOOD" flashes on screen; stains clear each loop. Left / right arrows: previous / next; R: replay; Space: pause; right-drag orbits, scroll zooms.
 
 In the game too, finisher blood now comes from the victim's chest bone (where the clip has carried them), not above their tile.
+
+## Bodies
+
+- After a takedown the corpse slides (during the 0.5 s hold) so its hips sit over the centre of the body's tile.
 
 ## Blood
 
