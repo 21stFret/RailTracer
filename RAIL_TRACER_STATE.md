@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 16.14 (4 Nov 2026).
+Last updated: Update 16.15 (4 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -43,8 +43,8 @@ Inspector; the saved scene matches these.
 Kill details:
 
 - **Stealth kill:** only when the victim can't see you. The victim is pulled onto your tile and dies there; you never move and keep your stance. Heard within 1 tile. Witnesses who see your tile: medium terror (25), combat. Who see only where the victim stood: they vanish (small terror 10; a snatch 35) and they search there.
-- **Brutal kill:** a standing act. You move onto the victim's tile; crouched before it, you drop back to crouching after. The whole carriage hears it. Witnesses take large terror (45) and go into combat, except anyone who has never seen you, who is startled. No free shots.
-- **Rail grab:** the victim hangs out of their window (or yours, if they're not at one) with one leg inside. Blood on every tile within 1 of the window. Heard within 8. Witnesses: large terror (45, or 67 bloodied).
+- **Brutal kill:** a standing act. You move onto the victim's tile; crouched before it, you drop back to crouching after. Heard within 8. Witnesses take large terror (45) and go into combat, except anyone who has never seen you, who is startled. No free shots.
+- **Rail grab:** the victim hangs out of their window (or yours, if they're not at one) with one leg inside. Blood on every tile within 1 of the window. Heard within 10 (louder than a brutal kill). Witnesses: large terror (45, or 67 bloodied).
 - **Demon throw:** large terror (45) for everyone who sees it land; they investigate the body.
 - Toughs (heavies) can't be killed until Shaken.
 
@@ -122,6 +122,7 @@ In the game too, finisher blood now comes from the victim's chest bone (where th
 ## Bodies
 
 - After a takedown the corpse slides (during the 0.5 s hold) so its hips sit over the centre of the body's tile.
+- You too: when the finisher blends back to idle your hips stay where the clip left them, then you slide onto your tile over the same hold.
 
 ## Blood
 

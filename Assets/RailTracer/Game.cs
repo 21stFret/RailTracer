@@ -1442,6 +1442,10 @@ namespace RailTracer
                 float length = playerAnim.GetCurrentAnimatorStateInfo(0).length;
                 float length2 = 0f;
                 bool second = false, bled = false;
+                // Handing back to idle: once the last clip starts blending out, your hips stay where the finisher left
+                // them (the transform follows the pose), then you slide onto the tile the rules gave you.
+                var playerHips = playerAnim.GetBoneTransform(HumanBodyBones.Hips);
+                Vector3? anchor = null;
                 for (float time = 0f; ; time += Time.deltaTime)
                 {
                     if (cam && (camSkip || SkipPressed()))
@@ -1469,10 +1473,18 @@ namespace RailTracer
                     else if (time >= length2) break;
                     float t = second ? time / length2 : time / length;
                     if ((!chained || second) && !bled && t >= bloodAt) { KillBlood(victim, act, playerFacing, Chest(va)); bled = true; }
+                    if (entry != null && playerHips && (anchor.HasValue || ((!chained || second) && t > 0.3f && playerAnim.IsInTransition(0))))
+                    {
+                        var h = root.InverseTransformPoint(playerHips.position) - playerShown;
+                        h.y = 0f;
+                        anchor ??= playerShown + h;
+                        playerShown = anchor.Value - h;
+                    }
                     yield return null;
                 }
                 if (!bled) KillBlood(victim, act, playerFacing, Chest(va));
-                playerShown = to;
+                if (!anchor.HasValue) playerShown = to;
+                var slideFrom = playerShown;
                 if (cam) yield return FlyOut();
                 if (entry != null && entry.victimFallsAfter) StartCoroutine(Topple(va.transform, playerFacing)); // still on their feet
                 // Hold on the body, easing onto where the rules have you, still facing it. The corpse slides with it so
@@ -1487,7 +1499,7 @@ namespace RailTracer
                 }
                 for (float time = 0f; time < takedownHold; time += Time.deltaTime)
                 {
-                    playerShown = Vector3.Lerp(to, end, Mathf.SmoothStep(0f, 1f, time / takedownHold));
+                    playerShown = Vector3.Lerp(slideFrom, end, Mathf.SmoothStep(0f, 1f, time / takedownHold));
                     va.transform.localPosition += OffCentre() * Mathf.Clamp01(Time.deltaTime / Mathf.Max(0.01f, takedownHold - time));
                     yield return null;
                 }
