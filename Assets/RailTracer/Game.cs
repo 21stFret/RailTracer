@@ -24,7 +24,7 @@ namespace RailTracer
         // A lit table lamp: a spot pointing straight down from the bulb, a soft-edged pool on the table.
         public float tableLampIntensity = 0.2f, tableLampRange = 1f, tableLampAngle = 179f, tableLampInnerAngle = 80f;
         readonly HashSet<Light> tableLamps = new HashSet<Light>(); // lit at their own level (LegendLighting)
-        public float sunDim = 0.02f;      // the directional light over the kit carriage: on, no shadows, very dim
+        public float sunDim = 0.01f;      // the directional light over the kit carriage: on, no shadows, very dim
         public Color lampColor = new Color(1f, 0.78f, 0.5f);
         // Wall lamps (renamed from lampIntensity / lampRange / lampAngle so these override the scene): the max (legend 0).
         public float wallLampIntensity = 2f, wallLampRange = 4.5f, wallLampAngle = 120f, wallLampInnerAngle = 0f;

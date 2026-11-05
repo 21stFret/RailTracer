@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 18.8 (5 Nov 2026).
+Last updated: Update 18.9 (5 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -27,6 +27,7 @@ Inspector; the saved scene matches these.
 | 18.6 (table lamp lights in their shades, sun 0.02) | Done, not yet seen in Play mode |
 | 18.7 (table lamp spots, matt shades, real cutlery, settings clear of each other) | Done, not yet seen in Play mode |
 | 18.8 (lamp brightness and cones) | Done, not yet seen in Play mode |
+| 18.9 (sun 0.01) | Done. Note: a Game field added while the scene is open keeps its first default in the open editor until the scene is reloaded from disk (the scene file has no saved value for the lamp or sun settings, so reopening applies the code defaults) |
 | Still needed (art) | Rail grab, demon throw and crouched drag-down animations; knife mesh (on hold); unarmed finishers (skipped for now); a searching animation; more idles |
 | Next | Full audio pass |
 
@@ -44,7 +45,7 @@ Inspector; the saved scene matches these.
 | 4 | Baggage hold | Hand-made greybox: crate maze, mail sacks, the safe's cage, a few windows | 8, 2 heavies |
 | 5 | First class | Generated (seed 5005), the passenger layout | 9, 2 heavies |
 
-- **Sun:** the directional light stays on over the kit carriage, with no shadows and very dim (Game "Sun Dim", 0.02); the lamps light the car.
+- **Sun:** the directional light stays on over the kit carriage, with no shadows and very dim (Game "Sun Dim", 0.01); the lamps light the car.
 - **Map tiles:** '.' floor, '_' floor with plain wall (plain wall also behind 'l', 'x' and 'B'), 'S' seat, 'L' / 'l' luggage, 'W' wall, 'P' start. New: 'T' dining table (straight or L groups), 'O' round table (2x2), 'D' dining cart, 'B' bar, 'M' mail sack (seat rules: no walking through, leap over, half cover crouched); 'X' / 'x' crate (luggage rules: blocks walking and sight; leapt over); 'C' the safe's cage (blocks walking, leaps and snatches like a wall, but you can see through it). Chairs sit tucked under the tables and block nothing.
 - **Dining car furniture (models):** `Assets/KitScripts/railtracer_dining.py` (stylized-blender-assets, RailTracer profile) exports to `Train Assets/Dining`: Dining_Table_1, Dining_Table_2 (straight), Dining_Table_L (3 tiles), Dining_Table_Round (2x2), Dining_Cart, Bar_L (4 + 1). Linen cloths, dark wood pedestals, velvet chairs with their seats just under the table edge (reaching ~0.35 m into the open tiles around), brass table lamps (solid shades in Trn_Shade, smooth and matt, no texture; the game puts the bulb 1.01 m up over the lamp, Game "Table Lamp Height", since FBX anchor empties miss the axis conversion) and place settings (a rimmed plate, a silver fork and knife either side, the cup and saucer up to the right, clear of the plate); the bar's panels and brass foot rail face the room, taps and a register on top, a back shelf of bottles on the wall behind the bartender. New materials Trn_Linen, Trn_Porcelain. The game fits each model to its group of tiles (GameFlow DiningModels: turned to the group, the bar mirrored if needed); any other shape falls back to the greybox.
 - **Baggage hold props (models):** `Assets/KitScripts/railtracer_baggage.py` exports to `Train Assets/Baggage`: Crate_Stack_A / B / C (pine crates with dark frame boards, iron corner plates, labels, parcels; 1.35-1.74 m, full cover), Mail_Sacks_A / B (canvas sacks tied at the neck, under 0.65 m, half cover), Safe_Cage (3 x 2 tiles, back to the wall: iron bars on the three room sides, a beam top, a barred door with a brass padlock, the safe and two strongboxes inside). New materials Trn_Pine, Trn_Canvas. The game puts a crate stack on every crate tile and a sack pile on every sack tile (variant and quarter turn from the tile, so the same each run) and the cage on a 3 x 2 'C' block against a wall; other shapes keep the greybox.
