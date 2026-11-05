@@ -215,6 +215,7 @@ namespace RailTracer
 
         RectTransform pause;
         TMP_Text pauseHead;
+        GameObject pauseClose;
         readonly List<TMP_Text> pauseItems = new List<TMP_Text>();
 
         void BuildOverlays(Transform root)
@@ -297,6 +298,9 @@ namespace RailTracer
             head.color = Bone;
             head.text = "Paused";
             pauseHead = head;
+            var px = CloseX(pause);
+            Button("closepause", px.rt, px.border);
+            pauseClose = px.rt.gameObject;
             for (int i = 0; i < 5; i++) pauseItems.Add(Label(pause, "", 18, Bone, 1.5f));
             pause.gameObject.SetActive(false);
         }
@@ -373,9 +377,10 @@ namespace RailTracer
 
         public bool PauseOpen => pause.gameObject.activeSelf;
         // The centre panel: the pause menu, or another short choice under its own heading (up to 5 lines).
-        public void ShowPause(bool on, string heading = "Paused")
+        public void ShowPause(bool on, string heading = "Paused", bool closable = true)
         {
             pauseHead.text = heading;
+            pauseClose.SetActive(closable);
             pause.gameObject.SetActive(on);
         }
 

@@ -16,6 +16,8 @@ namespace RailTracer
         readonly List<TMP_Text> menuItems = new List<TMP_Text>();
         readonly List<TMP_Text> journeyNames = new List<TMP_Text>();
         readonly List<Image> journeyLinks = new List<Image>();
+        RectTransform menuClose;
+        Image menuCloseBorder;
 
         public void BuildMenu()
         {
@@ -54,6 +56,9 @@ namespace RailTracer
             Glow(menuInfo);
             menuInfo.gameObject.AddComponent<LayoutElement>().preferredWidth = 460f;
 
+            var screenRect = Rect("Screen", root, Vector2.zero, Vector2.zero, Vector2.zero);
+            Stretch(screenRect, 0f);
+            (menuClose, menuCloseBorder) = CloseX(screenRect, 32f); // a submenu's way back
             for (int i = 0; i < Train.DemoCars; i++)
             {
                 var n = Text(root, title, 22, TextAlignmentOptions.Center, Vector2.zero, new Vector2(220, 30));
@@ -72,10 +77,14 @@ namespace RailTracer
 
         public void ShowMenu(bool on) => menuCanvas.gameObject.SetActive(on);
 
-        // One frame of a menu screen. title: the "Red Line" title (else `heading`); enabled: per item (null = all);
-        // info: a block of text under the lines (or null). Returns the enabled line under the mouse, or -1.
-        public int RefreshMenu(bool showTitle, string heading, string[] items, bool[] enabled, string info, Vector2 screen)
+        // One frame of a menu screen. title: the "Red Line" title (else `heading`, with the close X top right);
+        // enabled: per item (null = all); info: a block of text beside the lines (or null). Returns the enabled line
+        // under the mouse, -2 for the close X, or -1.
+        public int RefreshMenu(bool showTitle, string heading, string[] items, bool[] enabled, string info, Vector2 screen, bool held = false)
         {
+            menuClose.gameObject.SetActive(!showTitle);
+            bool onX = !showTitle && RectTransformUtility.RectangleContainsScreenPoint(menuClose, screen, null);
+            menuCloseBorder.color = onX ? (held ? Blood : Bone) : Black;
             menuTitle.gameObject.SetActive(showTitle);
             menuHeading.gameObject.SetActive(!showTitle && heading != null);
             menuHeading.text = heading;
@@ -94,7 +103,7 @@ namespace RailTracer
                 if (over) hit = i;
                 t.color = !on ? LockedBox : over ? Bone : Grey;
             }
-            return hit;
+            return onX ? -2 : hit;
         }
 
         // Journey: each car's name under it on screen (`at`, screen pixels), red cleared (2), white next (1), grey

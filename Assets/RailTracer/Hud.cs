@@ -437,7 +437,6 @@ namespace RailTracer
                 var t = Text(row, body, 17, TextAlignmentOptions.MidlineLeft, Vector2.zero, Vector2.zero);
                 t.color = Bone;
                 t.text = what;
-                if (keys[0] == "H") Button("closecontrols", row, t); // click "Close this" to close it
             }
             // Keep every line clear of the slanted left edge (and the right): the slant shifts the corners by half the
             // panel's height x tan 10 degrees, so pad by that plus 28 px.
@@ -445,6 +444,8 @@ namespace RailTracer
             int lean = Mathf.CeilToInt(panel.rect.height / 2f * Mathf.Tan(10f * Mathf.Deg2Rad));
             rows.padding = new RectOffset(28 + lean, 28 + lean, 18, 22);
             LayoutRebuilder.ForceRebuildLayoutImmediate(panel);
+            var cx = CloseX(panel);
+            Button("closecontrols", cx.rt, cx.border);
             controls = panel.gameObject;
             controls.SetActive(false);
 
@@ -513,10 +514,13 @@ namespace RailTracer
             Place(close, Vector2.one, new Vector2(-lean, -22));
             close.pivot = new Vector2(1f, 1f);
             Fit(close);
-            var lCap = KeyCap(close, "L");
-            var or = Label(close, "or", 13, Grey, 1f);
-            var escCap = KeyCap(close, "Esc");
-            Button("closelog", close, lCap.border, lCap.text, or, escCap.border, escCap.text, Label(close, "Close", 14, Grey, 2f));
+            KeyCap(close, "L");
+            Label(close, "or", 13, Grey, 1f);
+            KeyCap(close, "Esc");
+            Label(close, "Close", 14, Grey, 2f);
+            close.anchoredPosition += new Vector2(-40f, 0f); // clear of the X
+            var lx = CloseX(panel, lean * 0.5f + 8f);
+            Button("closelog", lx.rt, lx.border);
             logView = Rect("View", panel, Vector2.zero, Vector2.zero, Vector2.zero);
             Stretch(logView, 0f);
             logView.offsetMin = new Vector2(lean, 22);
@@ -956,6 +960,21 @@ namespace RailTracer
 
         void Button(string id, RectTransform rt, params Graphic[] parts) =>
             buttons.Add(new HudButton { id = id, rt = rt, parts = parts.Select(g => (g, g.color)).ToArray() });
+
+        // The close button every panel has in its top-right corner: a red X on white with a black border (the border
+        // turns white under the mouse, red while pressed). Out of the panel's layout.
+        (RectTransform rt, Image border) CloseX(RectTransform panel, float inset = 10f)
+        {
+            var x = Rect("Close X", panel, Vector2.one, new Vector2(-inset, -inset), new Vector2(28, 28));
+            x.gameObject.AddComponent<LayoutElement>().ignoreLayout = true;
+            var border = Img(x, Black, 0f);
+            Img(x, Bone, 2.5f);
+            var t = Text(x, title, 22, TextAlignmentOptions.Center, Vector2.zero, Vector2.zero);
+            Stretch(t.rectTransform, 0f);
+            t.text = "X";
+            t.color = Blood;
+            return (x, border);
+        }
 
         HudButton ButtonUnder(Vector2 screen) => hudCanvas.enabled
             ? buttons.LastOrDefault(b => b.rt.gameObject.activeInHierarchy && RectTransformUtility.RectangleContainsScreenPoint(b.rt, screen, null)) : null;

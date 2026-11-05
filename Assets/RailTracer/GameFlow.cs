@@ -301,7 +301,7 @@ namespace RailTracer
         void OpenChoice(string which)
         {
             choice = which;
-            hud.ShowPause(true, which == "board" ? NextName() : which == "done" ? "Demo complete" : "Paused");
+            hud.ShowPause(true, which == "board" ? NextName() : which == "done" ? "Demo complete" : "Paused", which != "done");
         }
 
         void CloseChoice()
@@ -322,7 +322,8 @@ namespace RailTracer
             if (choice == null) return false;
             var at = mouse != null ? mouse.position.ReadValue() : Vector2.zero;
             int hit = hud.RefreshPause(ChoiceItems(), at);
-            bool esc = kb != null && kb.escapeKey.wasPressedThisFrame;
+            bool x = mouse != null && hud.RefreshButtons(at, mouse.leftButton.isPressed, mouse.leftButton.wasPressedThisFrame) == "closepause";
+            bool esc = x || (kb != null && kb.escapeKey.wasPressedThisFrame);
             if (esc && choice != "done") { CloseChoice(); return true; }
             if (kb != null && choice == "board" && (kb.spaceKey.wasPressedThisFrame || kb.enterKey.wasPressedThisFrame)) hit = 0;
             else if (mouse == null || !mouse.leftButton.wasPressedThisFrame) return true;
@@ -523,6 +524,7 @@ namespace RailTracer
             var at = mouse != null ? mouse.position.ReadValue() : Vector2.zero;
             bool click = mouse != null && mouse.leftButton.wasPressedThisFrame;
             bool back = kb != null && kb.escapeKey.wasPressedThisFrame;
+            bool held = mouse != null && mouse.leftButton.isPressed;
             switch (screen)
             {
                 case MenuScreen.Start:
@@ -554,8 +556,8 @@ namespace RailTracer
                     bool resumable = isNext && save.run != null && !save.run.endless && save.run.car == journeyPick;
                     string action = cleared ? "Replay" : isNext ? (resumable ? "Continue" : "Board") : "Not yet";
                     var info = $"<b>{journeyPick + 1}. {pick.name}</b>\n{pick.blurb}\n\nBest ticket: {Ticket(save.best[journeyPick])}";
-                    int hit = hud.RefreshMenu(false, "Journey", new[] { action, "Back" }, new[] { cleared || isNext, true }, info, at);
-                    if (back || (click && hit == 1)) { screen = MenuScreen.Start; break; }
+                    int hit = hud.RefreshMenu(false, "Journey", new[] { action, "Back" }, new[] { cleared || isNext, true }, info, at, held);
+                    if (back || (click && (hit == 1 || hit == -2))) { screen = MenuScreen.Start; break; }
                     if (click && hit == 0 && (cleared || isNext))
                     {
                         int k = journeyPick;
@@ -574,8 +576,8 @@ namespace RailTracer
                         $"Kill cam: {(s.killCam ? "On" : "Off")}", $"Kill cam slow motion: {s.killCamSlowMo:0.##}x",
                         $"Window: {modeName}", $"Resolution: {w} x {h}", "Controls", "Back",
                     };
-                    int hit = hud.RefreshMenu(false, "Options", items, null, "Audio comes with the sound pass.", at);
-                    if (back || (click && hit == 5)) { screen = MenuScreen.Start; break; }
+                    int hit = hud.RefreshMenu(false, "Options", items, null, "Audio comes with the sound pass.", at, held);
+                    if (back || (click && (hit == 5 || hit == -2))) { screen = MenuScreen.Start; break; }
                     if (!click) break;
                     if (hit == 0) s.killCam = !s.killCam;
                     else if (hit == 1) s.killCamSlowMo = SlowMos[(System.Array.IndexOf(SlowMos, s.killCamSlowMo) + 1) % SlowMos.Length];
@@ -602,8 +604,8 @@ namespace RailTracer
                 case MenuScreen.Controls:
                 {
                     var info = string.Join("\n", SkillHud.ControlsList.Select(k => $"<b>{string.Join(" to ", k.keys)}</b>   {k.what}"));
-                    int hit = hud.RefreshMenu(false, "Controls", new[] { "Back" }, null, info, at);
-                    if (back || (click && hit == 0)) screen = MenuScreen.Options;
+                    int hit = hud.RefreshMenu(false, "Controls", new[] { "Back" }, null, info, at, held);
+                    if (back || (click && (hit == 0 || hit == -2))) screen = MenuScreen.Options;
                     break;
                 }
             }
