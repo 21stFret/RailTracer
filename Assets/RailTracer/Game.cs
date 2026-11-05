@@ -22,12 +22,13 @@ namespace RailTracer
         public float lampInset = 0.3f;    // in from the wall, so the light isn't inside it
         public float lampSpread = 3.5f;   // dining car and baggage hold: lit lamps at least this far apart (m)
         // A lit table lamp: a spot pointing straight down from the bulb, a soft-edged pool on the table.
-        public float tableLampIntensity = 0.2f, tableLampRange = 1.5f, tableLampAngle = 179f, tableLampInnerAngle = 80f;
+        public float tableLampIntensity = 0.2f, tableLampRange = 1f, tableLampAngle = 179f, tableLampInnerAngle = 80f;
         readonly HashSet<Light> tableLamps = new HashSet<Light>(); // lit at their own level (LegendLighting)
         public float sunDim = 0.02f;      // the directional light over the kit carriage: on, no shadows, very dim
         public Color lampColor = new Color(1f, 0.78f, 0.5f);
-        public float lampIntensity = 3f, lampRange = 4.5f, lampAngle = 80f;
-        // The legend reddens the carriage: lamp colour and brightness (x lampIntensity) at legend 0 (lampColor), 25, 50, 75 and 100,
+        // Wall lamps (renamed from lampIntensity / lampRange / lampAngle so these override the scene): the max (legend 0).
+        public float wallLampIntensity = 2f, wallLampRange = 4.5f, wallLampAngle = 120f, wallLampInnerAngle = 0f;
+        // The legend reddens the carriage: lamp colour and brightness (x wallLampIntensity) at legend 0 (lampColor), 25, 50, 75 and 100,
         // blended over about a second. Lamps and ambient only: every overlay is unlit, so it never changes.
         public Color[] legendLampColors = { new Color(1f, 0.78f, 0.5f), new Color(1f, 0.66f, 0.38f), new Color(1f, 0.42f, 0.26f), new Color(1f, 0.22f, 0.13f), new Color(0.8f, 0.05f, 0.04f) };
         public float[] legendLampLevels = { 1f, 0.8f, 0.65f, 0.5f, 0.45f };
@@ -612,10 +613,10 @@ namespace RailTracer
                 light.transform.localRotation = Quaternion.Euler(lampTilt, sideA ? 180f : 0f, 0f); // tipped down, facing into the car
                 light.type = LightType.Spot;
                 light.color = lampColor;
-                light.intensity = lampIntensity;
-                light.range = lampRange;
-                light.spotAngle = lampAngle;
-                light.innerSpotAngle = lampAngle * 0.5f;
+                light.intensity = wallLampIntensity;
+                light.range = wallLampRange;
+                light.spotAngle = wallLampAngle;
+                light.innerSpotAngle = wallLampInnerAngle;
                 light.shadows = lampShadows ? LightShadows.Soft : LightShadows.None;
                 PlaceLampModel();
 
@@ -1767,7 +1768,7 @@ namespace RailTracer
             {
                 if (!l) continue;
                 l.color = shownLampColor;
-                l.intensity = (tableLamps.Contains(l) ? tableLampIntensity : lampIntensity) * shownLampLevel;
+                l.intensity = (tableLamps.Contains(l) ? tableLampIntensity : wallLampIntensity) * shownLampLevel;
             }
             var tint = Color.Lerp(Color.white, shownLampColor, 0.5f);
             RenderSettings.ambientLight = baseAmbient * tint;
