@@ -299,7 +299,7 @@ namespace RailTracer
             head.text = "Paused";
             pauseHead = head;
             var px = CloseX(pause);
-            Button("closepause", px.rt, px.border);
+            Button("closepause", px.rt, px.x);
             pauseClose = px.rt.gameObject;
             for (int i = 0; i < 5; i++) pauseItems.Add(Label(pause, "", 18, Bone, 1.5f));
             pause.gameObject.SetActive(false);

@@ -17,7 +17,7 @@ namespace RailTracer
         readonly List<TMP_Text> journeyNames = new List<TMP_Text>();
         readonly List<Image> journeyLinks = new List<Image>();
         RectTransform menuClose;
-        Image menuCloseBorder;
+        TMP_Text menuCloseX;
 
         public void BuildMenu()
         {
@@ -58,7 +58,7 @@ namespace RailTracer
 
             var screenRect = Rect("Screen", root, Vector2.zero, Vector2.zero, Vector2.zero);
             Stretch(screenRect, 0f);
-            (menuClose, menuCloseBorder) = CloseX(screenRect, 32f); // a submenu's way back
+            (menuClose, menuCloseX) = CloseX(screenRect, 32f); // a submenu's way back
             for (int i = 0; i < Train.DemoCars; i++)
             {
                 var n = Text(root, title, 22, TextAlignmentOptions.Center, Vector2.zero, new Vector2(220, 30));
@@ -84,7 +84,7 @@ namespace RailTracer
         {
             menuClose.gameObject.SetActive(!showTitle);
             bool onX = !showTitle && RectTransformUtility.RectangleContainsScreenPoint(menuClose, screen, null);
-            menuCloseBorder.color = onX ? (held ? Blood : Bone) : Black;
+            menuCloseX.color = onX && !held ? Bone : Blood;
             menuTitle.gameObject.SetActive(showTitle);
             menuHeading.gameObject.SetActive(!showTitle && heading != null);
             menuHeading.text = heading;

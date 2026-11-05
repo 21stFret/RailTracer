@@ -445,7 +445,7 @@ namespace RailTracer
             rows.padding = new RectOffset(28 + lean, 28 + lean, 18, 22);
             LayoutRebuilder.ForceRebuildLayoutImmediate(panel);
             var cx = CloseX(panel);
-            Button("closecontrols", cx.rt, cx.border);
+            Button("closecontrols", cx.rt, cx.x);
             controls = panel.gameObject;
             controls.SetActive(false);
 
@@ -520,7 +520,7 @@ namespace RailTracer
             Label(close, "Close", 14, Grey, 2f);
             close.anchoredPosition += new Vector2(-40f, 0f); // clear of the X
             var lx = CloseX(panel, lean * 0.5f + 8f);
-            Button("closelog", lx.rt, lx.border);
+            Button("closelog", lx.rt, lx.x);
             logView = Rect("View", panel, Vector2.zero, Vector2.zero, Vector2.zero);
             Stretch(logView, 0f);
             logView.offsetMin = new Vector2(lean, 22);
@@ -961,19 +961,19 @@ namespace RailTracer
         void Button(string id, RectTransform rt, params Graphic[] parts) =>
             buttons.Add(new HudButton { id = id, rt = rt, parts = parts.Select(g => (g, g.color)).ToArray() });
 
-        // The close button every panel has in its top-right corner: a red X on white with a black border (the border
-        // turns white under the mouse, red while pressed). Out of the panel's layout.
-        (RectTransform rt, Image border) CloseX(RectTransform panel, float inset = 10f)
+        // The close button every panel has in its top-right corner: a red X on black with a white border (the X turns
+        // white under the mouse, red again while pressed). Out of the panel's layout.
+        (RectTransform rt, TMP_Text x) CloseX(RectTransform panel, float inset = 10f)
         {
             var x = Rect("Close X", panel, Vector2.one, new Vector2(-inset, -inset), new Vector2(28, 28));
             x.gameObject.AddComponent<LayoutElement>().ignoreLayout = true;
-            var border = Img(x, Black, 0f);
-            Img(x, Bone, 2.5f);
+            Img(x, Bone, 0f);
+            Img(x, Black, 2f);
             var t = Text(x, title, 22, TextAlignmentOptions.Center, Vector2.zero, Vector2.zero);
             Stretch(t.rectTransform, 0f);
             t.text = "X";
             t.color = Blood;
-            return (x, border);
+            return (x, t);
         }
 
         HudButton ButtonUnder(Vector2 screen) => hudCanvas.enabled
