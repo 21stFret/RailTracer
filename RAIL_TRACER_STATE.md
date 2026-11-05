@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 18.15 (5 Nov 2026).
+Last updated: Update 18.16 (5 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -34,6 +34,7 @@ Inspector; the saved scene matches these.
 | 18.13 (extra blood per strike, the body slides with you) | Done, not yet tried in Unity |
 | 18.14 (Alex's takedown tuning) | Done: Blood At set per takedown in the animation test, Shove to Table's Cover Shift 0.2 (Resources/Takedowns) |
 | 18.15 (Alex's extra blood points) | Done: extra strikes set in the animation test (Resources/Takedowns) |
+| 18.16 (aura follows the body, head off, soaked bodies, rail hang pose, stylish flip landing, bar shove) | Done, not yet seen in Play mode |
 | Still needed (art) | Rail grab, demon throw and crouched drag-down animations; knife mesh (on hold); unarmed finishers (skipped for now); a searching animation; more idles |
 | Next | Full audio pass |
 
@@ -187,7 +188,10 @@ In the game too, finisher blood now comes from the victim's chest bone (where th
 
 ## Bodies
 
-- Ragdolls: the character has ragdoll bones from Unity's Ragdoll Builder (Editor/RagdollSetup, kinematic and collider-off until needed, on Ignore Raycast). After the last clip of every takedown the victim goes limp and falls (during the kill cam's fly-out); other deaths too, except rail grabs (posed over the sill). First the body slides (Game "Ragdoll Slide", 0.15 s; after a takedown it slides with you instead, both over Takedown Hold, 0.5 s, starting as the clip ends while the kill cam flies back) so its hips are over its tile, then goes limp and falls there; after "Ragdoll Settle" (1.6 s) it freezes; drags and throws move the frozen pose. Shove to Table is the exception: the pair stays where the clip leaves them (the victim bent over the seat, you beside it in the stance you had, until you move); the body still counts as on its tile for drags, sight, blood and searchers, and goes limp once moved. The takedown viewer ragdolls its victim the same way.
+- Ragdolls: the character has ragdoll bones from Unity's Ragdoll Builder (Editor/RagdollSetup, kinematic and collider-off until needed, on Ignore Raycast). After the last clip of every takedown the victim goes limp and falls (during the kill cam's fly-out); other deaths too, except rail grabs (posed over the sill). First the body slides (Game "Ragdoll Slide", 0.15 s; after a takedown it slides with you instead, both over Takedown Hold, 0.5 s, starting as the clip ends while the kill cam flies back) so its hips are over its tile, then goes limp and falls there; after "Ragdoll Settle" (1.6 s) it freezes; drags and throws move the frozen pose. A takedown's body is soaked once it lies still: a big stain (Game "Soak Scale" 1.4 x the pool, "Soak Depth" 1.2 m) projected down through it from the hips, covering the corpse, the floor round it and any table it's over; Shove to Table gets it as the clip ends, over the victim and the table. Every takedown's kill tile gets a pool (stealth too); a shot body spatter. Shove to Table is the exception: the pair stays where the clip leaves them (the victim bent over the seat, you beside it in the stance you had, until you move); the body still counts as on its tile for drags, sight, blood and searchers, and goes limp once moved. The takedown viewer ragdolls its victim the same way.
+- **Head off:** a takedown with Head Off ticked (Grab Flip Head Stomp) takes the head off at Blood At: the head bone shrinks to nothing, with two gore bursts where it was and a pool under it (the animation test shows it too). A resumed save's corpse has its head back.
+- **Rail grab hang:** the hung body's root is placed from the tile by Game "Rail Hang Offset" (0.185, 1.234, -0.691) and "Rail Hang Euler" (77.22, 180, 189.13) on the top side's windows, turned half round for the bottom side; the limbs keep the sill pose.
+- **Shove to Table over the bar** lifts the victim Game "Bar Shove Lift" (0.3 m), the bar being taller than a table.
 - You too: when the finisher blends back to idle your hips stay where the clip left them, then you slide onto your tile over the same hold.
 
 ## Blood
@@ -211,6 +215,8 @@ In the game too, finisher blood now comes from the victim's chest bone (where th
 - **Legend readout** (only while a kill is targeted; gone when you cancel or pick another skill): the hover label adds the kill's name and "+30 legend" in #E0202F ("Locked" on a heavy that isn't Shaken yet); the big number reads "42 +30"; the legend bar shows the gain hatched (#E0202F stripes on #4A0C15) from your legend to where the kill lands; notches it crosses turn red and are named beside the health bar ("50: Brutal Bloodied · 60: Rail Bloodied"), plus "Capped at 100" past 100. Gains: stealth +10, brutal +30, rail grab +25. Skill boxes unchanged.
 - Move and leap previews: each tile that draws a shot shows its hit chance on the floor; a leap's says "LEAP -25", and the shooter's label "Hit 60% · leap -25".
 - The walk-through car has every legend effect off (demon aura, blood overlay); an aura starting at nothing clears what its systems played on awake.
+- The demon aura sits under your hips, not on your tile, so it travels with you through a finisher's moves.
+- The stylish flip (a bloodied leap past 3 tiles) crosses the floor as its clip does (Game "Stylish Flip Travel", sampled from the clip's hips: across in 1.2 s, then the landing plays in place), so it lands on its tile without sliding.
 - Running moves play the Synty sprint in the walk/run blend (Editor/AnimationSetup swaps it into existing controllers), in place of the sped-up run.
 - Ghosts: the move-preview ghost and the last-seen ghost are see-through outlines (last-seen fainter). The last-seen ghost marks only where an enemy actually last saw you.
 - Mouse only works too: the skill boxes, and the HUD's key hints are buttons (white under the mouse, red while pressed): Space end turn (hold the mouse on it, like Space), C crouch, Z undo, Esc menu, H controls, L log, and Esc cancel on the targeting banner. The win card's walk on: hold Space or the mouse; the loss card: a click retries. Every closable panel has a close button in its top-right corner (a red X on black, white border; the X turns white under the mouse, red while pressed): the log, the controls panel, the pause and Board panels (not Demo complete), and the menu's Journey, Options and Controls screens (back).

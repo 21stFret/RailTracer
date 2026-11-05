@@ -94,6 +94,8 @@ namespace RailTracer
         // Back on their feet after the ragdoll: bones kinematic again, the animator posing them.
         static void Stand(Animator a)
         {
+            var head = a.GetBoneTransform(HumanBodyBones.Head);
+            if (head) head.localScale = Vector3.one; // after a head-off takedown
             if (Game.HasRagdoll(a)) Game.SetLimp(a, false);
             a.enabled = true;
         }
@@ -262,6 +264,16 @@ namespace RailTracer
             dir = dir.sqrMagnitude > 1e-4f ? dir.normalized : Vector3.forward;
             bool brutal = t.kind == KillKind.Brutal;
             blood.Splash(bloodRoot, chest, dir, brutal);
+            if (t.headOff)
+            {
+                var head = victim.GetBoneTransform(HumanBodyBones.Head);
+                if (head)
+                {
+                    blood.Splash(bloodRoot, head.position, Vector3.up, true);
+                    blood.Splash(bloodRoot, head.position, dir, true);
+                    head.localScale = Vector3.one * 0.001f;
+                }
+            }
             // As in the game: the victim's tile (1 m grid), and for a brutal kill the four next to it, cast from stance height.
             var tile = new Vector3(Mathf.Round(floor.x), 0f, Mathf.Round(floor.z));
             float height = t.stance == TakedownStance.Crouched ? bloodCastCrouched : bloodCastStanding;

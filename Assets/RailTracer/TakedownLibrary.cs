@@ -31,6 +31,8 @@ namespace RailTracer
         [Tooltip("More strikes: extra splashes at these points, 0-1 over the WHOLE takedown (both clips of a combo). " +
                  "Blood At still lays the stains. Set them in the animation test scene (N adds one at the current frame).")]
         public List<float> extraBlood = new List<float>();
+        [Tooltip("The head comes off at Blood At: a gore burst where it was (a stomp, say).")]
+        public bool headOff;
 
         // How far through the whole takedown (0-1, both clips of a combo) a point in its first or second clip is.
         public float Overall(bool second, float k)
