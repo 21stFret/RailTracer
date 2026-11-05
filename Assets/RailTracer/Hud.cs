@@ -437,6 +437,7 @@ namespace RailTracer
                 var t = Text(row, body, 17, TextAlignmentOptions.MidlineLeft, Vector2.zero, Vector2.zero);
                 t.color = Bone;
                 t.text = what;
+                if (keys[0] == "H") Button("closecontrols", row, t); // click "Close this" to close it
             }
             // Keep every line clear of the slanted left edge (and the right): the slant shifts the corners by half the
             // panel's height x tan 10 degrees, so pad by that plus 28 px.
@@ -512,10 +513,10 @@ namespace RailTracer
             Place(close, Vector2.one, new Vector2(-lean, -22));
             close.pivot = new Vector2(1f, 1f);
             Fit(close);
-            KeyCap(close, "L");
-            Label(close, "or", 13, Grey, 1f);
-            KeyCap(close, "Esc");
-            Label(close, "Close", 14, Grey, 2f);
+            var lCap = KeyCap(close, "L");
+            var or = Label(close, "or", 13, Grey, 1f);
+            var escCap = KeyCap(close, "Esc");
+            Button("closelog", close, lCap.border, lCap.text, or, escCap.border, escCap.text, Label(close, "Close", 14, Grey, 2f));
             logView = Rect("View", panel, Vector2.zero, Vector2.zero, Vector2.zero);
             Stretch(logView, 0f);
             logView.offsetMin = new Vector2(lean, 22);
@@ -957,7 +958,7 @@ namespace RailTracer
             buttons.Add(new HudButton { id = id, rt = rt, parts = parts.Select(g => (g, g.color)).ToArray() });
 
         HudButton ButtonUnder(Vector2 screen) => hudCanvas.enabled
-            ? buttons.FirstOrDefault(b => b.rt.gameObject.activeInHierarchy && RectTransformUtility.RectangleContainsScreenPoint(b.rt, screen, null)) : null;
+            ? buttons.LastOrDefault(b => b.rt.gameObject.activeInHierarchy && RectTransformUtility.RectangleContainsScreenPoint(b.rt, screen, null)) : null;
 
         // Colours the buttons for this frame and returns the one clicked (pressed this frame), if any.
         public string RefreshButtons(Vector2 screen, bool held, bool pressed)

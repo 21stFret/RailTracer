@@ -951,6 +951,7 @@ namespace RailTracer
                     if (!kb.spaceKey.isPressed && !(mouse != null && mouse.leftButton.isPressed)) winHeld = 0f; // Space, or the mouse held down
                     else if ((winHeld += Time.unscaledDeltaTime) >= endTurnHold) { winHeld = -1f; hud.HideCard(); StartCoroutine(ExitCar()); }
                 }
+                else if (endShown && c.Lost && mouse != null && mouse.leftButton.wasPressedThisFrame) RestartCar(); // the loss card: a click retries
                 else if (any && hud.CardDismissable) hud.HideCard();
                 kb = null;
                 mouse = null;
@@ -1022,6 +1023,7 @@ namespace RailTracer
                 case "cancel": selected = null; break;
                 case "pause": if (!busy) OpenChoice("pause"); break;
                 case "controls": hud.ToggleControls(); break;
+                case "closecontrols": hud.CloseControls(); break;
                 case "log": hud.ShowLog(c.log); Time.timeScale = 0f; break;
             }
             if (!busy && !c.Over && mouse != null && mouse.leftButton.wasPressedThisFrame && hover.HasValue)
@@ -1086,7 +1088,7 @@ namespace RailTracer
                     RecordClear();
                     hud.ShowCard($"{CarLabel()} cleared", "The assassin washes up", "and steps out as the conductor.", "Hold Space (or the mouse) to walk on  /  R to ride again", 0f, false, TicketStates());
                 }
-                else hud.ShowCard(CarLabel(), "The demon was only", "human after all.", "R to retry", 0f, false);
+                else hud.ShowCard(CarLabel(), "The demon was only", "human after all.", "R or click to retry", 0f, false);
             }
         }
 
@@ -1224,7 +1226,8 @@ namespace RailTracer
         bool LogStep(Keyboard kb, Mouse mouse)
         {
             if (!hud.LogOpen) return false;
-            if (kb != null && (kb.lKey.wasPressedThisFrame || kb.escapeKey.wasPressedThisFrame))
+            bool clicked = mouse != null && hud.RefreshButtons(mouse.position.ReadValue(), mouse.leftButton.isPressed, mouse.leftButton.wasPressedThisFrame) == "closelog";
+            if (clicked || (kb != null && (kb.lKey.wasPressedThisFrame || kb.escapeKey.wasPressedThisFrame)))
             {
                 hud.HideLog();
                 Time.timeScale = 1f;
