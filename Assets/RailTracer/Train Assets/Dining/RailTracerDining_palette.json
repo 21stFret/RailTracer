@@ -159,9 +159,9 @@
     {
       "name": "Trn_Shade",
       "color": [
-        0.92,
-        0.85,
-        0.68
+        0.03,
+        0.16,
+        0.07
       ],
       "metallic": 0.0,
       "roughness": 0.6,

@@ -20,9 +20,11 @@ namespace RailTracer
         [Header("Seat lamps (kit carriage only)")]
         public float lampHeight = 2.1f;   // just above head height
         public float lampInset = 0.3f;    // in from the wall, so the light isn't inside it
-        public float lampSpread = 3.5f;   // dining car and baggage hold: lit lamps at least this far apart (m)
+        public float wallLampEvery = 4f;  // dining car and baggage hold: a wall lamp about this often along each side (m)
         // A lit table lamp: a spot pointing straight down from the bulb, a soft-edged pool on the table.
-        public float tableLampIntensity = 0.2f, tableLampRange = 1f, tableLampAngle = 179f, tableLampInnerAngle = 80f;
+        // (Renamed again from tableLampIntensity etc.: an open scene keeps a field's first default, so a new name is
+        // what makes a new value take.)
+        public float tableLampPower = 0.1f, tableLampReach = 1f, tableLampCone = 179f, tableLampInnerCone = 0f;
         readonly HashSet<Light> tableLamps = new HashSet<Light>(); // lit at their own level (LegendLighting)
         public float sunDim = 0.01f;      // the directional light over the kit carriage: on, no shadows, very dim
         public Color lampColor = new Color(1f, 0.78f, 0.5f);
@@ -539,39 +541,24 @@ namespace RailTracer
             {
                 var bulbs = new List<Transform>();
                 Greybox(car, map, parent, kit, bulbs);
-                // Wall lamps on the plain wall (one per up to 4 tiles of it), lamps on the tables; only some are lit,
-                // picked along the car so no two lit ones are within lampSpread of each other.
-                var spots = new List<(Vector3 at, System.Action<bool> make)>();
+                // Wall lamps, all lit, as evenly spaced as the plain wall allows: one about every wallLampEvery metres
+                // along each side (the sides staggered by half of that), each on the free plain-wall tile nearest its
+                // even spot (none if there's no plain wall within half a step). Table lamps: every other one along the
+                // car is lit.
                 foreach (bool sideA in new[] { true, false })
                 {
                     int row = sideA ? 0 : car.H - 1;
-                    bool Plain(int px) => car.BlankWall(new Cell(px, row)) || car.IsCage(new Cell(px, row));
-                    for (int x = 0; x < car.W; )
+                    var plain = Enumerable.Range(0, car.W).Where(px => car.BlankWall(new Cell(px, row)) || car.IsCage(new Cell(px, row))).ToList();
+                    for (float t = sideA ? wallLampEvery / 2f : wallLampEvery; t < car.W; t += wallLampEvery)
                     {
-                        if (!Plain(x)) { x++; continue; }
-                        int x0 = x;
-                        while (x < car.W && Plain(x)) x++;
-                        int n = x - x0, k = (n + 3) / 4;
-                        for (int i = 0; i < k; i++)
-                        {
-                            float lx = x0 - 0.5f + (i + 0.5f) * n / k;
-                            bool side = sideA;
-                            spots.Add((new Vector3(lx, lampHeight, sideA ? 0.5f : -(car.H - 1) - 0.5f), lit => Lamp(lx, side, lit, false)));
-                        }
+                        var near = plain.Where(px => Mathf.Abs(px - t) <= wallLampEvery / 2f).OrderBy(px => Mathf.Abs(px - t)).ToList();
+                        if (near.Count == 0) continue;
+                        plain.Remove(near[0]);
+                        Lamp(near[0], sideA, true, false);
                     }
                 }
-                foreach (var b in bulbs)
-                {
-                    var bulb = b;
-                    spots.Add((parent.InverseTransformPoint(bulb.position), lit => { if (lit) TableLight(bulb); }));
-                }
-                var chosen = new List<Vector3>();
-                foreach (var s in spots.OrderBy(s => s.at.x))
-                {
-                    bool lit = chosen.TrueForAll(p => Vector2.Distance(new Vector2(p.x, p.z), new Vector2(s.at.x, s.at.z)) >= lampSpread);
-                    if (lit) chosen.Add(s.at);
-                    s.make(lit);
-                }
+                var tables = bulbs.OrderBy(b => parent.InverseTransformPoint(b.position).x).ToList();
+                for (int i = 0; i < tables.Count; i += 2) TableLight(tables[i]);
             }
             if (live && kind != CarKind.Dining && kind != CarKind.Baggage) ScatterProps(kit, seats);
             return true;
@@ -589,10 +576,10 @@ namespace RailTracer
                 light.transform.localRotation = Quaternion.Euler(90f, 0f, 0f); // straight down
                 light.type = LightType.Spot;
                 light.color = lampColor;
-                light.intensity = tableLampIntensity;
-                light.range = tableLampRange;
-                light.spotAngle = tableLampAngle;
-                light.innerSpotAngle = tableLampInnerAngle;
+                light.intensity = tableLampPower;
+                light.range = tableLampReach;
+                light.spotAngle = tableLampCone;
+                light.innerSpotAngle = tableLampInnerCone;
                 light.shadows = LightShadows.None;
             }
 
@@ -1768,7 +1755,7 @@ namespace RailTracer
             {
                 if (!l) continue;
                 l.color = shownLampColor;
-                l.intensity = (tableLamps.Contains(l) ? tableLampIntensity : wallLampIntensity) * shownLampLevel;
+                l.intensity = (tableLamps.Contains(l) ? tableLampPower : wallLampIntensity) * shownLampLevel;
             }
             var tint = Color.Lerp(Color.white, shownLampColor, 0.5f);
             RenderSettings.ambientLight = baseAmbient * tint;

@@ -2,7 +2,7 @@
 RAILTRACER - DINING CAR FURNITURE   (Blender 3.x-5.x -> Unity FBX)
 Run in Blender (Scripting tab), or headless:  blender -b --python railtracer_dining.py -- --out <folder>
 Same palette as the train kit (Trn_*), plus Trn_Linen (tablecloths), Trn_Porcelain (plates, cups),
-Trn_Silver (cutlery) and Trn_Shade (lamp shades: smooth and matt, no texture).
+Trn_Silver (cutlery) and Trn_Shade (lamp shades: dark green, smooth and matt, no texture).
 
 Sized to the game's 1 m tile grid and the Update 18 greybox. Pivot = floor level at the CENTRE of the
 asset's first tile (the round table: the centre of its 2x2 block). Directions below are UNITY local axes
@@ -18,7 +18,7 @@ asset's first tile (the round table: the centre of its 2x2 block). Directions be
                       at +X; teapot, cups and a cloche on top, plates below.
   Bar_L               L of 5 tiles corner tile at the pivot: the counter stands in the room, 4 tiles along +X,
                       its front and brass foot rail facing -Z; the short leg runs 1 tile along +Z back to the wall.
-                      The bartender stands behind it (the row at +Z), with a back shelf of bottles on the wall.
+                      The bartender stands behind it (the row at +Z), with a cupboard and a shelf of bottles on the wall (kept under 1.8 m for the wall lamps).
                       1.1 m tall; taps, a cash register, glasses and bottles on top.
 Chairs reach about 0.35 m past the table's tiles into the open floor around it (the map keeps a tile clear
 round every table); nothing reaches past the wall side of a window table.
@@ -950,7 +950,7 @@ def make_texture_set(entry, style, n=512, seed=1):
     ("Trn_Linen",      (0.88, 0.86, 0.80), 0.0, 0.9, {"tex": "fabric", "tile": 0.5}),
     ("Trn_Porcelain",  (0.93, 0.92, 0.88), 0.0, 0.25, {"tex": "plain", "tile": 0.5}),
     ("Trn_Silver",     (0.80, 0.80, 0.82), 1.0, 0.3),                                   # cutlery
-    ("Trn_Shade",      (0.92, 0.85, 0.68), 0.0, 0.6)])                                  # lamp shades: smooth, matt, untextured
+    ("Trn_Shade",      (0.03, 0.16, 0.07), 0.0, 0.6)])                                  # lamp shades: dark green, smooth, matt, untextured
 
 
 # ---------------------------------------------------------------- Unity-axis helpers
@@ -1216,12 +1216,11 @@ def bar_l():
     sb0, sb1 = 1.22, 1.45
     R(S, inner + 0.3, end, sb0, sb1, 0.0, 0.9, WOODDARK)
     R(S, inner + 0.3, end, sb0 - 0.02, sb1, 0.9, 0.94, WOOD)
-    for y in (1.35, 1.75):
-        R(S, inner + 0.3, end, sb0 + 0.06, sb1, y, y + 0.03, WOOD)
+    R(S, inner + 0.3, end, sb0 + 0.06, sb1, 1.35, 1.38, WOOD)                               # one shelf: wall lamps go above
     for u in (inner + 0.31, end - 0.03):
-        R(S, u - 0.01, u + 0.02, sb0 + 0.06, sb1, 0.94, 2.0, WOOD)                           # shelf ends
+        R(S, u - 0.01, u + 0.02, sb0 + 0.06, sb1, 0.94, 1.7, WOOD)                           # shelf ends
     rng = a.rng
-    for y in (0.94, 1.38, 1.78):
+    for y in (0.94, 1.38):
         u = inner + 0.42
         while u < end - 0.12:
             h = rng.uniform(0.2, 0.3)
