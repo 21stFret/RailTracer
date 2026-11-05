@@ -225,7 +225,7 @@ namespace RailTracer
             cam.transform.rotation = Quaternion.Euler(55, 0, 0);
             focus = new Vector3(6, 0, -(Map.Length - 1) / 2f);
             // The kit carriage is lit by its seat lamps; this sun is only for the white-box fallback (see Build).
-            sun = System.Array.Find(FindObjectsByType<Light>(FindObjectsSortMode.None), l => l.type == LightType.Directional);
+            sun = System.Array.Find(FindObjectsByType<Light>(), l => l.type == LightType.Directional);
             if (!sun && !FindAnyObjectByType<Light>())
             {
                 sun = new GameObject("Light").AddComponent<Light>();
