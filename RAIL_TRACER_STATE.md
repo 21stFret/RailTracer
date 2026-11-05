@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 18.32 (5 Nov 2026).
+Last updated: Update 18.33 (5 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -51,6 +51,7 @@ Inspector; the saved scene matches these.
 | 18.30 (saved kill cam shots kept) | Done, not yet seen in Play mode: a seat back under the shot was throwing it out for the default angles |
 | 18.31 (takedowns hold their place) | Done, not yet seen in Play mode |
 | 18.32 (sight through partition doorways) | Done, not yet seen in Play mode |
+| 18.33 (a resumed save keeps its legend) | Done, not yet seen in Play mode: the Inspector's debug sliders overwrote the replayed legend and cooldowns as Play mode started |
 | Still needed (art) | Rail grab, demon throw and crouched drag-down animations; unarmed finishers (skipped for now); a searching animation; more idles |
 | Next | Full audio pass |
 

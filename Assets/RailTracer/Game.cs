@@ -397,6 +397,13 @@ namespace RailTracer
             ghostRenderers = null;
             ghostCell = pendingGhost = null;
             gone.Clear();
+            // The Inspector's debug sliders follow the new car (Unity reports a change to them as Play mode starts,
+            // which would otherwise overwrite a resumed save's legend and cooldowns with the sliders' old values).
+            debugDirty = false;
+            debugLegend = c.legend;
+            debugLeapWait = c.leapWait;
+            debugRailWait = c.railWait;
+            debugThrowWait = c.throwWait;
             // A resumed save: rail-grab bodies hang out of their windows again, fleers are already gone.
             foreach (var b in c.bodies) if (b.hung) { hung.Add(b.who); Smash(b.pos, false); } // and their windows stay smashed
             foreach (var e in c.enemies) if (e.state == EnemyState.Fled) gone.Add(e);
@@ -1422,10 +1429,11 @@ namespace RailTracer
             if (debugDirty)
             {
                 debugDirty = false;
-                c.legend = Mathf.Clamp(debugLegend, 0, tuning.maxLegend);
-                c.leapWait = Mathf.Clamp(debugLeapWait, 0, c.Def(SkillId.Leap).cooldown);
-                c.railWait = Mathf.Clamp(debugRailWait, 0, c.Def(SkillId.Rail).cooldown);
-                c.throwWait = Mathf.Clamp(debugThrowWait, 0, c.Def(SkillId.Throw).cooldown);
+                // Only what was actually moved (a change reported for some other field leaves these alone).
+                if (debugLegend != c.legend) c.legend = Mathf.Clamp(debugLegend, 0, tuning.maxLegend);
+                if (debugLeapWait != c.leapWait) c.leapWait = Mathf.Clamp(debugLeapWait, 0, c.Def(SkillId.Leap).cooldown);
+                if (debugRailWait != c.railWait) c.railWait = Mathf.Clamp(debugRailWait, 0, c.Def(SkillId.Rail).cooldown);
+                if (debugThrowWait != c.throwWait) c.throwWait = Mathf.Clamp(debugThrowWait, 0, c.Def(SkillId.Throw).cooldown);
             }
             debugLegend = c.legend;
             debugLeapWait = c.leapWait;
