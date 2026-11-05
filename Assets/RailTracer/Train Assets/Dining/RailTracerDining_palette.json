@@ -143,20 +143,6 @@
       "mask": "Trn_Porcelain_mask.png"
     },
     {
-      "name": "Trn_Silver",
-      "color": [
-        0.8,
-        0.8,
-        0.82
-      ],
-      "metallic": 1.0,
-      "roughness": 0.3,
-      "tile": 1.0,
-      "albedo": "Trn_Silver_albedo.png",
-      "normal": "Trn_Silver_normal.png",
-      "mask": "Trn_Silver_mask.png"
-    },
-    {
       "name": "Trn_Shade",
       "color": [
         0.03,

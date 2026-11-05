@@ -1,8 +1,8 @@
 """
 RAILTRACER - DINING CAR FURNITURE   (Blender 3.x-5.x -> Unity FBX)
 Run in Blender (Scripting tab), or headless:  blender -b --python railtracer_dining.py -- --out <folder>
-Same palette as the train kit (Trn_*), plus Trn_Linen (tablecloths), Trn_Porcelain (plates, cups),
-Trn_Silver (cutlery) and Trn_Shade (lamp shades: dark green, smooth and matt, no texture).
+Same palette as the train kit (Trn_*), plus Trn_Linen (tablecloths), Trn_Porcelain (plates, cups)
+and Trn_Shade (lamp shades: dark green, smooth and matt, no texture).
 
 Sized to the game's 1 m tile grid and the Update 18 greybox. Pivot = floor level at the CENTRE of the
 asset's first tile (the round table: the centre of its 2x2 block). Directions below are UNITY local axes
@@ -937,7 +937,7 @@ def make_texture_set(entry, style, n=512, seed=1):
 
 
 
-(WOOD, WOODDARK, BRASS, CREAM, VELVET, LEATHER, IRON, GLASS, LINEN, PORCELAIN, SILVER, SHADE) = set_palette([
+(WOOD, WOODDARK, BRASS, CREAM, VELVET, LEATHER, IRON, GLASS, LINEN, PORCELAIN, SHADE) = set_palette([
     ("Trn_Wood",       (0.45, 0.24, 0.12), 0.0, 0.6, {"tex": "wood", "tile": 2.0, "planks": 1, "rings": 14, "seams": False}),
     ("Trn_WoodDark",   (0.20, 0.10, 0.05), 0.0, 0.6, {"tex": "wood", "tile": 1.0, "planks": 2}),
     ("Trn_Brass",      (0.95, 0.70, 0.25), 1.0, 0.3, {"tex": "brushed", "tile": 0.5}),
@@ -949,7 +949,6 @@ def make_texture_set(entry, style, n=512, seed=1):
     # new for the dining car
     ("Trn_Linen",      (0.48, 0.39, 0.26), 0.0, 1.0, {"tex": "fabric", "tile": 0.5}),  # warm oatmeal (sRGB ~ #B8A88C), matt: the plates stand out
     ("Trn_Porcelain",  (0.93, 0.92, 0.88), 0.0, 0.25, {"tex": "plain", "tile": 0.5}),
-    ("Trn_Silver",     (0.80, 0.80, 0.82), 1.0, 0.3),                                   # cutlery
     ("Trn_Shade",      (0.03, 0.16, 0.07), 0.0, 0.6)])                                  # lamp shades: dark green, smooth, matt, untextured
 
 
@@ -1017,29 +1016,50 @@ def flat(mb, ou, ow, fu, fw, pts, y0, y1, slot):
     mb.add(verts, faces, slot)
 
 
+def ornate_handle(mb, ou, ow, fu, fw, y, f_end, f_collar, slot):
+    """An ornate handle along f, from its rounded end at f_end to a collar at f_collar: a teardrop end with a raised
+    oval boss, a waisted shaft, and a raised collar (all convex pieces, each on its own height: no shared faces)."""
+    import math
+    # teardrop end: a rounded lobe (12-gon), the shaft starts inside it
+    r, c = 0.0115, f_end + 0.0115
+    flat(mb, ou, ow, fu, fw, [(c + r * math.cos(2 * math.pi * k / 12), r * 1.05 * math.sin(2 * math.pi * k / 12)) for k in range(12)],
+         y, y + 0.006, slot)
+    flat(mb, ou, ow, fu, fw, [(c + r * 0.6 * math.cos(2 * math.pi * k / 10), r * 0.45 * math.sin(2 * math.pi * k / 10)) for k in range(10)],
+         y + 0.006, y + 0.0085, slot)                                    # the boss
+    # the shaft: waisted (narrow in the middle), in two tapered pieces
+    mid = (c + f_collar) / 2
+    flat(mb, ou, ow, fu, fw, [(c + 0.004, -0.0075), (c + 0.004, 0.0075), (mid, 0.0045), (mid, -0.0045)], y, y + 0.0055, slot)
+    flat(mb, ou, ow, fu, fw, [(mid, -0.0045), (mid, 0.0045), (f_collar, 0.0062), (f_collar, -0.0062)], y, y + 0.0055, slot)
+    # the collar: a little wider and higher, with a fine bead
+    flat(mb, ou, ow, fu, fw, [(f_collar, -0.0078), (f_collar, 0.0078), (f_collar + 0.008, 0.0078), (f_collar + 0.008, -0.0078)],
+         y, y + 0.0075, slot)
+    flat(mb, ou, ow, fu, fw, [(f_collar + 0.002, -0.0082), (f_collar + 0.002, 0.0082), (f_collar + 0.006, 0.0082), (f_collar + 0.006, -0.0082)],
+         y + 0.0075, y + 0.0085, slot)
+
+
 def knife(mb, ou, ow, fu, fw, y):
-    """Table knife, blade away from the sitter: a rounded handle and a blade with a curved spine and round tip."""
-    flat(mb, ou, ow, fu, fw, [(-0.1, -0.008), (-0.1, 0.008), (-0.098, 0.0095), (-0.03, 0.0085), (-0.027, 0.0),
-                              (-0.03, -0.0085), (-0.098, -0.0095)], y, y + 0.007, SILVER)
-    flat(mb, ou, ow, fu, fw, [(-0.027, -0.006), (-0.027, 0.0075), (0.04, 0.008), (0.065, 0.006), (0.075, 0.002),
-                              (0.077, -0.002), (0.07, -0.006)], y, y + 0.0025, SILVER)
+    """Ornate table knife in brass, blade away from the sitter: the ornate handle, then a blade with a curved spine,
+    a round tip and a slim ricasso by the collar."""
+    ornate_handle(mb, ou, ow, fu, fw, y, -0.105, -0.034, BRASS)
+    flat(mb, ou, ow, fu, fw, [(-0.026, -0.005), (-0.026, 0.0055), (-0.018, 0.0065), (0.04, 0.0078), (0.064, 0.006),
+                              (0.075, 0.0022), (0.077, -0.0018), (0.07, -0.0055), (-0.018, -0.0055)], y, y + 0.0025, BRASS)
 
 
 def fork(mb, ou, ow, fu, fw, y):
-    """Table fork, tines away from the sitter: handle, a neck widening into the head, four tines."""
-    flat(mb, ou, ow, fu, fw, [(-0.1, -0.008), (-0.1, 0.008), (-0.098, 0.0095), (-0.025, 0.0065), (-0.02, 0.004),
-                              (-0.02, -0.004), (-0.025, -0.0065), (-0.098, -0.0095)], y, y + 0.006, SILVER)
-    flat(mb, ou, ow, fu, fw, [(-0.02, -0.004), (-0.02, 0.004), (0.015, 0.012), (0.03, 0.012), (0.03, -0.012),
-                              (0.015, -0.012)], y, y + 0.003, SILVER)
+    """Ornate table fork in brass, tines away from the sitter: the ornate handle, a neck widening into the head,
+    four tines with pointed tips."""
+    ornate_handle(mb, ou, ow, fu, fw, y, -0.105, -0.034, BRASS)
+    flat(mb, ou, ow, fu, fw, [(-0.026, -0.004), (-0.026, 0.004), (0.012, 0.0115), (0.03, 0.0122), (0.03, -0.0122),
+                              (0.012, -0.0115)], y, y + 0.003, BRASS)
     for k in range(4):
         s = -0.0105 + k * 0.007
-        flat(mb, ou, ow, fu, fw, [(0.03, s - 0.0018), (0.03, s + 0.0018), (0.068, s + 0.0014), (0.07, s),
-                                  (0.068, s - 0.0014)], y, y + 0.003, SILVER)
+        flat(mb, ou, ow, fu, fw, [(0.03, s - 0.0018), (0.03, s + 0.0018), (0.066, s + 0.0013), (0.072, s),
+                                  (0.066, s - 0.0013)], y, y + 0.003, BRASS)
 
 
 def setting(mb, u, w, fu, fw, y):
-    """A place setting in front of a chair facing (fu, fw): a rimmed dinner plate, the fork to its left and the
-    knife to its right, the cup and saucer above the knife, clear of the plate (cup centre 21 cm from the plate's)."""
+    """A place setting in front of a chair facing (fu, fw): a rimmed dinner plate, the brass fork to its left and the
+    brass knife to its right, the cup and saucer above the knife, clear of the plate (cup centre 21 cm from the plate's)."""
     pu, pw = u + fu * 0.2, w + fw * 0.2
     su, sw = fw, -fu                                                   # to the sitter's right
     L(mb, [(0.07, y), (0.075, y + 0.006), (0.115, y + 0.012), (0.12, y + 0.02), (0.112, y + 0.02),
