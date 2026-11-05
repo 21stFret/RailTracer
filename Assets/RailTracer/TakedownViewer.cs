@@ -25,6 +25,7 @@ namespace RailTracer
         public float soakBrutal = 0.7f, soakStealth = 0.35f, soakHeight = 0.3f, soakDepth = 1.2f; // as on the Game component
         public Vector3 knifeOffset, knifeTwist; // as on the Game component: tune here, copy the values across
         Game.Knife knife;
+        bool knifeReversed;
         // The kill cam being set (K): its direction from the middle of the pair, in the pair's space, and distance.
         float camYaw, camPitch, camDist = 1.3f;
         Vector3 camPan; // the look point's shift from the middle of the pair (pair space): Cam Look
@@ -162,6 +163,7 @@ namespace RailTracer
             foreach (Transform stain in bloodRoot) Destroy(stain.gameObject);
             Stand(attacker);
             Stand(victim);
+            knifeReversed = t.reverseGrip;
             attacker.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
             victim.transform.SetPositionAndRotation(t.victimOffset, Quaternion.Euler(0f, t.victimYaw, 0f));
             // The game turns the pair to face the seat and moves the victim coverShift towards it: the seat stands a
@@ -249,6 +251,7 @@ namespace RailTracer
             }
             for (float time = 0f; (time < holdAfter || paused) && !jump; time += Time.deltaTime * Rates[rate]) yield return null;
             Stand(victim);
+            knifeReversed = false;
             attacker.enabled = true;
             attacker.Play("Idle", 0, 0f);
             victim.Play("Idle", 0, 0f);
@@ -404,7 +407,7 @@ namespace RailTracer
                 if (killCam) camDist = Mathf.Clamp(camDist - wheel * camDist, 0.4f, 8f);
                 else distance = Mathf.Clamp(distance - wheel * distance, 1.5f, 12f);
             }
-            Game.PoseKnife(knife, knifeOffset, knifeTwist);
+            Game.PoseKnife(knife, knifeOffset, knifeTwist, knifeReversed);
             if (!cam || library == null) return;
             var t = Current;
             if (killCam && t != null)

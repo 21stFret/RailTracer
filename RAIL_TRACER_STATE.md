@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 18.27 (5 Nov 2026).
+Last updated: Update 18.28 (5 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -46,6 +46,7 @@ Inspector; the saved scene matches these.
 | 18.25 (kill cam chance, slow motion overrides takedown speed) | Done, not yet seen in Play mode |
 | 18.26 (slow motion only on hits) | Done, not yet seen in Play mode |
 | 18.27 (the knife) | Done, not yet seen in Play mode: Prop_Knife (1 FBX, Train Assets/Knife, railtracer_knife.py) in your right hand |
+| 18.28 (the hunting knife, reverse grip) | Done, not yet seen in Play mode: Prop_Knife rebuilt from Alex's reference, 34 cm; Heart Stab reverses the grip |
 | Still needed (art) | Rail grab, demon throw and crouched drag-down animations; unarmed finishers (skipped for now); a searching animation; more idles |
 | Next | Full audio pass |
 
@@ -227,7 +228,7 @@ In the game too, finisher blood now comes from the victim's chest bone (where th
 - **Legend readout** (only while a kill is targeted; gone when you cancel or pick another skill): the hover label adds the kill's name and "+30 legend" in #E0202F ("Locked" on a heavy that isn't Shaken yet); the big number reads "42 +30"; the legend bar shows the gain hatched (#E0202F stripes on #4A0C15) from your legend to where the kill lands; notches it crosses turn red and are named beside the health bar ("50: Brutal Bloodied · 60: Rail Bloodied"), plus "Capped at 100" past 100. Gains: stealth +10, brutal +30, rail grab +25. Skill boxes unchanged.
 - Move and leap previews: each tile that draws a shot shows its hit chance on the floor; a leap's says "LEAP -25", and the shooter's label "Hit 60% · leap -25".
 - The walk-through car has every legend effect off (demon aura, blood overlay); an aura starting at nothing clears what its systems played on awake.
-- **The knife:** `Assets/KitScripts/railtracer_knife.py` exports Prop_Knife to `Train Assets/Knife`: a 30 cm 1930s dagger, a mirror-polished steel blade (Trn_Steel, untextured, roughness 0.06) of diamond section tapering to a needle point, a brass crossguard with ball ends, a dark leather grip (Trn_GripLeather) wound with brass wire, a brass pommel. Always in your right hand: the grip is worked out from the hand's bones (across the knuckles, blade out of the thumb side, edges along the fingers, in the palm); Game "Knife Offset" (m, in the knife's space) and "Knife Twist" (degrees) nudge it, live in Play mode. The animation test's attacker holds it too, with its own Knife Offset / Twist to try values.
+- **The knife:** `Assets/KitScripts/railtracer_knife.py` exports Prop_Knife to `Train Assets/Knife`: a 34 cm vintage hunting knife (from Alex's reference photo): a mirror-polished single-edged steel blade (Trn_Steel, roughness 0.06) with a full flat grind, a choil by the guard and an upswept curved tip; a thin brass guard; stacked black, brass and red spacers at both ends of the handle (Trn_SpacerBlack, Trn_SpacerRed); jigged stag scales (Trn_Stag) with two brass pins; an aluminium bird's-head pommel (Trn_Aluminium). Always in your right hand: the grip is worked out from the hand's bones (across the knuckles, blade out of the thumb side, edges along the fingers, in the palm); Game "Knife Offset" (m, in the knife's space) and "Knife Twist" (degrees) nudge it, live in Play mode. A takedown with Reverse Grip ticked (Heart Stab) holds it the other way round while it plays: the blade out of the little-finger side. The animation test's attacker holds it too, with its own Knife Offset / Twist to try values.
 - The demon aura sits under your hips, not on your tile, so it travels with you through a finisher's moves.
 - The stylish flip (a bloodied leap past 3 tiles) crosses the floor as its clip does (Game "Stylish Flip Travel", sampled from the clip's hips: across in 1.2 s, then the landing plays in place), so it lands on its tile without sliding.
 - Running moves play the Synty sprint in the walk/run blend (Editor/AnimationSetup swaps it into existing controllers), in place of the sped-up run.

@@ -33,6 +33,8 @@ namespace RailTracer
         public List<float> extraBlood = new List<float>();
         [Tooltip("The head comes off at Blood At: a gore burst where it was (a stomp, say).")]
         public bool headOff;
+        [Tooltip("Hold the knife the other way round for this one: the blade out of the little-finger side.")]
+        public bool reverseGrip;
 
         // How far through the whole takedown (0-1, both clips of a combo) a point in its first or second clip is.
         public float Overall(bool second, float k)

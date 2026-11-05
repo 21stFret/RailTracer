@@ -1488,6 +1488,7 @@ namespace RailTracer
             if (playerAnim && anims.TryGetValue(victim, out var va) && playerAnim.HasState(0, hash) && va.HasState(0, hash))
             {
                 takedownVictim = victim;
+                knifeReversed = entry != null && entry.reverseGrip;
                 Vector3 from = playerShown, at = shown[victim];
                 var dir = at - from;
                 dir.y = 0;
@@ -1657,6 +1658,7 @@ namespace RailTracer
                 playerShown = end;
                 if (flyOut != null) yield return flyOut;
                 playerAnim.speed = va.speed = 1f;
+                knifeReversed = false;
                 pairedKills.Add(victim);
                 takedownVictim = null;
             }
@@ -2521,7 +2523,7 @@ namespace RailTracer
             t.localPosition = playerShown;
             t.localRotation = Quaternion.LookRotation(playerFacing);
             t.localScale = Vector3.one * characterScale;
-            PoseKnife(knife, knifeOffset, knifeTwist); // live, so Knife Offset / Twist can be tuned in Play mode
+            PoseKnife(knife, knifeOffset, knifeTwist, knifeReversed); // live, so Knife Offset / Twist can be tuned in Play mode
             // Soaks up as the legend fills, washes back when you're hurt; eased so a kill spreads rather than pops.
             // The walk-through car: every legend effect fully off.
             shownBlood = c.freeWalk ? 0f : Mathf.MoveTowards(shownBlood, c.legend / (float)tuning.maxLegend, bloodSpreadSpeed * Time.deltaTime);
@@ -2542,6 +2544,7 @@ namespace RailTracer
         public Vector3 knifeOffset, knifeTwist;
         internal class Knife { public Transform t; public Vector3 pos; public Quaternion rot; public float unit; }
         Knife knife;
+        bool knifeReversed; // a takedown with Reverse Grip is playing
 
         // Puts the knife in the right hand, gripped from the hand's own bones: the handle across the knuckles (blade
         // out of the thumb side, little finger to index), its edges along the fingers, the grip in the palm a little
@@ -2578,10 +2581,11 @@ namespace RailTracer
             return k;
         }
 
-        internal static void PoseKnife(Knife k, Vector3 offset, Vector3 twist)
+        // reverse: the other way round in the fist (turned half round about the flats), the blade out of the little-finger side.
+        internal static void PoseKnife(Knife k, Vector3 offset, Vector3 twist, bool reverse = false)
         {
             if (k == null || !k.t) return;
-            var rot = k.rot * Quaternion.Euler(twist);
+            var rot = k.rot * (reverse ? Quaternion.Euler(0f, 0f, 180f) : Quaternion.identity) * Quaternion.Euler(twist);
             k.t.localRotation = rot;
             k.t.localPosition = k.pos + rot * (offset * k.unit);
         }
