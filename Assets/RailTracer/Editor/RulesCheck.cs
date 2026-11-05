@@ -581,6 +581,13 @@ namespace RailTracer
                 Check(c.Blocked(new Cell(2, 0)) && c.CanSee(g, c.player) && !c.CanLeapTo(new Cell(3, 0)), "the cage: seen through, not walked or leapt through");
             }
 
+            // Sight through a partition only through its doorway: straight down the aisle, not at a steep slant.
+            {
+                var c = new Carriage(new[] { "...W...", "...W...", "P......", "...W...", "...W..." }, t, 1);
+                Check(c.LineOfSight(new Cell(0, 2), new Cell(6, 2), false) && c.LineOfSight(new Cell(0, 1), new Cell(6, 3), false), "a partition: seen through its doorway");
+                Check(!c.LineOfSight(new Cell(2, 1), new Cell(4, 3), false) && !c.LineOfSight(new Cell(1, 2), new Cell(6, 3), false), "a partition: not at a slant past its frame");
+            }
+
             // Round tables and the dining cart: seat rules.
             {
                 var c = new Carriage(new[] { ".POD..", "..OO..", "......" }, t, 1);

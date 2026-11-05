@@ -186,6 +186,13 @@ namespace RailTracer
                     wall[x, y] = ch == 'W';
                     if (ch == 'P') player = new Cell(x, y);
                 }
+            // Partitions: a column walled off but for one doorway (the train draws the wall on the joint after it).
+            for (int x = 0; x < W; x++)
+            {
+                int walls = 0, door = -1;
+                for (int y = 0; y < H; y++) { if (wall[x, y]) walls++; else door = y; }
+                if (H >= 3 && walls == H - 1) partitions.Add((x, door));
+            }
             hp = t.maxHp;
             rng = new Random(seed);
             StartPlayerTurn();
@@ -260,9 +267,21 @@ namespace RailTracer
         bool Occupied(Cell c) => c == player || EnemyAt(c) != null;
         public bool IsBloody(Cell c) => stains.Exists(s => s.tiles.Contains(c));
 
-        // Bresenham. Full cover always blocks; seats only when told to (something low). Units never block.
+        readonly List<(int x, int door)> partitions = new List<(int, int)>();
+        const double DoorHalf = 0.45; // half the partition doorway's width (1 m), less its frame
+
+        // Bresenham. Full cover always blocks; seats only when told to (something low). Units never block. A line
+        // through a partition must pass its doorway: where it crosses the wall's plane (on the joint after the
+        // partition's tiles) it has to be within the opening, so from a steep angle you see barely a tile through.
         public bool LineOfSight(Cell a, Cell b, bool seatsBlock)
         {
+            foreach (var (px, door) in partitions)
+            {
+                double plane = px + 0.5;
+                if ((a.x - plane) * (b.x - plane) >= 0) continue; // both on one side
+                double k = (plane - a.x) / (b.x - a.x), yc = a.y + k * (b.y - a.y);
+                if (Math.Abs(yc - door) > DoorHalf) return false;
+            }
             int dx = Math.Abs(b.x - a.x), dy = -Math.Abs(b.y - a.y);
             int sx = a.x < b.x ? 1 : -1, sy = a.y < b.y ? 1 : -1, err = dx + dy;
             int x = a.x, y = a.y;

@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 18.31 (5 Nov 2026).
+Last updated: Update 18.32 (5 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -50,6 +50,7 @@ Inspector; the saved scene matches these.
 | 18.29 (kill cam keeps its shot, enemy turn speed) | Done, not yet seen in Play mode: the play camera's controls ran during kill cams, letting you move it and dragging it back to play distance |
 | 18.30 (saved kill cam shots kept) | Done, not yet seen in Play mode: a seat back under the shot was throwing it out for the default angles |
 | 18.31 (takedowns hold their place) | Done, not yet seen in Play mode |
+| 18.32 (sight through partition doorways) | Done, not yet seen in Play mode |
 | Still needed (art) | Rail grab, demon throw and crouched drag-down animations; unarmed finishers (skipped for now); a searching animation; more idles |
 | Next | Full audio pass |
 
@@ -176,6 +177,7 @@ Hover label: name, role, one state line ("Searching · Shaken", "Panicked · Fre
 - Range: guards 7, heavies 8. Never changes with awareness.
 - Guards: a 90° wedge in front (full range), plus two tiles of side vision one row ahead.
 - Heavies: the same, plus the first 2 tiles straight out to each side.
+- **Partitions** (a column walled off but for its doorway, like Third class's): a sight line through one has to pass the doorway, where the wall is drawn (on the joint after the partition's tiles), within 0.45 m of its middle; so from a steep angle only about a tile shows through, and straight down the aisle is clear. Throws and the other line-of-sight checks follow the same rule.
 - Each standing enemy on the line halves the sight left beyond them (broken ones and bodies don't count).
 - Luggage and walls block sight. Seats block it only for something low (you crouched, a body, blood).
 - **Half cover (crouched):** a seat on the line to the viewer hides you if it's right next to you (viewer 3 tiles away or less) or within 2 tiles of you (viewer further). Worked out per viewer. Bodies and blood use the same rule.
