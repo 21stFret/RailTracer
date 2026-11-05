@@ -405,6 +405,8 @@ namespace RailTracer
             playerAnim = Character(characterModel, new AnimatorOverrideController(playerController)); // its "Finisher" takes each takedown's clip
             Colour(playerAnim, tintedParts, conductorSuitColor);
             AddBloodOverlay(playerAnim);
+            var knifeKit = Resources.Load<TrainKit>("Kit/TrainKit");
+            knife = HoldKnife(playerAnim, knifeKit ? knifeKit.Get("Prop_Knife") : null, characterScale);
             AddAura(playerAnim.transform);
             shownBlood = 0f;
             foreach (var e in c.enemies)
@@ -2519,6 +2521,7 @@ namespace RailTracer
             t.localPosition = playerShown;
             t.localRotation = Quaternion.LookRotation(playerFacing);
             t.localScale = Vector3.one * characterScale;
+            PoseKnife(knife, knifeOffset, knifeTwist); // live, so Knife Offset / Twist can be tuned in Play mode
             // Soaks up as the legend fills, washes back when you're hurt; eased so a kill spreads rather than pops.
             // The walk-through car: every legend effect fully off.
             shownBlood = c.freeWalk ? 0f : Mathf.MoveTowards(shownBlood, c.legend / (float)tuning.maxLegend, bloodSpreadSpeed * Time.deltaTime);
@@ -2530,6 +2533,57 @@ namespace RailTracer
                 auraHolder.rotation = t.rotation;
             }
             SyncAura(Mathf.InverseLerp(auraFrom, auraFull, shownBlood));
+        }
+
+        // ---- The knife (Train Assets/Knife, from railtracer_knife.py) in your right hand ----
+
+        // Nudges on top of the grip worked out from the hand: metres in the knife's own space (+Y up the blade), and
+        // degrees. Shared with the animation test.
+        public Vector3 knifeOffset, knifeTwist;
+        internal class Knife { public Transform t; public Vector3 pos; public Quaternion rot; public float unit; }
+        Knife knife;
+
+        // Puts the knife in the right hand, gripped from the hand's own bones: the handle across the knuckles (blade
+        // out of the thumb side, little finger to index), its edges along the fingers, the grip in the palm a little
+        // short of the knuckles. Null without the model or the bones.
+        internal static Knife HoldKnife(Animator a, GameObject model, float worldScale)
+        {
+            if (!a || !model) return null;
+            var hand = a.GetBoneTransform(HumanBodyBones.RightHand);
+            var index = a.GetBoneTransform(HumanBodyBones.RightIndexProximal);
+            var little = a.GetBoneTransform(HumanBodyBones.RightLittleProximal) ?? a.GetBoneTransform(HumanBodyBones.RightRingProximal);
+            var middle = a.GetBoneTransform(HumanBodyBones.RightMiddleProximal);
+            var thumb = a.GetBoneTransform(HumanBodyBones.RightThumbProximal);
+            if (!hand) return null;
+            var k = new Knife { t = Instantiate(model, hand, false).transform };
+            k.t.name = "Knife";
+            float s = Mathf.Max(1e-4f, hand.lossyScale.x);
+            k.unit = 1f / s;                                            // metres to hand-local units
+            k.t.localScale = Vector3.one * worldScale / s;
+            foreach (var col in k.t.GetComponentsInChildren<Collider>()) col.enabled = false;
+            if (index && little && middle)
+            {
+                Vector3 I = hand.InverseTransformPoint(index.position), Lt = hand.InverseTransformPoint(little.position);
+                Vector3 M = hand.InverseTransformPoint(middle.position);
+                var across = (I - Lt).normalized;                       // up the blade
+                var fingers = Vector3.ProjectOnPlane(M, across).normalized; // wrist to knuckles
+                var palm = Vector3.Cross(across, fingers).normalized;
+                if (thumb && Vector3.Dot(palm, hand.InverseTransformPoint(thumb.position) - M) < 0f) palm = -palm;
+                float d = M.magnitude;                                   // the hand's length, wrist to knuckle
+                k.pos = fingers * d * 0.95f + palm * d * 0.3f;
+                k.rot = Quaternion.LookRotation(palm, across);           // +Y up the blade, the flats facing the palm
+            }
+            else { k.pos = new Vector3(0f, 0.08f, 0.02f) * k.unit; k.rot = Quaternion.identity; }
+            PoseKnife(k, Vector3.zero, Vector3.zero);
+            return k;
+        }
+
+        internal static void PoseKnife(Knife k, Vector3 offset, Vector3 twist)
+        {
+            if (k == null || !k.t) return;
+            var rot = k.rot * Quaternion.Euler(twist);
+            k.t.localRotation = rot;
+            k.t.localPosition = k.pos + rot * (offset * k.unit);
         }
 
         void AddAura(Transform player)

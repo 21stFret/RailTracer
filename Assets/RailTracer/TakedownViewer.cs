@@ -23,6 +23,8 @@ namespace RailTracer
         public float bloodCastStanding = 1.8f, bloodCastCrouched = 1f, bloodCastReach = 1.5f; // as on the Game component
         public float killCamClose = 1.25f, killCamHeight = 0.55f, takedownHold = 0.5f;        // as on the Game component (the body's slide takes Takedown Hold)
         public float soakBrutal = 0.7f, soakStealth = 0.35f, soakHeight = 0.3f, soakDepth = 1.2f; // as on the Game component
+        public Vector3 knifeOffset, knifeTwist; // as on the Game component: tune here, copy the values across
+        Game.Knife knife;
         // The kill cam being set (K): its direction from the middle of the pair, in the pair's space, and distance.
         float camYaw, camPitch, camDist = 1.3f;
         Vector3 camPan; // the look point's shift from the middle of the pair (pair space): Cam Look
@@ -86,6 +88,8 @@ namespace RailTracer
             coverTable.GetComponent<Renderer>().material.color = new Color(0.86f, 0.83f, 0.76f);
             coverTable.SetActive(false);
             attacker = Spawn(model, playerController, "Attacker");
+            var kit = Resources.Load<TrainKit>("Kit/TrainKit");
+            knife = Game.HoldKnife(attacker, kit ? kit.Get("Prop_Knife") : null, 1f);
             victim = Spawn(model, enemyController, "Victim");
             StartCoroutine(Loop());
         }
@@ -400,6 +404,7 @@ namespace RailTracer
                 if (killCam) camDist = Mathf.Clamp(camDist - wheel * camDist, 0.4f, 8f);
                 else distance = Mathf.Clamp(distance - wheel * distance, 1.5f, 12f);
             }
+            Game.PoseKnife(knife, knifeOffset, knifeTwist);
             if (!cam || library == null) return;
             var t = Current;
             if (killCam && t != null)
