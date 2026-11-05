@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 18.30 (5 Nov 2026).
+Last updated: Update 18.31 (5 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -49,6 +49,7 @@ Inspector; the saved scene matches these.
 | 18.28 (the hunting knife, reverse grip) | Done, not yet seen in Play mode: Prop_Knife rebuilt from Alex's reference, 34 cm; Heart Stab reverses the grip |
 | 18.29 (kill cam keeps its shot, enemy turn speed) | Done, not yet seen in Play mode: the play camera's controls ran during kill cams, letting you move it and dragging it back to play distance |
 | 18.30 (saved kill cam shots kept) | Done, not yet seen in Play mode: a seat back under the shot was throwing it out for the default angles |
+| 18.31 (takedowns hold their place) | Done, not yet seen in Play mode |
 | Still needed (art) | Rail grab, demon throw and crouched drag-down animations; unarmed finishers (skipped for now); a searching animation; more idles |
 | Next | Full audio pass |
 
@@ -207,6 +208,7 @@ In the game too, finisher blood now comes from the victim's chest bone (where th
 - **Head off:** a takedown with Head Off ticked (Grab Flip Head Stomp) takes the head off at Blood At: the head bone shrinks to nothing, with two gore bursts where it was and a pool under it (the animation test shows it too). A resumed save's corpse has its head back.
 - **Rail grab hang:** the hung body's root is placed from the tile by Game "Rail Hang Pos" (0.335, 1.334, -0.691) and "Rail Hang Rot" (77.22, 180, 189.13) on the top side's windows, turned half round for the bottom side; the limbs keep the sill pose.
 - **Shove to Table over the bar** lifts the victim Game "Bar Shove Lift" (0.3 m), the bar being taller than a table.
+- **Holding place:** a clip's travel is in its pose, so some takedowns (Heart Stab among them) wandered off their tiles. While a takedown plays, the middle of the two hips is held where it started: both of you are moved back by however far it drifts, so the spacing is kept. Off for cover finishers (Shove to Table travels to the seat) and for any takedown with Keep Travel ticked. The animation test does the same.
 - You too: when the finisher blends back to idle your hips stay where the clip left them, then you slide onto your tile over the same hold.
 
 ## Blood

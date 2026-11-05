@@ -193,6 +193,11 @@ namespace RailTracer
             attacker.Update(0f);
             victim.Update(0f);
             clock = 0f;
+            // As in the game: hold the middle of the pair's hips where it started (unless Keep Travel or a cover finisher).
+            var aHips = attacker.GetBoneTransform(HumanBodyBones.Hips);
+            var vHips = victim.GetBoneTransform(HumanBodyBones.Hips);
+            bool hold = t.HoldsPlace && aHips && vHips;
+            var heldAt = hold ? (aHips.position + vHips.position) / 2f : Vector3.zero;
             bool comboStarted = false, bled = false;
             var struck = new System.Collections.Generic.HashSet<int>();
             while (clock < total)
@@ -218,6 +223,13 @@ namespace RailTracer
                         victim.Update(dt * speed);
                     }
                     clock += dt;
+                    if (hold)
+                    {
+                        var drift = (aHips.position + vHips.position) / 2f - heldAt;
+                        drift.y = 0f;
+                        attacker.transform.position -= drift;
+                        victim.transform.position -= drift;
+                    }
                     if (!bled && clock >= bloodTime) { Bleed(t); bled = true; }
                     for (int s = 0; s < t.extraBlood.Count; s++)
                         if (!struck.Contains(s) && clock >= t.extraBlood[s] * total) { struck.Add(s); Strike(t); }
@@ -414,7 +426,7 @@ namespace RailTracer
             {
                 // The game's kill cam pose (Game.KillCamPose): the entry's Cam Offset in the pair's space, or low and
                 // side-on, close in, looking at the middle of the pair at half figure height.
-                var a = attacker.transform.position;
+                var a = Vector3.zero; // where the pair started, as the game frames it (the hold moves the pair a little)
                 var b = t.victimOffset;
                 var mid = (a + b) / 2f + Vector3.up * 0.9f;
                 var along = b - a;

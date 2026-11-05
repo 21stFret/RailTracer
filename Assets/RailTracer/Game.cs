@@ -1567,6 +1567,13 @@ namespace RailTracer
                 playerAnim.Play(hash, 0, 0f);
                 va.Play(hash, 0, 0f);
                 yield return null; // let the state start so its length is known
+                // Hold the pair in place (a clip's travel is in its pose): the middle of the two hips stays where it
+                // started; both of you are moved back by however far it has drifted, so the spacing is kept.
+                var victimHips = va.GetBoneTransform(HumanBodyBones.Hips);
+                var playerHipsAtStart = playerAnim.GetBoneTransform(HumanBodyBones.Hips);
+                bool hold = entry != null && entry.HoldsPlace && victimHips && playerHipsAtStart;
+                Vector3 PairMiddle() => (root.InverseTransformPoint(playerHipsAtStart.position) + root.InverseTransformPoint(victimHips.position)) / 2f;
+                var heldAt = hold ? PairMiddle() : Vector3.zero;
                 float length = playerAnim.GetCurrentAnimatorStateInfo(0).length;
                 float length2 = 0f;
                 bool second = false, bled = false;
@@ -1612,6 +1619,13 @@ namespace RailTracer
                                 blood.Splash(root, chestNow, playerFacing, brutal);
                                 HitSlowMo();
                             }
+                    }
+                    if (hold && !anchor.HasValue)
+                    {
+                        var drift = PairMiddle() - heldAt;
+                        drift.y = 0f;
+                        playerShown -= drift;
+                        va.transform.localPosition -= drift;
                     }
                     if (entry != null && playerHips && (anchor.HasValue || ((!chained || second) && t > 0.3f && playerAnim.IsInTransition(0))))
                     {

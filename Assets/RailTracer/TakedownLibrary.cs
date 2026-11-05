@@ -35,6 +35,12 @@ namespace RailTracer
         public bool headOff;
         [Tooltip("Hold the knife the other way round for this one: the blade out of the little-finger side.")]
         public bool reverseGrip;
+        [Tooltip("Let the pair travel as the clips do. Off (the default): the game holds the middle of the pair where it " +
+                 "started, so they don't wander off their tiles (their spacing is kept). Cover finishers always travel.")]
+        public bool keepTravel;
+
+        // Whether the pair is held in place while this plays.
+        public bool HoldsPlace => !keepTravel && !needsCover;
 
         // How far through the whole takedown (0-1, both clips of a combo) a point in its first or second clip is.
         public float Overall(bool second, float k)
