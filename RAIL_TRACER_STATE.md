@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 18.16 (5 Nov 2026).
+Last updated: Update 18.17 (5 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -35,6 +35,7 @@ Inspector; the saved scene matches these.
 | 18.14 (Alex's takedown tuning) | Done: Blood At set per takedown in the animation test, Shove to Table's Cover Shift 0.2 (Resources/Takedowns) |
 | 18.15 (Alex's extra blood points) | Done: extra strikes set in the animation test (Resources/Takedowns) |
 | 18.16 (aura follows the body, head off, soaked bodies, rail hang pose, stylish flip landing, bar shove) | Done, not yet seen in Play mode |
+| 18.17 (loaded corpses on their tiles) | Done, not yet seen in Play mode: a resumed save's bodies were piling up in a corner of the car |
 | Still needed (art) | Rail grab, demon throw and crouched drag-down animations; knife mesh (on hold); unarmed finishers (skipped for now); a searching animation; more idles |
 | Next | Full audio pass |
 
@@ -189,6 +190,7 @@ In the game too, finisher blood now comes from the victim's chest bone (where th
 ## Bodies
 
 - Ragdolls: the character has ragdoll bones from Unity's Ragdoll Builder (Editor/RagdollSetup, kinematic and collider-off until needed, on Ignore Raycast). After the last clip of every takedown the victim goes limp and falls (during the kill cam's fly-out); other deaths too, except rail grabs (posed over the sill). First the body slides (Game "Ragdoll Slide", 0.15 s; after a takedown it slides with you instead, both over Takedown Hold, 0.5 s, starting as the clip ends while the kill cam flies back) so its hips are over its tile, then goes limp and falls there; after "Ragdoll Settle" (1.6 s) it freezes; drags and throws move the frozen pose. A takedown's body is soaked once it lies still: a big stain (Game "Soak Scale" 1.4 x the pool, "Soak Depth" 1.2 m) projected down through it from the hips, covering the corpse, the floor round it and any table it's over; Shove to Table gets it as the clip ends, over the victim and the table. Every takedown's kill tile gets a pool (stealth too); a shot body spatter. Shove to Table is the exception: the pair stays where the clip leaves them (the victim bent over the seat, you beside it in the stance you had, until you move); the body still counts as on its tile for drags, sight, blood and searchers, and goes limp once moved. The takedown viewer ragdolls its victim the same way.
+- A resumed save's bodies are stood on their own tiles first (they were never shown alive), then fall there like any other; a corpse's place for drags and throws is taken once its slide is done.
 - **Head off:** a takedown with Head Off ticked (Grab Flip Head Stomp) takes the head off at Blood At: the head bone shrinks to nothing, with two gore bursts where it was and a pool under it (the animation test shows it too). A resumed save's corpse has its head back.
 - **Rail grab hang:** the hung body's root is placed from the tile by Game "Rail Hang Offset" (0.185, 1.234, -0.691) and "Rail Hang Euler" (77.22, 180, 189.13) on the top side's windows, turned half round for the bottom side; the limbs keep the sill pose.
 - **Shove to Table over the bar** lifts the victim Game "Bar Shove Lift" (0.3 m), the bar being taller than a table.

@@ -158,6 +158,7 @@ namespace RailTracer
         public AnimationCurve takedownMove = AnimationCurve.EaseInOut(0.15f, 0f, 0.45f, 1f);
         Enemy takedownVictim;             // dead in the rules, still on screen while this is set
         readonly HashSet<Enemy> corpses = new HashSet<Enemy>(), pairedKills = new HashSet<Enemy>();
+        readonly HashSet<Enemy> placed = new HashSet<Enemy>(); // shown alive at least once (SyncEnemyAnim placed them)
         // Quiet kill: the "StealthKill" pair. You stay on your tile in the rules, so you close in by up to
         // quietKillReach of a tile (along quietKillMove, same idea as takedownMove), then step back.
         public AnimationCurve quietKillMove = AnimationCurve.EaseInOut(0.05f, 0f, 0.3f, 1f);
@@ -273,6 +274,7 @@ namespace RailTracer
             views.Clear();
             anims.Clear();
             corpses.Clear();
+            placed.Clear();
             pairedKills.Clear();
             tints.Clear();
             shown.Clear();
@@ -2743,6 +2745,7 @@ namespace RailTracer
         {
             a.gameObject.SetActive(present);
             if (!present) return;
+            placed.Add(e);
             if (e == takedownVictim) return; // PairedKill() placed it; it stays put while it plays
             if (!routes.TryGetValue(e, out var route)) routes[e] = route = new Queue<Vector3>();
             var pos = shown[e];
@@ -2782,6 +2785,16 @@ namespace RailTracer
         void Corpse(Enemy e, Animator a)
         {
             if (!corpses.Add(e) || pairedKills.Contains(e)) return;
+            if (!placed.Contains(e))
+            {
+                // Dead before it was ever shown (a resumed save): stood on its body's tile first, as SyncEnemyAnim would.
+                var lying = c.bodies.Find(b => b.who == e)?.pos ?? e.pos;
+                var t = a.transform;
+                t.localPosition = shown[e] = World(lying);
+                t.localRotation = Quaternion.LookRotation(new Vector3(e.facing.x, 0, -e.facing.y));
+                t.localScale = Vector3.one * characterScale * (e.tough ? 1.15f : 1f);
+                Tint(a, SuitColor(e));
+            }
             if (hung.Contains(e)) HangOut(e, a);
             else if (HasRagdoll(a)) StartCoroutine(Ragdoll(e, a, c.bodies.Find(b => b.who == e)?.pos ?? e.pos));
             else StartCoroutine(Topple(a.transform, shown[e] - playerShown));
@@ -2847,7 +2860,6 @@ namespace RailTracer
             {
                 var d = World(tile) - root.InverseTransformPoint(hips.position);
                 d.y = 0f;
-                if (bodyOffset.ContainsKey(e)) bodyOffset[e] += d; // SyncBodies heads the same way
                 var start = a.transform.localPosition;
                 for (float time = 0f; time < slide; time += Time.deltaTime)
                 {
@@ -2857,6 +2869,9 @@ namespace RailTracer
                 }
                 a.transform.localPosition = start + d;
             }
+            // Where the corpse now lies, for SyncBodies (drags and throws keep it): set here, after the slide, so an offset
+            // taken mid-slide can't pull it back.
+            bodyOffset[e] = a.transform.localPosition - World(c.bodies.Find(b => b.who == e)?.pos ?? tile);
             SetLimp(a, true); // the pose is the physics' now
             for (float time = 0f; time < ragdollSettle; time += Time.deltaTime)
             {
