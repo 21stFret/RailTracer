@@ -31,6 +31,7 @@ MonoBehaviour:
     victimYaw: 180
     speed: 1
     bloodAt: 0.55
+    extraBlood: []
     camOffset: {x: 0, y: 0, z: 0}
   - name: Duck and Back Stab
     kind: 1
@@ -50,6 +51,7 @@ MonoBehaviour:
     victimYaw: 180
     speed: 1
     bloodAt: 0.5
+    extraBlood: []
     camOffset: {x: 0, y: 0, z: 0}
   - name: Slash Combo
     kind: 1
@@ -69,6 +71,8 @@ MonoBehaviour:
     victimYaw: 180
     speed: 1
     bloodAt: 0.3
+    extraBlood:
+    - 0.25
     camOffset: {x: 0, y: 0, z: 0}
   - name: Shove to Table (half cover)
     kind: 1
@@ -88,6 +92,8 @@ MonoBehaviour:
     victimYaw: 180
     speed: 1
     bloodAt: 0.5
+    extraBlood:
+    - 0.35
     camOffset: {x: 0, y: 0, z: 0}
   - name: Grab Flip Head Stomp
     kind: 1
@@ -107,6 +113,7 @@ MonoBehaviour:
     victimYaw: 0
     speed: 1
     bloodAt: 0.77
+    extraBlood: []
     camOffset: {x: 0, y: 0, z: 0}
   - name: Karate Chop KO
     kind: 0
@@ -126,6 +133,7 @@ MonoBehaviour:
     victimYaw: 0
     speed: 1
     bloodAt: 0.21
+    extraBlood: []
     camOffset: {x: 0, y: 0, z: 0}
   - name: Neck Break
     kind: 0
@@ -145,6 +153,7 @@ MonoBehaviour:
     victimYaw: 0
     speed: 1
     bloodAt: 0.59
+    extraBlood: []
     camOffset: {x: 0, y: 0, z: 0}
   - name: Grab Flip Stab
     kind: 0
@@ -164,6 +173,7 @@ MonoBehaviour:
     victimYaw: 0
     speed: 1
     bloodAt: 0.79
+    extraBlood: []
     camOffset: {x: 0, y: 0, z: 0}
   - name: Neck Stab (from behind)
     kind: 0
@@ -183,6 +193,8 @@ MonoBehaviour:
     victimYaw: 0
     speed: 1
     bloodAt: 0.2
+    extraBlood:
+    - 0.6
     camOffset: {x: 0, y: 0, z: 0}
   - name: Spin Stab
     kind: 0
@@ -202,6 +214,8 @@ MonoBehaviour:
     victimYaw: 0
     speed: 1
     bloodAt: 0.4
+    extraBlood:
+    - 0.15
     camOffset: {x: 0, y: 0, z: 0}
   - name: Thigh and Neck Stab
     kind: 0
@@ -221,4 +235,6 @@ MonoBehaviour:
     victimYaw: 0
     speed: 1
     bloodAt: 0.7
+    extraBlood:
+    - 0.1
     camOffset: {x: 0, y: 0, z: 0}
