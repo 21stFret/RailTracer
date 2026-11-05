@@ -1,0 +1,104 @@
+{
+  "kit": "RailTracerBaggage",
+  "style": "pbr",
+  "materials": [
+    {
+      "name": "Trn_WoodDark",
+      "color": [
+        0.2,
+        0.1,
+        0.05
+      ],
+      "metallic": 0.0,
+      "roughness": 0.6,
+      "tile": 1.0,
+      "albedo": "Trn_WoodDark_albedo.png",
+      "normal": "Trn_WoodDark_normal.png",
+      "mask": "Trn_WoodDark_mask.png"
+    },
+    {
+      "name": "Trn_Brass",
+      "color": [
+        0.95,
+        0.7,
+        0.25
+      ],
+      "metallic": 1.0,
+      "roughness": 0.3,
+      "tile": 0.5,
+      "albedo": "Trn_Brass_albedo.png",
+      "normal": "Trn_Brass_normal.png",
+      "mask": "Trn_Brass_mask.png"
+    },
+    {
+      "name": "Trn_Cream",
+      "color": [
+        0.9,
+        0.84,
+        0.68
+      ],
+      "metallic": 0.0,
+      "roughness": 0.8,
+      "tile": 2.0,
+      "albedo": "Trn_Cream_albedo.png",
+      "normal": "Trn_Cream_normal.png",
+      "mask": "Trn_Cream_mask.png"
+    },
+    {
+      "name": "Trn_Leather",
+      "color": [
+        0.4,
+        0.22,
+        0.1
+      ],
+      "metallic": 0.0,
+      "roughness": 0.7,
+      "tile": 0.5,
+      "albedo": "Trn_Leather_albedo.png",
+      "normal": "Trn_Leather_normal.png",
+      "mask": "Trn_Leather_mask.png"
+    },
+    {
+      "name": "Trn_Iron",
+      "color": [
+        0.18,
+        0.2,
+        0.22
+      ],
+      "metallic": 0.6,
+      "roughness": 0.5,
+      "tile": 2.0,
+      "albedo": "Trn_Iron_albedo.png",
+      "normal": "Trn_Iron_normal.png",
+      "mask": "Trn_Iron_mask.png"
+    },
+    {
+      "name": "Trn_Pine",
+      "color": [
+        0.52,
+        0.37,
+        0.2
+      ],
+      "metallic": 0.0,
+      "roughness": 0.75,
+      "tile": 1.0,
+      "albedo": "Trn_Pine_albedo.png",
+      "normal": "Trn_Pine_normal.png",
+      "mask": "Trn_Pine_mask.png"
+    },
+    {
+      "name": "Trn_Canvas",
+      "color": [
+        0.5,
+        0.44,
+        0.31
+      ],
+      "metallic": 0.0,
+      "roughness": 0.95,
+      "tile": 0.5,
+      "albedo": "Trn_Canvas_albedo.png",
+      "normal": "Trn_Canvas_normal.png",
+      "mask": "Trn_Canvas_mask.png"
+    }
+  ]
+}

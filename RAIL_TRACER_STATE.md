@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 18.2 (5 Nov 2026).
+Last updated: Update 18.3 (5 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -17,11 +17,12 @@ Inspector; the saved scene matches these.
 | 16 (behaviour and readability) | Done, not yet seen in Play mode |
 | 16.11 (legend every 10, chip and zone fixes) | Done, not yet seen in Play mode |
 | 16.12–16.17 (chips by sight, fixes, hearing 8/10, takedown slides, no kill cam skip, demon aura) | Done |
-| 17 (demo structure, saves, menus, new cars, ragdolls, scared face) | Done, not yet seen in Play mode. Rail-grab glass waits for Alex's broken window model |
+| 17 (demo structure, saves, menus, new cars, ragdolls, scared face) | Done, not yet seen in Play mode |
 | 18 (leap over tall objects, heavies hit on arrival, legend gain readout, ghost freeze icon, dining car relayout, bodies, presentation fixes) | Done, not yet seen in Play mode. Watch: leaping luggage to break sight, heavies' 4-tile threat, the dining car's cover |
 | 18.1 (dining car furniture models) | Done, not yet seen in Play mode: six FBX from Assets/KitScripts/railtracer_dining.py in Train Assets/Dining, placed by the game |
 | 18.2 (playtest fixes) | Done, not yet seen in Play mode: partition racks back in Third class, shot-mark crash between cars, stand up and walk out at the normal pace, Journey zooms to the picked car and has no Replay confirm, chairs pulled out from the tables, solid lamp shades, plain walls and spread-out lamps in the dining car, dim shadowless sun |
-| Still needed (art) | Rail grab, demon throw and crouched drag-down animations; knife mesh (on hold); unarmed finishers (skipped for now); baggage hold props (greybox for now); broken window and glass shards; a searching animation; more idles |
+| 18.3 (baggage hold props, smashed windows) | Done, not yet seen in Play mode: 6 FBX in Train Assets/Baggage (railtracer_baggage.py), 4 in Train Assets/Glass (railtracer_glass.py) |
+| Still needed (art) | Rail grab, demon throw and crouched drag-down animations; knife mesh (on hold); unarmed finishers (skipped for now); a searching animation; more idles |
 | Next | Full audio pass |
 
 ## The train
@@ -41,6 +42,7 @@ Inspector; the saved scene matches these.
 - **Sun:** the directional light stays on over the kit carriage, with no shadows and very dim (Game "Sun Dim", 0.03); the lamps light the car.
 - **Map tiles:** '.' floor, '_' floor with plain wall (plain wall also behind 'l', 'x' and 'B'), 'S' seat, 'L' / 'l' luggage, 'W' wall, 'P' start. New: 'T' dining table (straight or L groups), 'O' round table (2x2), 'D' dining cart, 'B' bar, 'M' mail sack (seat rules: no walking through, leap over, half cover crouched); 'X' / 'x' crate (luggage rules: blocks walking and sight; leapt over); 'C' the safe's cage (blocks walking, leaps and snatches like a wall, but you can see through it). Chairs sit tucked under the tables and block nothing.
 - **Dining car furniture (models):** `Assets/KitScripts/railtracer_dining.py` (stylized-blender-assets, RailTracer profile) exports to `Train Assets/Dining`: Dining_Table_1, Dining_Table_2 (straight), Dining_Table_L (3 tiles), Dining_Table_Round (2x2), Dining_Cart, Bar_L (4 + 1). Linen cloths, dark wood pedestals, velvet chairs with their seats just under the table edge (reaching ~0.35 m into the open tiles around), brass table lamps (solid shades, Anchor_00 at the bulb) and place settings; the bar has panels, a brass foot rail, taps, bottles and a register. New materials Trn_Linen, Trn_Porcelain. The game fits each model to its group of tiles (GameFlow DiningModels: turned to the group, the bar mirrored if needed); any other shape falls back to the greybox.
+- **Baggage hold props (models):** `Assets/KitScripts/railtracer_baggage.py` exports to `Train Assets/Baggage`: Crate_Stack_A / B / C (pine crates with dark frame boards, iron corner plates, labels, parcels; 1.35-1.74 m, full cover), Mail_Sacks_A / B (canvas sacks tied at the neck, under 0.65 m, half cover), Safe_Cage (3 x 2 tiles, back to the wall: iron bars on the three room sides, a beam top, a barred door with a brass padlock, the safe and two strongboxes inside). New materials Trn_Pine, Trn_Canvas. The game puts a crate stack on every crate tile and a sack pile on every sack tile (variant and quarter turn from the tile, so the same each run) and the cage on a 3 x 2 'C' block against a wall; other shapes keep the greybox.
 - **Greybox:** tables (cloth white, chairs tucked under; the round table a cloth cylinder with four chairs), the dining cart (a two-tray trolley), bar, sacks, two-crate stacks and the cage's beams are placeholder blocks the size of the real props; the dining car and baggage hold get Lamp_Wall lamps on their plain wall (one per up to 4 tiles of it) plus the dining tables' lamps; only some are lit, picked along the car so no two lit ones are within Game "Lamp Spread" (3.5 m); a lit table lamp is a warm point light (Table Lamp Intensity 0.6 x, range 3 m, no shadows). Every light has a lamp model.
 - **Every car** starts at legend 0 with cooldowns clear and the lamps warm. You get half your health back (15) at the start of each car, up to 30.
 - **Clearing a car:** the win card shows the tickets and "Hold Space / click to walk on" with a bar that fills over the hold (empties if you let go early), or R to ride again. Walking on: you stand up first if crouched (Game "Stand Up Time" 0.4 s), then walk out of the far door at the normal move pace (a confident walk clip is still to source). Then the **walk-through car**: the first carriage's seats, nobody in it, no turns, no move costs, no skills. A glowing tile by the far door asks "Board / Not yet" (Space or Enter boards).
@@ -175,6 +177,7 @@ In the game too, finisher blood now comes from the victim's chest bone (where th
 ## Blood
 
 - A kill (and a thrown body's landing) bloodies tiles by the rules: stealth 1, brutal 5 (the tile and its open neighbours), rail grab every open tile within 1 of the window.
+- **Smashed windows:** a rail grab through a shut window smashes it: the sash swaps to its broken one (`Train Assets/Glass`, from `railtracer_glass.py`: the same frame with jagged shards left round it, the middle open), glass bursts both ways out of the window (Game "Glass Burst", 45 shard particles, falling and skittering on the floor), and a spill of glass (Glass_Shards) lies on the floor under the window. It stays smashed for the rest of the car; a resumed save smashes the windows of the hung bodies again. A smashed window can't be opened or shut (O does nothing; a window hop goes straight through the frame), and nothing sticks to its missing pane. An open window has no glass in the way: no smash. New material Trn_GlassShard (pale, glossy).
 - The splash effect comes from the victim's chest (the big gore one for a brutal kill, towards the glass for a rail grab).
 - The stains that stay: from each bloodied tile, five straight casts from 1.8 m up (1 m for a crouched stealth kill; a thrown body 1 m), down and out along the grid up to 1.5 m (Game: Blood Cast Standing / Crouched / Reach). A floor or wall gets a stain square-on; a seat gets one at 45 degrees into the cushion fold (down and towards its back); window glass gets one stuck to the sash. The kill tile's floor gets a pool for a brutal kill or a thrown body, spatter otherwise; walls get smears. Drag trails keep a floor stain per tile.
 

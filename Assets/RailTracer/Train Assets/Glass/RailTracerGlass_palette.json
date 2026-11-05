@@ -1,0 +1,48 @@
+{
+  "kit": "RailTracerGlass",
+  "style": "pbr",
+  "materials": [
+    {
+      "name": "Trn_WoodDark",
+      "color": [
+        0.2,
+        0.1,
+        0.05
+      ],
+      "metallic": 0.0,
+      "roughness": 0.6,
+      "tile": 1.0,
+      "albedo": "Trn_WoodDark_albedo.png",
+      "normal": "Trn_WoodDark_normal.png",
+      "mask": "Trn_WoodDark_mask.png"
+    },
+    {
+      "name": "Trn_Brass",
+      "color": [
+        0.95,
+        0.7,
+        0.25
+      ],
+      "metallic": 1.0,
+      "roughness": 0.3,
+      "tile": 0.5,
+      "albedo": "Trn_Brass_albedo.png",
+      "normal": "Trn_Brass_normal.png",
+      "mask": "Trn_Brass_mask.png"
+    },
+    {
+      "name": "Trn_GlassShard",
+      "color": [
+        0.62,
+        0.74,
+        0.78
+      ],
+      "metallic": 0.3,
+      "roughness": 0.05,
+      "tile": 1.0,
+      "albedo": "Trn_GlassShard_albedo.png",
+      "normal": "Trn_GlassShard_normal.png",
+      "mask": "Trn_GlassShard_mask.png"
+    }
+  ]
+}

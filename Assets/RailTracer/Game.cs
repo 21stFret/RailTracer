@@ -366,7 +366,7 @@ namespace RailTracer
             ghostCell = pendingGhost = null;
             gone.Clear();
             // A resumed save: rail-grab bodies hang out of their windows again, fleers are already gone.
-            foreach (var b in c.bodies) if (b.hung) hung.Add(b.who);
+            foreach (var b in c.bodies) if (b.hung) { hung.Add(b.who); Smash(b.pos, false); } // and their windows stay smashed
             foreach (var e in c.enemies) if (e.state == EnemyState.Fled) gone.Add(e);
             if (!HasModels) return;
             playerBody.enabled = false;
@@ -1803,7 +1803,7 @@ namespace RailTracer
                 {
                     var dir = World(e.pos) - playerShown;
                     dir.y = 0;
-                    if (pendingAct == Act.RailGrab) hung.Add(e);
+                    if (pendingAct == Act.RailGrab) { hung.Add(e); Smash(e.pos, true); } // through the glass
                     KillBlood(e, pendingAct, dir.sqrMagnitude > 1e-4f ? dir.normalized : Vector3.forward);
                 }
                 lastState[e] = e.state;
@@ -2516,6 +2516,7 @@ namespace RailTracer
         // started: called as the climb begins (after the window is open).
         IEnumerator Climb(SlidingWindow window, Vector3 a, Vector3 b, System.Action started = null)
         {
+            if (window && window.broken) window = null; // smashed: straight through the frame
             if (window)
             {
                 window.open = true;
@@ -2541,6 +2542,81 @@ namespace RailTracer
         {
             if (playerAnim) foreach (var r in playerAnim.GetComponentsInChildren<Renderer>()) r.enabled = on;
             else playerBody.enabled = on;
+        }
+
+        // A rail grab through a shut window: the sash swaps to its broken one (shards left in the frame; anything
+        // stuck to the sash, like blood, stays), glass bursts out (burst) and a spill of it lies on the floor under
+        // the window. An open window has no glass in the way. Rebuilt the same way for a resumed save.
+        public int glassBurst = 45;
+        void Smash(Cell at, bool burst)
+        {
+            var sash = SashNear(World(at), at.y);
+            if (!sash || sash.broken || !sash.IsShut) return;
+            var kit = Resources.Load<TrainKit>("Kit/TrainKit");
+            float half = sashes.Find(s => s.sash == sash).half;
+            var model = kit ? kit.Get(half >= 1f ? "Window_Sash_Large_Broken" : "Window_Sash_Small_Broken") : null;
+            if (!model) return;
+            sash.broken = true;
+            var mode = ShadowCastingMode.On;
+            foreach (var r in sash.GetComponentsInChildren<Renderer>()) { mode = r.shadowCastingMode; r.enabled = false; }
+            foreach (var col in sash.GetComponentsInChildren<Collider>()) col.enabled = false; // no pane for blood to stick to
+            var shell = Instantiate(model, sash.transform);
+            foreach (var r in shell.GetComponentsInChildren<Renderer>()) r.shadowCastingMode = mode; // the cut-away wall's stay shadows-only
+            var outward = at.y == 0 ? Vector3.forward : Vector3.back;
+            var spill = kit.Get("Glass_Shards");
+            if (spill)
+            {
+                var floorGlass = Instantiate(spill, root);
+                floorGlass.transform.localPosition = World(at) + outward * 0.15f;
+                floorGlass.transform.localRotation = Quaternion.LookRotation(outward); // its window side (+Z) to the wall
+            }
+            var shard = kit.Get("Glass_Shard");
+            if (burst && shard) GlassBurst(World(at) + outward * 0.45f + Vector3.up * 1.4f, shard);
+        }
+
+        // Glass flying both ways out of the window, falling and skittering on the floor.
+        void GlassBurst(Vector3 at, GameObject shard)
+        {
+            var mf = shard.GetComponentInChildren<MeshFilter>();
+            var mr = shard.GetComponentInChildren<MeshRenderer>();
+            if (!mf || !mr) return;
+            var go = new GameObject("Glass Burst");
+            go.transform.SetParent(root, false);
+            go.transform.localPosition = at;
+            var ps = go.AddComponent<ParticleSystem>();
+            ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            var main = ps.main;
+            main.duration = 0.2f;
+            main.loop = false;
+            main.startLifetime = new ParticleSystem.MinMaxCurve(1.2f, 1.8f);
+            main.startSpeed = new ParticleSystem.MinMaxCurve(1.2f, 3.5f);
+            main.startSize = new ParticleSystem.MinMaxCurve(0.6f, 1.5f);
+            main.startRotation3D = true;
+            main.startRotationX = main.startRotationY = main.startRotationZ = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
+            main.gravityModifier = 1f;
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+            main.stopAction = ParticleSystemStopAction.Destroy;
+            var emission = ps.emission;
+            emission.rateOverTime = 0f;
+            emission.SetBursts(new[] { new ParticleSystem.Burst(0f, (short)glassBurst) });
+            var shape = ps.shape;
+            shape.shapeType = ParticleSystemShapeType.Box;
+            shape.scale = new Vector3(0.8f, 1.1f, 0.05f);
+            shape.randomDirectionAmount = 1f;
+            var spin = ps.rotationOverLifetime;
+            spin.enabled = true;
+            spin.separateAxes = true;
+            spin.x = spin.y = spin.z = new ParticleSystem.MinMaxCurve(-8f, 8f);
+            var collision = ps.collision;
+            collision.enabled = true;
+            collision.type = ParticleSystemCollisionType.World;
+            collision.dampen = 0.6f;
+            collision.bounce = 0.15f;
+            var rend = go.GetComponent<ParticleSystemRenderer>();
+            rend.renderMode = ParticleSystemRenderMode.Mesh;
+            rend.mesh = mf.sharedMesh;
+            rend.sharedMaterial = mr.sharedMaterial;
+            ps.Play();
         }
 
         // The sash on that side whose window spans x (nearest, if none quite does). Null without the kit.

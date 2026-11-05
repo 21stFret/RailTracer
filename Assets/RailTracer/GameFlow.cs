@@ -687,9 +687,11 @@ namespace RailTracer
                 }
         }
 
-        // The dining car's furniture from the kit (Train Assets/Dining), each fitted to its group of tiles: tables
-        // of 1, 2 (straight) or 3 (L) 'T' tiles, the 2x2 round table, the cart, the L bar (4 + 1). Returns the
-        // tiles they cover; any other shape keeps the greybox.
+        // Furniture from the kit, each fitted to its tiles. Dining car (Train Assets/Dining): tables of 1, 2
+        // (straight) or 3 (L) 'T' tiles, the 2x2 round table, the cart, the L bar (4 + 1). Baggage hold (Train
+        // Assets/Baggage): a crate stack per crate tile and a sack pile per mail sack tile (variant and quarter turn
+        // from the tile), the safe's cage on a 3 x 2 block against a wall. Returns the tiles they cover; any other
+        // shape keeps the greybox.
         HashSet<Cell> DiningModels(Carriage car, string[] map, Transform parent, TrainKit kit, List<Transform> bulbs)
         {
             var done = new HashSet<Cell>();
@@ -699,14 +701,33 @@ namespace RailTracer
                 {
                     char ch = map[y][x];
                     var start = new Cell(x, y);
-                    if ("TOBD".IndexOf(ch) < 0 || seen.Contains(start)) continue;
-                    var group = TileGroup(map, start, ch);
+                    if ("TOBDXxMC".IndexOf(ch) < 0 || seen.Contains(start)) continue;
+                    bool single = "XxM".IndexOf(ch) >= 0; // one model per tile
+                    var group = single ? new HashSet<Cell> { start } : TileGroup(map, start, ch);
                     seen.UnionWith(group);
                     string model = null;
                     var pos = World(start);
                     var rot = Quaternion.identity;
                     bool mirror = false;
-                    if (ch == 'D' && group.Count == 1) model = "Dining_Cart"; // long side along the car
+                    int hash = (x * 73856093) ^ (y * 19349663);
+                    if (single)
+                    {
+                        model = ch == 'M' ? (hash & 1) == 0 ? "Mail_Sacks_A" : "Mail_Sacks_B" : "Crate_Stack_" + "ABC"[(hash & 0x7fffffff) % 3];
+                        rot = Quaternion.Euler(0f, 90f * ((hash >> 3) & 3), 0f);
+                    }
+                    else if (ch == 'C')
+                    {
+                        // The safe's cage: a full 3 x 2 block along a wall row, its back (local +Z) to that wall.
+                        int x0 = group.Min(g => g.x), x1 = group.Max(g => g.x), y0 = group.Min(g => g.y), y1 = group.Max(g => g.y);
+                        bool atWall = y0 == 0 || y1 == car.H - 1;
+                        if (group.Count == 6 && x1 - x0 == 2 && y1 - y0 == 1 && atWall)
+                        {
+                            model = "Safe_Cage";
+                            pos = group.Aggregate(Vector3.zero, (s, g) => s + World(g)) / 6f;
+                            rot = y0 == 0 ? Quaternion.identity : Quaternion.Euler(0f, 180f, 0f);
+                        }
+                    }
+                    else if (ch == 'D' && group.Count == 1) model = "Dining_Cart"; // long side along the car
                     else if (ch == 'O' && group.Count == 4)
                     {
                         model = "Dining_Table_Round";

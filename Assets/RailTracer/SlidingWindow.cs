@@ -8,6 +8,7 @@ namespace RailTracer
     public class SlidingWindow : MonoBehaviour
     {
         public bool open;
+        public bool broken; // smashed by a rail grab: stays shut, its broken sash in place of the glass
         [Range(0f, 0.87f)] public float openRise = 0.87f; // metres it rises when open: all the way, its top just under the wall top
         public float speed = 2.5f;                        // metres per second
 
@@ -15,7 +16,7 @@ namespace RailTracer
 
         public bool IsOpen => Mathf.Approximately(rise, openRise);
         public bool IsShut => rise <= 0f;
-        public void Toggle() => open = !open;
+        public void Toggle() { if (!broken) open = !open; }
 
         void Update()
         {
