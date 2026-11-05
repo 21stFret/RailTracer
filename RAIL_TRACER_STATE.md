@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 18.29 (5 Nov 2026).
+Last updated: Update 18.30 (5 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -48,6 +48,7 @@ Inspector; the saved scene matches these.
 | 18.27 (the knife) | Done, not yet seen in Play mode: Prop_Knife (1 FBX, Train Assets/Knife, railtracer_knife.py) in your right hand |
 | 18.28 (the hunting knife, reverse grip) | Done, not yet seen in Play mode: Prop_Knife rebuilt from Alex's reference, 34 cm; Heart Stab reverses the grip |
 | 18.29 (kill cam keeps its shot, enemy turn speed) | Done, not yet seen in Play mode: the play camera's controls ran during kill cams, letting you move it and dragging it back to play distance |
+| 18.30 (saved kill cam shots kept) | Done, not yet seen in Play mode: a seat back under the shot was throwing it out for the default angles |
 | Still needed (art) | Rail grab, demon throw and crouched drag-down animations; unarmed finishers (skipped for now); a searching animation; more idles |
 | Next | Full audio pass |
 
@@ -217,7 +218,7 @@ In the game too, finisher blood now comes from the victim's chest bone (where th
 
 ## Camera, HUD and presentation
 
-- Kill cam on every takedown, brutal and stealth (as long as the finisher), rail grabs and throws (1.2 s): the camera flies in (0.45 s), holds a beat (0.2 s), plays the shot from a fixed angle, then flies back to your exact view (0.35 s). The angle is low, side-on and tight on the pair (Kill Cam Close 1.25), trying other close angles until no wall, floor, luggage or seat back is in the way (or a takedown's own Cam Offset); it pulls back only when every close angle is blocked. Slow motion: the Options setting (Game "Kill Cam Slow Mo"), one value for every kill cam, only for Game "Hit Slow Time" (0.5 s, real time) on each hit it shows: a takedown's Blood At and every extra blood point, a rail grab's impact as the shot starts, a thrown body as it lands. Everything else in the shot plays at full speed; takedowns keep their own Speed. How often a kill gets the kill cam: Options "Kill cam chance". The camera controls are off during it (it keeps exactly the shot it was given). It can't be skipped; Options and the pause menu: "Kill cam: On/Off" (default On), and its slow motion in Options. The HUD hides during it.
+- Kill cam on every takedown, brutal and stealth (as long as the finisher), rail grabs and throws (1.2 s): the camera flies in (0.45 s), holds a beat (0.2 s), plays the shot from a fixed angle, then flies back to your exact view (0.35 s). The angle is low, side-on and tight on the pair (Kill Cam Close 1.25), trying other close angles until no wall, floor, luggage or seat back is in the way ; it pulls back only when every close angle is blocked. A takedown's own shot (Cam Offset / Cam Look) comes first: seat backs don't count against it, only walls, floor and luggage; if one is in the way the same shot (height, distance, look point) swings round, mirrored first, then 30 degrees at a time, and only if none is clear do the defaults take over. Slow motion: the Options setting (Game "Kill Cam Slow Mo"), one value for every kill cam, only for Game "Hit Slow Time" (0.5 s, real time) on each hit it shows: a takedown's Blood At and every extra blood point, a rail grab's impact as the shot starts, a thrown body as it lands. Everything else in the shot plays at full speed; takedowns keep their own Speed. How often a kill gets the kill cam: Options "Kill cam chance". The camera controls are off during it (it keeps exactly the shot it was given). It can't be skipped; Options and the pause menu: "Kill cam: On/Off" (default On), and its slow motion in Options. The HUD hides during it.
 - Demon aura (Resources/Effects/Demon Aura) round your feet: fades in with the same eased legend as the blood on your clothes, from nothing at 10 legend to the prefab's full colours at 100 (Game "Aura From" 0.1, "Aura Full" 1).
 - The carriage lamps redden with legend, stepping at 25, 50, 75 and 100 and blending over about a second. Overlays never change.
 - Finishers: Brutal Finishers knife clips (Humanoid on the mannequin avatar) in `Resources/Takedowns`, Alex's picks:

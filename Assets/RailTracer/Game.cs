@@ -1704,8 +1704,16 @@ namespace RailTracer
             // Cam Offset from that, if nothing is in the way.
             if (offset != Vector3.zero)
             {
+                // Seat backs don't count; a wall does. Then the same shot (height, distance, look) swung round: mirrored,
+                // then 30 degrees at a time either way, the first clear one. Only when none is clear, the defaults.
                 var focusAt = mid + pair * lookShift;
-                if (!CamBlocked(focusAt, focusAt + pair * offset)) return (focusAt + pair * offset, focusAt);
+                var mirrored = new Vector3(-offset.x, offset.y, offset.z);
+                foreach (var yaw in new[] { 0f, 30f, -30f, 60f, -60f, 90f, -90f, 120f, -120f, 150f, -150f, 180f })
+                    foreach (var o in yaw == 0f ? new[] { offset, mirrored } : new[] { offset })
+                    {
+                        var pos = focusAt + pair * (Quaternion.Euler(0f, yaw, 0f) * o);
+                        if (!CamBlocked(focusAt, pos, false)) return (pos, focusAt);
+                    }
             }
             var tries = new List<Vector3>();
             // the side nearer the view you had first, then three-quarter views, the other side, and finally from above
@@ -1724,7 +1732,8 @@ namespace RailTracer
 
         // Would the shot from `pos` to `mid` look through a wall, the floor, luggage or a seat back? The camera-side
         // wall only casts shadows (cutaway), so looking through it is fine.
-        bool CamBlocked(Vector3 mid, Vector3 pos)
+        // seats: whether a seat back in the way counts (a takedown's own shot looks down over them).
+        bool CamBlocked(Vector3 mid, Vector3 pos, bool seats = true)
         {
             for (float k = 0.15f; k <= 1.001f; k += 0.08f)
             {
@@ -1733,7 +1742,7 @@ namespace RailTracer
                 if (!cutawayNearWall && p.z < -(c.H - 1) - 0.42f) return true;
                 var cell = new Cell(Mathf.RoundToInt(p.x), Mathf.RoundToInt(-p.z));
                 if (c.IsSolid(cell) && p.y < 2.2f) return true;
-                if (c.IsSeat(cell) && p.y < 1.05f) return true;
+                if (seats && c.IsSeat(cell) && p.y < 1.05f) return true;
             }
             return false;
         }
