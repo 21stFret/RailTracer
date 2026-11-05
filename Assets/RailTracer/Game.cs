@@ -525,7 +525,7 @@ namespace RailTracer
             }
             if (kind == CarKind.Dining || kind == CarKind.Baggage)
             {
-                Greybox(car, map, parent);
+                Greybox(car, map, parent, kit);
                 for (int x = 2; x < car.W - 1; x += 4) { Lamp(x, true); Lamp(x, false); } // no seat banks to hang them over
             }
             if (live && kind != CarKind.Dining && kind != CarKind.Baggage) ScatterProps(kit, seats);

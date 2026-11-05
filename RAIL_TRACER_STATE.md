@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 18 (5 Nov 2026).
+Last updated: Update 18.1 (5 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -19,7 +19,8 @@ Inspector; the saved scene matches these.
 | 16.12–16.17 (chips by sight, fixes, hearing 8/10, takedown slides, no kill cam skip, demon aura) | Done |
 | 17 (demo structure, saves, menus, new cars, ragdolls, scared face) | Done, not yet seen in Play mode. Rail-grab glass waits for Alex's broken window model |
 | 18 (leap over tall objects, heavies hit on arrival, legend gain readout, ghost freeze icon, dining car relayout, bodies, presentation fixes) | Done, not yet seen in Play mode. Watch: leaping luggage to break sight, heavies' 4-tile threat, the dining car's cover |
-| Still needed (art) | Rail grab, demon throw and crouched drag-down animations; knife mesh (on hold); unarmed finishers (skipped for now); dining car and baggage hold props (greybox for now); broken window and glass shards; a searching animation; more idles |
+| 18.1 (dining car furniture models) | Done, not yet seen in Play mode: six FBX from Assets/KitScripts/railtracer_dining.py in Train Assets/Dining, placed by the game |
+| Still needed (art) | Rail grab, demon throw and crouched drag-down animations; knife mesh (on hold); unarmed finishers (skipped for now); baggage hold props (greybox for now); broken window and glass shards; a searching animation; more idles |
 | Next | Full audio pass |
 
 ## The train
@@ -37,6 +38,7 @@ Inspector; the saved scene matches these.
 | 5 | First class | Generated (seed 5005), the passenger layout | 9, 2 heavies |
 
 - **Map tiles:** '.' floor, '_' floor with plain wall, 'S' seat, 'L' / 'l' luggage, 'W' wall, 'P' start. New: 'T' dining table (straight or L groups), 'O' round table (2x2), 'D' dining cart, 'B' bar, 'M' mail sack (seat rules: no walking through, leap over, half cover crouched); 'X' / 'x' crate (luggage rules: blocks walking and sight; leapt over); 'C' the safe's cage (blocks walking, leaps and snatches like a wall, but you can see through it). Chairs sit tucked under the tables and block nothing.
+- **Dining car furniture (models):** `Assets/KitScripts/railtracer_dining.py` (stylized-blender-assets, RailTracer profile) exports to `Train Assets/Dining`: Dining_Table_1, Dining_Table_2 (straight), Dining_Table_L (3 tiles), Dining_Table_Round (2x2), Dining_Cart, Bar_L (4 + 1). Linen cloths, dark wood pedestals, velvet chairs tucked under inside the footprint, brass lamps and place settings; the bar has panels, a brass foot rail, taps, bottles and a register. New materials Trn_Linen, Trn_Porcelain. The game fits each model to its group of tiles (GameFlow DiningModels: turned to the group, the bar mirrored if needed); any other shape falls back to the greybox.
 - **Greybox:** tables (cloth white, chairs tucked under; the round table a cloth cylinder with four chairs), the dining cart (a two-tray trolley), bar, sacks, two-crate stacks and the cage's beams are placeholder blocks the size of the real props; the dining car and baggage hold get bare lamps along both walls every 4 tiles.
 - **Every car** starts at legend 0 with cooldowns clear and the lamps warm. You get half your health back (15) at the start of each car, up to 30.
 - **Clearing a car:** the win card shows the tickets and "Hold Space / click to walk on" with a bar that fills over the hold (empties if you let go early), or R to ride again. Walking on: you stand up first if crouched (Game "Stand Up Time" 0.4 s), then walk out of the far door at a walk (Walk Out Speed 1.5; the confident walk clip is still to source). Then the **walk-through car**: the first carriage's seats, nobody in it, no turns, no move costs, no skills. A glowing tile by the far door asks "Board / Not yet" (Space or Enter boards).

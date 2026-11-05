@@ -632,14 +632,16 @@ namespace RailTracer
 
         // Greybox stand-ins for the dining car and baggage hold, until their art arrives: tables with chairs tucked
         // under (cloth white), the bar counter, mail sacks, crates, and the safe's cage of heavy beams with gaps.
-        void Greybox(Carriage car, string[] map, Transform parent)
+        void Greybox(Carriage car, string[] map, Transform parent, TrainKit kit = null)
         {
+            var modelled = kit ? DiningModels(car, map, parent, kit) : new HashSet<Cell>();
             Color cloth = new Color(0.86f, 0.83f, 0.76f), wood = new Color(0.3f, 0.19f, 0.11f), sack = new Color(0.55f, 0.48f, 0.34f),
                 crate = new Color(0.5f, 0.36f, 0.2f), beam = new Color(0.25f, 0.16f, 0.09f), metal = new Color(0.62f, 0.6f, 0.56f);
             for (int x = 0; x < car.W; x++)
                 for (int y = 0; y < car.H; y++)
                 {
                     var at = World(new Cell(x, y));
+                    if (modelled.Contains(new Cell(x, y))) continue;
                     switch (map[y][x])
                     {
                         case 'T':
@@ -691,6 +693,89 @@ namespace RailTracer
                             break;
                     }
                 }
+        }
+
+        // The dining car's furniture from the kit (Train Assets/Dining), each fitted to its group of tiles: tables
+        // of 1, 2 (straight) or 3 (L) 'T' tiles, the 2x2 round table, the cart, the L bar (4 + 1). Returns the
+        // tiles they cover; any other shape keeps the greybox.
+        HashSet<Cell> DiningModels(Carriage car, string[] map, Transform parent, TrainKit kit)
+        {
+            var done = new HashSet<Cell>();
+            var seen = new HashSet<Cell>();
+            for (int y = 0; y < car.H; y++)
+                for (int x = 0; x < car.W; x++)
+                {
+                    char ch = map[y][x];
+                    var start = new Cell(x, y);
+                    if ("TOBD".IndexOf(ch) < 0 || seen.Contains(start)) continue;
+                    var group = TileGroup(map, start, ch);
+                    seen.UnionWith(group);
+                    string model = null;
+                    var pos = World(start);
+                    var rot = Quaternion.identity;
+                    bool mirror = false;
+                    if (ch == 'D' && group.Count == 1) model = "Dining_Cart"; // long side along the car
+                    else if (ch == 'O' && group.Count == 4)
+                    {
+                        model = "Dining_Table_Round";
+                        pos = group.Aggregate(Vector3.zero, (s, g) => s + World(g)) / 4f;
+                    }
+                    else if (ch == 'T' && group.Count == 1) model = "Dining_Table_1";
+                    else if (ch == 'T' && group.Count == 2)
+                    {
+                        model = "Dining_Table_2";
+                        var a = group.OrderBy(g => g.x + g.y).First();
+                        pos = World(a);
+                        var d1 = World(group.First(g => g != a)) - pos;
+                        rot = Quaternion.LookRotation(Vector3.Cross(d1, Vector3.up)); // local +X along the table
+                    }
+                    else if ((ch == 'T' && group.Count == 3) || (ch == 'B' && group.Count == 5))
+                    {
+                        // An L: the corner has neighbours both ways; local +X runs along the long arm, local -Z the other.
+                        var dirs = new[] { new Cell(1, 0), new Cell(-1, 0), new Cell(0, 1), new Cell(0, -1) };
+                        int Arm(Cell from, Cell d) { int n = 0; while (group.Contains(new Cell(from.x + d.x * (n + 1), from.y + d.y * (n + 1)))) n++; return n; }
+                        foreach (var corner in group)
+                        {
+                            var arms = dirs.Where(d => Arm(corner, d) > 0).OrderByDescending(d => Arm(corner, d)).ToList();
+                            if (arms.Count != 2 || arms[0].x == -arms[1].x && arms[0].y == -arms[1].y) continue;
+                            int a1 = Arm(corner, arms[0]), a2 = Arm(corner, arms[1]);
+                            if (a1 + a2 + 1 != group.Count || (ch == 'B' ? a1 != 3 || a2 != 1 : a1 != 1 || a2 != 1)) break;
+                            model = ch == 'B' ? "Bar_L" : "Dining_Table_L";
+                            pos = World(corner);
+                            Vector3 Dir(Cell d) => new Vector3(d.x, 0f, -d.y);
+                            Vector3 d1 = Dir(arms[0]), d2 = Dir(arms[1]);
+                            rot = Quaternion.LookRotation(-d2);
+                            if (Vector3.Dot(rot * Vector3.right, d1) < 0.5f)
+                            {
+                                if (ch == 'B') mirror = true; // the bar isn't symmetric: its mirror image
+                                else rot = Quaternion.LookRotation(-d1); // the L table is: swap its arms
+                            }
+                            break;
+                        }
+                    }
+                    var prefab = model != null ? kit.Get(model) : null;
+                    if (!prefab) continue;
+                    var go = Instantiate(prefab, parent);
+                    go.transform.localPosition = pos;
+                    go.transform.localRotation = rot;
+                    if (mirror) go.transform.localScale = new Vector3(-1f, 1f, 1f);
+                    done.UnionWith(group);
+                }
+            return done;
+        }
+
+        // The 4-connected tiles of `ch` around `start`.
+        static HashSet<Cell> TileGroup(string[] map, Cell start, char ch)
+        {
+            var group = new HashSet<Cell> { start };
+            var q = new Queue<Cell>(group);
+            while (q.Count > 0)
+            {
+                var p = q.Dequeue();
+                foreach (var n in new[] { new Cell(p.x + 1, p.y), new Cell(p.x - 1, p.y), new Cell(p.x, p.y + 1), new Cell(p.x, p.y - 1) })
+                    if (n.y >= 0 && n.y < map.Length && n.x >= 0 && n.x < map[0].Length && map[n.y][n.x] == ch && group.Add(n)) q.Enqueue(n);
+            }
+            return group;
         }
 
         static void Quit()
