@@ -117,12 +117,12 @@
     {
       "name": "Trn_Linen",
       "color": [
-        0.88,
-        0.86,
-        0.8
+        0.48,
+        0.39,
+        0.26
       ],
       "metallic": 0.0,
-      "roughness": 0.9,
+      "roughness": 1.0,
       "tile": 0.5,
       "albedo": "Trn_Linen_albedo.png",
       "normal": "Trn_Linen_normal.png",

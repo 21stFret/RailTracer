@@ -947,7 +947,7 @@ def make_texture_set(entry, style, n=512, seed=1):
     ("Trn_Iron",       (0.18, 0.20, 0.22), 0.6, 0.5, {"tex": "painted_metal", "tile": 2.0}),
     ("Trn_Glass",      (0.05, 0.08, 0.07), 0.0, 0.1),
     # new for the dining car
-    ("Trn_Linen",      (0.88, 0.86, 0.80), 0.0, 0.9, {"tex": "fabric", "tile": 0.5}),
+    ("Trn_Linen",      (0.48, 0.39, 0.26), 0.0, 1.0, {"tex": "fabric", "tile": 0.5}),  # warm oatmeal (sRGB ~ #B8A88C), matt: the plates stand out
     ("Trn_Porcelain",  (0.93, 0.92, 0.88), 0.0, 0.25, {"tex": "plain", "tile": 0.5}),
     ("Trn_Silver",     (0.80, 0.80, 0.82), 1.0, 0.3),                                   # cutlery
     ("Trn_Shade",      (0.03, 0.16, 0.07), 0.0, 0.6)])                                  # lamp shades: dark green, smooth, matt, untextured
