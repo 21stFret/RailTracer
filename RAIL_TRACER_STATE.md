@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 18.4 (5 Nov 2026).
+Last updated: Update 18.5 (5 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -23,6 +23,7 @@ Inspector; the saved scene matches these.
 | 18.2 (playtest fixes) | Done, not yet seen in Play mode: partition racks back in Third class, shot-mark crash between cars, stand up and walk out at the normal pace, Journey zooms to the picked car and has no Replay confirm, chairs pulled out from the tables, solid lamp shades, plain walls and spread-out lamps in the dining car, dim shadowless sun |
 | 18.3 (baggage hold props, smashed windows) | Done, not yet seen in Play mode: 6 FBX in Train Assets/Baggage (railtracer_baggage.py), 4 in Train Assets/Glass (railtracer_glass.py) |
 | 18.4 (the bar turned round) | Done, not yet seen in Play mode |
+| 18.5 (Journey: dive into the picked car) | Done, not yet seen in Play mode |
 | Still needed (art) | Rail grab, demon throw and crouched drag-down animations; knife mesh (on hold); unarmed finishers (skipped for now); a searching animation; more idles |
 | Next | Full audio pass |
 
@@ -65,7 +66,7 @@ Every menu is over the real carriages: the live (saved) car plus the other demo 
 - **Layout:** the middle stays clear for the train: the title (or the screen's heading) top left, the menu lines bottom left with any text beside them; no panel behind, the text has a dark glow. No floor overlays behind the menus (reaction zone, routes, arrows, "?" markers, walk range, blood outlines).
 - **Start:** "RED LINE" ("Red" #C8102E, "Line" bone), the saved game behind it, loaded and paused. With no save, an empty car 1 and "Board the train". Lines: Continue (car and turn) or Board the train, Journey, Endless, Options, Quit.
 - **Camera:** each screen is a zoomed-out view of a real car (Start over your car, Options over the next one along); it glides sideways between them. Journey pulls out side-on to the whole train. Continue (or boarding) dives straight down into the car and play resumes, no loading screen.
-- **Journey:** the five cars side-on, names under them (red cleared, white next, grey ahead) with short links between; click one for its name, description and best ticket, and Replay (cleared), Continue or Board (next); clicking the picked car again plays it, like a double click. No confirm: progress (cleared cars, best tickets) is kept whatever you replay, and play goes on in order from the car you jump into. The camera closes in side-on on the picked car (Game "Journey Zoom", 40 m), its neighbours still in view. Cars ahead can't be played. Replaying a car carries on through the rest of the train.
+- **Journey:** the five cars side-on, names under them (red cleared, white next, grey ahead) with short links between; click one for its name, description and best ticket, and Replay (cleared), Continue or Board (next); clicking the picked car again plays it, like a double click. No confirm: progress (cleared cars, best tickets) is kept whatever you replay, and play goes on in order from the car you jump into. The camera closes in side-on on the picked car (Game "Journey Zoom", 55 m), its neighbours still in view. Playing a car from Journey dives straight down into that car (the menu train is laid out again round it as it is built). Cars ahead can't be played. Replaying a car carries on through the rest of the train.
 - **Options:** Kill cam On/Off, kill cam slow motion (1, 0.75, 0.5, 0.25x), window mode (Borderless, Fullscreen, Windowed), resolution, Controls (view only). No audio yet. The car behind has a lamp per setting, in menu order: off when the setting is off, a slider's value as its brightness (slow motion now, the volumes later); its progress lamps go out while you're there.
 - **Pause (Esc):** Resume, Tutorial tips, Kill cam, Restart car, Main menu. Esc backs out of every submenu.
 

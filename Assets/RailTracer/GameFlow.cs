@@ -70,7 +70,7 @@ namespace RailTracer
         bool boardAsked;       // the board popup has shown for this visit to the glowing tile
         GameObject glow;
         int journeyPick = -1;
-        public float journeyZoom = 40f; // Journey: how far the camera stands from the picked car
+        public float journeyZoom = 55f; // Journey: how far the camera stands from the picked car
 
         static string SavePath => Path.Combine(Application.persistentDataPath, "save.json");
         static readonly float[] SlowMos = { 1f, 0.75f, 0.5f, 0.25f };
@@ -513,10 +513,20 @@ namespace RailTracer
             }
         }
 
-        // Start into a car from the menu: rebuilt fresh (or kept, to continue), then the camera dives in.
-        void Dive(System.Action setUp)
+        // Start into a car from the menu: rebuilt fresh (or kept, to continue), then the camera dives in. `slot`: the
+        // menu train car being played (Journey). The new car is built where the live one was, so the menu train is
+        // laid out again round it and the camera moved by the same amount: nothing jumps, and the dive goes down
+        // into the car that was picked.
+        void Dive(System.Action setUp, int slot = -1)
         {
+            float from = slot >= 0 ? SlotX(slot) : 0f; // the live car always sits at 0
             setUp?.Invoke();
+            if (Mathf.Abs(from) > 0.01f)
+            {
+                BuildMenuTrain();
+                cam.transform.position -= new Vector3(from, 0f, 0f);
+                menuCamPos -= new Vector3(from, 0f, 0f);
+            }
             StartCoroutine(Enter());
         }
 
@@ -572,7 +582,7 @@ namespace RailTracer
                     if ((again || (click && hit == 0)) && (cleared || isNext))
                     {
                         int k = journeyPick;
-                        Dive(resumable ? (System.Action)null : () => StartCar(false, k, MaxHpCarry));
+                        Dive(resumable ? (System.Action)null : () => StartCar(false, k, MaxHpCarry), k);
                     }
                     break;
                 }
