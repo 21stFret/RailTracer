@@ -174,6 +174,17 @@ namespace RailTracer
         // the kill cam shows (a takedown's Blood At and extra blood points, a rail grab's impact, a thrown body landing).
         [Range(0.1f, 1f)] public float killCamSlowMo = 1f;
         public float hitSlowTime = 0.5f;
+        // Walking out of a cleared car: the walk clip (not the sprint), a little brisker than its own pace.
+        public float walkOutPace = 1.25f;
+        bool exiting;
+        float WalkOutSpeed
+        {
+            get
+            {
+                float walk = playerAnim && gaits.TryGetValue(playerAnim, out var g) && g.x > 0f ? g.x : 1.4f; // the clip's m/s
+                return walk * walkOutPace * characterScale;
+            }
+        }
         float slowUntil = -1f;
 
         void HitSlowMo()
@@ -2542,7 +2553,7 @@ namespace RailTracer
             }
             bool moving = false;
             // Crouching or dragging costs double, so it looks slower too.
-            float speed = c.crouched || c.held != null ? unitSpeed * 0.5f : unitSpeed;
+            float speed = exiting ? WalkOutSpeed : c.crouched || c.held != null ? unitSpeed * 0.5f : unitSpeed;
             if (parkedOn != c.player || playerRoute.Count > 0) parkedOn = null;
             if (flipT < 0f && takedownVictim == null && !hopRunning && parkedOn == null) moving = Advance(ref playerShown, playerRoute, target, speed); // else PairedKill() / HopThrough() moves it
             moving |= hopMoving;

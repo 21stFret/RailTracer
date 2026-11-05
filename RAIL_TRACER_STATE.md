@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 18.33 (5 Nov 2026).
+Last updated: Update 18.34 (5 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -52,6 +52,7 @@ Inspector; the saved scene matches these.
 | 18.31 (takedowns hold their place) | Done, not yet seen in Play mode |
 | 18.32 (sight through partition doorways) | Done, not yet seen in Play mode |
 | 18.33 (a resumed save keeps its legend) | Done, not yet seen in Play mode: the Inspector's debug sliders overwrote the replayed legend and cooldowns as Play mode started |
+| 18.34 (walking out of a cleared car) | Done, not yet seen in Play mode |
 | Still needed (art) | Rail grab, demon throw and crouched drag-down animations; unarmed finishers (skipped for now); a searching animation; more idles |
 | Next | Full audio pass |
 
@@ -76,7 +77,7 @@ Inspector; the saved scene matches these.
 - **Greybox:** tables (cloth white, chairs tucked under; the round table a cloth cylinder with four chairs), the dining cart (a two-tray trolley), bar, sacks, two-crate stacks and the cage's beams are placeholder blocks the size of the real props; the dining car and baggage hold get Lamp_Wall lamps, all lit, as evenly spaced as the plain wall allows: one about every Game "Wall Lamp Every" (4 m) along each side, the sides staggered by half of that, each on the free plain-wall tile nearest its even spot (skipped where only windows are near). Every other dining table lamp along the car is lit: a warm spot pointing straight down from its bulb (Game "Table Lamp Power" 0.1, Reach 1, Cone 179, Inner Cone 0; no shadows), kept at its own level by the legend lighting. Every light has a lamp model.
 - **Wall lamps** (every car): spots, Game "Wall Lamp Intensity" 2, Range 4.5, Angle 120, Inner Angle 0 (renamed from Lamp Intensity / Range / Angle, so the scene's old 3 / 80 no longer apply). Both are the maximum: the legend's lamp levels (1 at legend 0, down to 0.85) only dim them.
 - **Every car** starts at legend 0 with cooldowns clear and the lamps warm. You get half your health back (15) at the start of each car, up to 30.
-- **Clearing a car:** the win card shows the tickets and "Hold Space / click to walk on" with a bar that fills over the hold (empties if you let go early), or R to ride again. Walking on: you stand up first if crouched (Game "Stand Up Time" 0.4 s), then walk out of the far door at the normal move pace (a confident walk clip is still to source). Then the **walk-through car**: the first carriage's seats, nobody in it, no turns, no move costs, no skills. A glowing tile by the far door asks "Board / Not yet" (Space or Enter boards).
+- **Clearing a car:** the win card shows the tickets and "Hold Space / click to walk on" with a bar that fills over the hold (empties if you let go early), or R to ride again. Walking on: you stand up first if crouched (Game "Stand Up Time" 0.4 s), then walk out of the far door: the walk clip, at Game "Walk Out Pace" (1.25) x its own speed (a confident walk clip could replace it later). Then the **walk-through car**: the first carriage's seats, nobody in it, no turns, no move costs, no skills. A glowing tile by the far door asks "Board / Not yet" (Space or Enter boards).
 - **After car 5:** "Demo complete": Restart from car 1, Try Endless mode, Main menu.
 - **Fleeing enemies** jump off the train: broken, gone, never in the next car.
 - **Endless mode:** generated cars without end (TrainGen), the same rules; car n has 5 + n enemies (up to 11) and 1 + n/2 heavies (up to 3).

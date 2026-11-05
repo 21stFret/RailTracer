@@ -212,7 +212,7 @@ namespace RailTracer
             }
             var door = new Cell(c.W - 1, c.H / 2);
             var path = PathOut(c.player, door);
-            hopRunning = true; // the view walks you, not the rules
+            hopRunning = exiting = true; // the view walks you, not the rules
             var points = path.Select(World).ToList();
             points.Add(World(door) + Vector3.right * 1.6f); // through the door
             foreach (var p in points)
@@ -220,7 +220,7 @@ namespace RailTracer
                 while ((playerShown - p).sqrMagnitude > 1e-4f)
                 {
                     var before = playerShown;
-                    playerShown = Vector3.MoveTowards(playerShown, p, unitSpeed * Time.deltaTime);
+                    playerShown = Vector3.MoveTowards(playerShown, p, WalkOutSpeed * Time.deltaTime);
                     hopMoving = true;
                     var step = playerShown - before;
                     if (step.sqrMagnitude > 1e-6f) playerFacing = step.normalized;
@@ -229,7 +229,7 @@ namespace RailTracer
                 }
             }
             hopMoving = false;
-            hopRunning = false;
+            hopRunning = exiting = false;
             busy = false;
             if (!endless && carIndex == Train.DemoCars - 1)
             {
