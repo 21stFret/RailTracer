@@ -1539,7 +1539,7 @@ namespace RailTracer
                     }
                     playerShown = to;
                 }
-                bool cam = brutal && KillCamOn;
+                bool cam = KillCamOn; // every takedown, stealth too
                 if (cam)
                 {
                     // Fly in and hold a beat before the strike; the shot then stays put (no chasing the pair).
