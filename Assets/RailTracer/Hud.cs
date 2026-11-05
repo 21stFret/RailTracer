@@ -156,6 +156,8 @@ namespace RailTracer
         GameObject controls;
         CanvasGroup card;
         TMP_Text cardSmall, cardLine1, cardLine2, cardFoot;
+        GameObject cardHold;
+        Image cardHoldFill;
         float cardShown, cardAuto, cardFading = -1f;
         bool cardDismissable;
         TMP_FontAsset title, body;
@@ -502,6 +504,13 @@ namespace RailTracer
             cardLine1.color = cardLine2.color = Bone;
             cardLine1.lineSpacing = cardLine2.lineSpacing = -10f;
             cardFoot = Label(box, "", 14, Grey, 3f);
+            // The win card's hold to walk on: fills while held, empties if you let go early.
+            var hold = Rect("Hold", box, Vector2.zero, Vector2.zero, new Vector2(300, 6));
+            Size(hold, 300, 6);
+            Img(hold, Burgundy, 0f, skew: true);
+            cardHoldFill = Img(hold, Bright, 0f, skew: true);
+            Filled(cardHoldFill, Image.FillMethod.Horizontal, (int)Image.OriginHorizontal.Left);
+            cardHold = hold.gameObject;
             cardTickets = MakeTicketRow(box);
             cardRoot.gameObject.SetActive(false);
 
@@ -586,12 +595,20 @@ namespace RailTracer
             cardLine2.text = line2;
             cardFoot.text = foot;
             cardFoot.gameObject.SetActive(!string.IsNullOrEmpty(foot));
+            SetCardHold(-1f);
             cardShown = Time.unscaledTime;
             cardAuto = autoHide;
             cardDismissable = dismissable;
             cardFading = -1f;
             card.alpha = 1f;
             card.gameObject.SetActive(true);
+        }
+
+        // The card's hold bar at `k` (0..1), or hidden (k < 0).
+        public void SetCardHold(float k)
+        {
+            cardHold.SetActive(k >= 0f);
+            cardHoldFill.fillAmount = Mathf.Clamp01(k);
         }
 
         public void HideCard()

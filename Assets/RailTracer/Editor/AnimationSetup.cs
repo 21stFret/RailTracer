@@ -95,6 +95,11 @@ namespace RailTracer
                 AssetDatabase.SaveAssets();
                 Debug.Log("Rail Tracer: walk states now blend walk/run by speed, with stride matched to movement.");
             }
+            if (Sprint(Dir + "Player.controller", "Walk") | Sprint(Dir + "Enemy.controller", "Move"))
+            {
+                AssetDatabase.SaveAssets();
+                Debug.Log("Rail Tracer: the run in the walk/run blend is now a sprint.");
+            }
             if (AddRelaxedIdle(Dir + "Enemy.controller"))
             {
                 AssetDatabase.SaveAssets();
@@ -135,7 +140,7 @@ namespace RailTracer
             var sm = ac.layers[0].stateMachine;
             var walkS = sm.states.Select(s => s.state).FirstOrDefault(s => s.name == walkState);
             var walk = Clip(Masc + "Locomotion/Walk/A_Walk_F_Masc.fbx");
-            var run = Clip(Masc + "Locomotion/Run/A_Run_F_Masc.fbx");
+            var run = Clip(Masc + "Locomotion/Sprint/A_Sprint_F_Masc.fbx"); // running moves are a sprint (Update 18)
             if (!walkS || !walk || !run) return false;
             float Speed(string twin, float fallback)
             {
@@ -144,7 +149,7 @@ namespace RailTracer
                 return v > 0.1f ? v : fallback;
             }
             float walkSpeed = Speed("Locomotion/Walk/A_Walk_F_RootMotion_Masc.fbx", 1.4f);
-            float runSpeed = Mathf.Max(walkSpeed + 0.5f, Speed("Locomotion/Run/A_Run_F_RootMotion_Masc.fbx", 3.5f));
+            float runSpeed = Mathf.Max(walkSpeed + 0.5f, Speed("Locomotion/Sprint/A_Sprint_F_RootMotion_Masc.fbx", 5.5f));
             float crouchSpeed = Speed("Locomotion/Crouch/A_Crouch_FwdStrafeF_RootMotion_Masc.fbx", 1f);
             void Param(string name, float value) => ac.AddParameter(new AnimatorControllerParameter
                 { name = name, type = AnimatorControllerParameterType.Float, defaultFloat = value });
@@ -167,6 +172,29 @@ namespace RailTracer
                 crouch.speedParameterActive = true;
                 crouch.speedParameter = "StrideScale";
             }
+            EditorUtility.SetDirty(ac);
+            return true;
+        }
+
+        // Update 18: an already upgraded walk/run blend gets the sprint in place of the run (the trot), and RunSpeed its pace.
+        static bool Sprint(string path, string walkState)
+        {
+            var ac = AssetDatabase.LoadAssetAtPath<AnimatorController>(path);
+            var sprint = Clip(Masc + "Locomotion/Sprint/A_Sprint_F_Masc.fbx");
+            if (!ac || !sprint) return false;
+            var state = ac.layers[0].stateMachine.states.Select(s => s.state).FirstOrDefault(s => s.name == walkState);
+            if (!state || !(state.motion is BlendTree tree) || tree.children.Length < 2 || tree.children[1].motion == sprint) return false;
+            var twin = Clip(Masc + "Locomotion/Sprint/A_Sprint_F_RootMotion_Masc.fbx");
+            float v = twin ? new Vector2(twin.averageSpeed.x, twin.averageSpeed.z).magnitude : 0f;
+            float speed = Mathf.Max(tree.children[0].threshold + 0.5f, v > 0.1f ? v : 5.5f);
+            var children = tree.children;
+            children[1].motion = sprint;
+            children[1].threshold = speed;
+            tree.children = children;
+            var ps = ac.parameters;
+            foreach (var p in ps) if (p.name == "RunSpeed") p.defaultFloat = speed;
+            ac.parameters = ps;
+            EditorUtility.SetDirty(tree);
             EditorUtility.SetDirty(ac);
             return true;
         }

@@ -66,9 +66,12 @@ namespace RailTracer
         SaveData save = new SaveData();
         string choice;         // the centre panel: null, "pause", "board" (the next car) or "done" (demo complete)
         float winHeld = -1f;   // holding Space on the win card
+        bool exiting; // walking out of a cleared car
+        public float standUpTime = 0.4f; // clearing a car crouched: the beat to stand before walking out
         bool boardAsked;       // the board popup has shown for this visit to the glowing tile
         GameObject glow;
         int journeyPick = -1;
+        int journeyConfirm = -1; // a Replay that would replace the saved run, waiting for a yes
 
         static string SavePath => Path.Combine(Application.persistentDataPath, "save.json");
         static readonly float[] SlowMos = { 1f, 0.75f, 0.5f, 0.25f };
@@ -192,9 +195,15 @@ namespace RailTracer
         IEnumerator ExitCar()
         {
             busy = true;
+            // Triumphant: on your feet first, then out of the far door (the confident walk: the normal walk for now).
+            if (c.crouched)
+            {
+                c.Do("crouch");
+                for (float time = 0f; time < standUpTime; time += Time.deltaTime) yield return null;
+            }
             var door = new Cell(c.W - 1, c.H / 2);
             var path = PathOut(c.player, door);
-            hopRunning = true; // the view walks you, not the rules
+            hopRunning = exiting = true; // the view walks you, not the rules
             var points = path.Select(World).ToList();
             points.Add(World(door) + Vector3.right * 1.6f); // through the door
             foreach (var p in points)
@@ -202,7 +211,7 @@ namespace RailTracer
                 while ((playerShown - p).sqrMagnitude > 1e-4f)
                 {
                     var before = playerShown;
-                    playerShown = Vector3.MoveTowards(playerShown, p, unitSpeed * Time.deltaTime);
+                    playerShown = Vector3.MoveTowards(playerShown, p, walkOutSpeed * Time.deltaTime);
                     hopMoving = true;
                     var step = playerShown - before;
                     if (step.sqrMagnitude > 1e-6f) playerFacing = step.normalized;
@@ -211,7 +220,7 @@ namespace RailTracer
                 }
             }
             hopMoving = false;
-            hopRunning = false;
+            hopRunning = exiting = false;
             busy = false;
             if (!endless && carIndex == Train.DemoCars - 1)
             {
@@ -533,7 +542,7 @@ namespace RailTracer
                     int hit = hud.RefreshMenu(true, null, items, null, null, at);
                     if (!click) break;
                     if (hit == 0) Dive(BackdropIsEmpty ? () => StartCar(false, 0, MaxHpCarry) : (System.Action)null);
-                    else if (hit == 1) { screen = MenuScreen.Journey; journeyPick = Mathf.Min(NextDemo, Train.DemoCars - 1); }
+                    else if (hit == 1) { screen = MenuScreen.Journey; journeyPick = Mathf.Min(NextDemo, Train.DemoCars - 1); journeyConfirm = -1; }
                     else if (hit == 2) Dive(() => StartCar(true, 1, MaxHpCarry));
                     else if (hit == 3) screen = MenuScreen.Options;
                     else if (hit == 4) Quit();
@@ -550,6 +559,15 @@ namespace RailTracer
                         return new Vector2(p.x, p.y);
                     }).ToArray();
                     int over = hud.RefreshJourney(screenAt, names, states, journeyPick, at);
+                    if (journeyConfirm >= 0)
+                    {
+                        var info2 = $"Replaying {Train.Demo(journeyConfirm).name} replaces your saved run.";
+                        int yes = hud.RefreshMenu(false, "Journey", new[] { "Replay anyway", "Keep my run" }, null, info2, at, held);
+                        if (back || (click && (yes == 1 || yes == -2))) journeyConfirm = -1;
+                        else if (click && yes == 0) { int k = journeyConfirm; journeyConfirm = -1; Dive(() => StartCar(false, k, MaxHpCarry)); }
+                        break;
+                    }
+                    bool again = click && over >= 0 && over == journeyPick; // clicking the picked car plays it, like a double click
                     if (click && over >= 0) journeyPick = over;
                     var pick = Train.Demo(journeyPick);
                     bool cleared = save.cleared[journeyPick], isNext = journeyPick == next;
@@ -558,10 +576,11 @@ namespace RailTracer
                     var info = $"<b>{journeyPick + 1}. {pick.name}</b>\n{pick.blurb}\n\nBest ticket: {Ticket(save.best[journeyPick])}";
                     int hit = hud.RefreshMenu(false, "Journey", new[] { action, "Back" }, new[] { cleared || isNext, true }, info, at, held);
                     if (back || (click && (hit == 1 || hit == -2))) { screen = MenuScreen.Start; break; }
-                    if (click && hit == 0 && (cleared || isNext))
+                    if ((again || (click && hit == 0)) && (cleared || isNext))
                     {
                         int k = journeyPick;
-                        Dive(resumable ? (System.Action)null : () => StartCar(false, k, MaxHpCarry));
+                        if (cleared && save.run != null) journeyConfirm = k; // ask before a Replay replaces the saved run
+                        else Dive(resumable ? (System.Action)null : () => StartCar(false, k, MaxHpCarry));
                     }
                     break;
                 }
