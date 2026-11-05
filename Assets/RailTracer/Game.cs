@@ -1088,7 +1088,9 @@ namespace RailTracer
                 }
             }
 
-            if (phase == Phase.Play) MoveCamera(kb, mouse); // with input held back this only follows the camera target (tutorial pans)
+            // With input held back this only follows the camera target (tutorial pans). Never during a kill cam: it owns
+            // the camera (and this would drag it back to your play distance along the shot's direction).
+            if (phase == Phase.Play && !camming) MoveCamera(kb, mouse);
             WalkStep();
             if (selected.HasValue && !c.Has(selected.Value)) selected = null; // lost the legend for it
             leaping = !walking && (selected == SkillId.Leap || (kb != null && kb.shiftKey.isPressed));
@@ -1951,7 +1953,7 @@ namespace RailTracer
                 if (c.Over) break;
                 if (!e.InPlay && c.Decide(e) != Intent.Flee) continue; // broken ones only move to flee
                 if (followCamera) camTarget = shown[e];
-                yield return new WaitForSeconds(enemyStepDelay);
+                yield return new WaitForSeconds(enemyStepDelay / EnemyPace);
                 bool fleeing = c.Decide(e) == Intent.Flee;
                 c.Do($"enemy {e.id}");
                 if (!routes.TryGetValue(e, out var route)) routes[e] = route = new Queue<Vector3>();
@@ -1967,14 +1969,14 @@ namespace RailTracer
                     if (followCamera) camTarget = shown[e];
                     yield return null;
                 }
-                if (fleeing && e.state == EnemyState.Fled) { yield return new WaitForSeconds(0.3f); gone.Add(e); }
-                else if (walked) yield return new WaitForSeconds(0.15f);
+                if (fleeing && e.state == EnemyState.Fled) { yield return new WaitForSeconds(0.3f / EnemyPace); gone.Add(e); }
+                else if (walked) yield return new WaitForSeconds(0.15f / EnemyPace);
                 Poll(); // a card pauses the turn before the next enemy acts
                 while (tut.Active) yield return null;
             }
             c.Do("start");
             AutoSave(); // after the turn's results, so reloading never rerolls a shot
-            if (followCamera) { yield return new WaitForSeconds(enemyStepDelay); camTarget = playerShown; }
+            if (followCamera) { yield return new WaitForSeconds(enemyStepDelay / EnemyPace); camTarget = playerShown; }
             busy = false;
         }
 
@@ -2830,7 +2832,8 @@ namespace RailTracer
             if (!routes.TryGetValue(e, out var route)) routes[e] = route = new Queue<Vector3>();
             var pos = shown[e];
             var before = pos;
-            bool moving = Advance(ref pos, route, World(e.pos), unitSpeed);
+            float pace = unitSpeed * EnemyPace; // the Options enemy turn speed
+            bool moving = Advance(ref pos, route, World(e.pos), pace);
             shown[e] = pos;
             a.SetBool("Moving", moving);
             // Broken: down on their knees to beg ("BegStart", then the "Beg" loop), or the old cower without those states.
@@ -2838,7 +2841,7 @@ namespace RailTracer
             if (!a.HasState(0, Animator.StringToHash("BegStart"))) a.SetBool("Broken", broken);
             else if (broken && begging.Add(e)) a.CrossFade("BegStart", 0.25f, 0, 0f);
             if (armed.Contains(a)) a.SetBool("Armed", e.awareness != Awareness.Unaware); // holstered only while unaware
-            Stride(a, moving ? unitSpeed : 0f, false);
+            Stride(a, moving ? pace : 0f, false);
             var t = a.transform;
             t.localPosition = pos;
             // Face where they're walking; once there, face where the rules say they're looking.
