@@ -394,7 +394,7 @@ namespace RailTracer
                         pitch = Mathf.Clamp(pitch - d.y * 0.3f, -10f, 80f);
                     }
                 }
-                float wheel = mouse.scroll.ReadValue().y * 0.002f;
+                float wheel = mouse.scroll.ReadValue().y * 0.006f; // zoom speed (x3 of the first)
                 if (killCam) camDist = Mathf.Clamp(camDist - wheel * camDist, 0.4f, 8f);
                 else distance = Mathf.Clamp(distance - wheel * distance, 1.5f, 12f);
             }

@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 18.20 (5 Nov 2026).
+Last updated: Update 18.21 (5 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -39,6 +39,7 @@ Inspector; the saved scene matches these.
 | 18.18 (oatmeal tablecloths) | Done, not yet seen in Play mode |
 | 18.19 (ornate brass cutlery) | Done, not yet seen in Play mode |
 | 18.20 (smaller kill stains at the blood, window body moved, kill cam editor) | Done, not yet seen in Play mode |
+| 18.21 (animation test: scroll zoom x3) | Done |
 | Still needed (art) | Rail grab, demon throw and crouched drag-down animations; knife mesh (on hold); unarmed finishers (skipped for now); a searching animation; more idles |
 | Next | Full audio pass |
 
