@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 17.1 (4 Nov 2026).
+Last updated: Update 17.2 (4 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -54,10 +54,11 @@ Inspector; the saved scene matches these.
 
 Every menu is over the real carriages: the live (saved) car plus the other demo cars built beside it, empty and without props. Menu train lamps: red for a cleared car, white for the next to play, dark for cars ahead.
 
-- **Start:** "RED LINE" ("Red" #C8102E, "Line" bone) and the menu down the left over a shaded strip, the saved game behind it, loaded and paused. With no save, an empty car 1 and "Board the train". Lines: Continue (car and turn) or Board the train, Journey, Endless, Options, Quit.
+- **Layout:** the middle stays clear for the train: the title (or the screen's heading) top left, the menu lines bottom left with any text beside them; no panel behind, the text has a dark glow. No floor overlays behind the menus (reaction zone, routes, arrows, "?" markers, walk range, blood outlines).
+- **Start:** "RED LINE" ("Red" #C8102E, "Line" bone), the saved game behind it, loaded and paused. With no save, an empty car 1 and "Board the train". Lines: Continue (car and turn) or Board the train, Journey, Endless, Options, Quit.
 - **Camera:** each screen is a zoomed-out view of a real car (Start over your car, Options over the next one along); it glides sideways between them. Journey pulls out side-on to the whole train. Continue (or boarding) dives straight down into the car and play resumes, no loading screen.
 - **Journey:** the five cars side-on, names under them (red cleared, white next, grey ahead) with short links between; click one for its name, description and best ticket, and Replay (cleared), Continue or Board (next). Cars ahead can't be played. Replaying a car carries on through the rest of the train.
-- **Options:** Kill cam On/Off, kill cam slow motion (1, 0.75, 0.5, 0.25x), window mode (Borderless, Fullscreen, Windowed), resolution, Controls (view only). No audio yet.
+- **Options:** Kill cam On/Off, kill cam slow motion (1, 0.75, 0.5, 0.25x), window mode (Borderless, Fullscreen, Windowed), resolution, Controls (view only). No audio yet. The car behind has a lamp per setting, in menu order: off when the setting is off, a slider's value as its brightness (slow motion now, the volumes later); its progress lamps go out while you're there.
 - **Pause (Esc):** Resume, Tutorial tips, Kill cam, Restart car, Main menu. Esc backs out of every submenu.
 
 ## Turn
@@ -178,10 +179,11 @@ In the game too, finisher blood now comes from the victim's chest bone (where th
 - Demon aura (Resources/Effects/Demon Aura) round your feet: fades in with the same eased legend as the blood on your clothes, from nothing at 10 legend to the prefab's full colours at 100 (Game "Aura From" 0.1, "Aura Full" 1).
 - The carriage lamps redden with legend, stepping at 25, 50, 75 and 100 and blending over about a second. Overlays never change.
 - Finishers: Brutal Finishers knife clips (Humanoid on the mannequin avatar) in `Resources/Takedowns`, Alex's picks:
-  - Stealth, crouched (random): Heart Stab, plus the Stealth Finishers pack: Grab Flip Head Stomp, Karate Chop KO, Neck Break, Grab Flip Stab, Neck Stab (from behind), Spin Stab, Thigh and Neck Stab (start values: 1 m apart, victim facing away; still to tune). Stealth, standing: Shove Neck Slice (quick).
-  - Brutal, at random: Duck and Back Stab, or the Slash Combo (mid-section slash, then face slash cross-faded in on the "Finisher2" states: Combo From / Combo Start / Combo Blend on the entry; the victim topples after).
+  - Stealth, crouched (random): Heart Stab, Grab Flip Stab, Thigh and Neck Stab. Stealth, standing: Karate Chop KO, Neck Break, Spin Stab, Neck Stab (from behind). (Stealth Finishers pack ones start 1 m apart, victim facing away; still to tune.) Shove Neck Slice removed (it travelled too far). A stance with nothing in it would use any of its kind.
+  - Brutal, at random: Duck and Back Stab, Grab Flip Head Stomp, or the Slash Combo (mid-section slash, then face slash cross-faded in on the "Finisher2" states: Combo From / Combo Start / Combo Blend on the entry; the victim topples after).
   - Brutal with half cover (a seat) straight out from the victim's tile: always Shove to Table, the pair turned to face that seat.
   - The clips keep their own travel in the pose (imported with root XZ baked from the original position), so a pair lines up through the whole clip once its start offset is right. The exported clips start with both characters on the same spot; each pair has its own starting distance (as set up in Unreal), facing you: Victim Offset Z 1.5 (Shove Neck Slice 1.3), Victim Yaw 180.
   - Each entry can be tagged Guard / Heavy / Any (all Any for now).
 - Ghosts: the move-preview ghost and the last-seen ghost are see-through outlines (last-seen fainter). The last-seen ghost marks only where an enemy actually last saw you.
+- Mouse only works too: the skill boxes, and the HUD's key hints are buttons (white under the mouse, red while pressed): Space end turn (a click ends it), C crouch, Z undo, Esc menu, H controls, L log, and Esc cancel on the targeting banner. The win card's walk on: hold Space or the mouse.
 - Keys: 1–8 skills, Shift leap, Ctrl hop, G grab, C crouch, Z undo, V all senses, B blood outlines, L log, H controls, R restart the car, Esc pause (Main menu is in there).

@@ -32,25 +32,6 @@ MonoBehaviour:
     speed: 1
     bloodAt: 0.55
     camOffset: {x: 0, y: 0, z: 0}
-  - name: Shove Neck Slice (standing)
-    kind: 0
-    target: 0
-    stance: 2
-    attacker: {fileID: 8993902097722301239, guid: f20bc7b83f30db74481d7f27de780188, type: 3}
-    victim: {fileID: 8993902097722301239, guid: e15db6fe689c87f4789c7bf3523aef59, type: 3}
-    attacker2: {fileID: 0}
-    victim2: {fileID: 0}
-    comboFrom: 0.85
-    comboStart: 0.1
-    comboBlend: 0.25
-    victimFallsAfter: 0
-    needsCover: 0
-    coverShift: 0.45
-    victimOffset: {x: -0.05, y: 0, z: 1.2}
-    victimYaw: 180
-    speed: 1
-    bloodAt: 0.38
-    camOffset: {x: 0, y: 0, z: 0}
   - name: Duck and Back Stab
     kind: 1
     target: 0
@@ -109,9 +90,9 @@ MonoBehaviour:
     bloodAt: 0.5
     camOffset: {x: 0, y: 0, z: 0}
   - name: Grab Flip Head Stomp
-    kind: 0
+    kind: 1
     target: 0
-    stance: 1
+    stance: 0
     attacker: {fileID: 8993902097722301239, guid: f6afe5cd3e834dfba5414d0e797309b5, type: 3}
     victim: {fileID: 8993902097722301239, guid: 772e450cd4004c5b91de6b214e7861e5, type: 3}
     attacker2: {fileID: 0}
@@ -130,7 +111,7 @@ MonoBehaviour:
   - name: Karate Chop KO
     kind: 0
     target: 0
-    stance: 1
+    stance: 2
     attacker: {fileID: 8993902097722301239, guid: b5957850e9134dd9a7121c7ba4577e0f, type: 3}
     victim: {fileID: 8993902097722301239, guid: 5355fb24e162427e8517ba6e9c45f07e, type: 3}
     attacker2: {fileID: 0}
@@ -149,7 +130,7 @@ MonoBehaviour:
   - name: Neck Break
     kind: 0
     target: 0
-    stance: 1
+    stance: 2
     attacker: {fileID: 8993902097722301239, guid: e56459abaf3a4aceb144fac5472865b4, type: 3}
     victim: {fileID: 8993902097722301239, guid: 5e92da9a167c4866a51023fa16083dbc, type: 3}
     attacker2: {fileID: 0}
@@ -187,7 +168,7 @@ MonoBehaviour:
   - name: Neck Stab (from behind)
     kind: 0
     target: 0
-    stance: 1
+    stance: 2
     attacker: {fileID: 8993902097722301239, guid: eddaeb6287f44596b66d56d0c0a795b6, type: 3}
     victim: {fileID: 8993902097722301239, guid: 5089f90c31a346ef91c08c6a0d300c46, type: 3}
     attacker2: {fileID: 0}
@@ -206,7 +187,7 @@ MonoBehaviour:
   - name: Spin Stab
     kind: 0
     target: 0
-    stance: 1
+    stance: 2
     attacker: {fileID: 8993902097722301239, guid: 5970b66641c1448d9d2d88e336c4962f, type: 3}
     victim: {fileID: 8993902097722301239, guid: b3c4feb60e6e4704af5a7b0555e7e749, type: 3}
     attacker2: {fileID: 0}

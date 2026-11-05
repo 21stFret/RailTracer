@@ -354,6 +354,8 @@ namespace RailTracer
         GameObject menuTrain;
         Vector3 menuCamPos; Quaternion menuCamRot;
         readonly List<(Transform car, float x)> menuCars = new List<(Transform, float)>();
+        readonly List<List<Light>> statusLamps = new List<List<Light>>();
+        readonly List<Light> settingLamps = new List<Light>();
 
         // Which demo slot the live carriage sits in (the menu train is laid out round it); -1 = none of them.
         int LiveSlot => walking || endless ? -1 : carIndex;
@@ -366,6 +368,8 @@ namespace RailTracer
         {
             if (menuTrain) Destroy(menuTrain);
             menuCars.Clear();
+            statusLamps.Clear();
+            settingLamps.Clear();
             menuTrain = new GameObject("Menu Train");
             var kit = useTrainKit ? Resources.Load<TrainKit>("Kit/TrainKit") : null;
             for (int k = 0; k < Train.DemoCars; k++)
@@ -374,6 +378,8 @@ namespace RailTracer
                 t.SetParent(menuTrain.transform, false);
                 t.localPosition = new Vector3(SlotX(k), 0f, 0f);
                 menuCars.Add((t, SlotX(k)));
+                var lit = new List<Light>();
+                statusLamps.Add(lit);
                 if (k != LiveSlot && kit)
                 {
                     var def = Train.Demo(k);
@@ -391,7 +397,37 @@ namespace RailTracer
                     l.intensity = 2.5f;
                     l.range = 9f;
                     l.shadows = LightShadows.None;
+                    lit.Add(l);
                 }
+            }
+            // The Options car: a lamp per setting, down the car in menu order (SyncSettingLamps).
+            for (int i = 0; i < 4; i++)
+            {
+                var l = new GameObject("Setting Lamp " + (i + 1)).AddComponent<Light>();
+                l.transform.SetParent(menuTrain.transform, false);
+                l.transform.localPosition = new Vector3(OptionsX + 4f + i * 6f, 2.1f, -2f);
+                l.type = LightType.Point;
+                l.color = new Color(1f, 0.9f, 0.75f);
+                l.range = 7f;
+                l.shadows = LightShadows.None;
+                settingLamps.Add(l);
+            }
+        }
+
+        // Where the Options screen looks: the car after the live one (before it, from the last).
+        float OptionsX => (LiveSlot >= 0 ? SlotX(LiveSlot) : 0f) + (LiveSlot == Train.DemoCars - 1 ? -Pitch : Pitch);
+
+        // On the Options screens the car's lamps are the settings: off when a setting is off, a slider's value as
+        // the brightness (kill cam slow motion for now; the volumes when audio arrives). Its progress lamps go out.
+        void SyncSettingLamps(bool showing)
+        {
+            var s = save.settings;
+            float[] level = { s.killCam ? 1f : 0f, s.killCamSlowMo, 1f, 1f }; // kill cam, slow motion, window mode, resolution
+            for (int i = 0; i < settingLamps.Count; i++) settingLamps[i].intensity = showing ? 2.8f * level[i] : 0f;
+            for (int k = 0; k < menuCars.Count; k++)
+            {
+                bool here = Mathf.Abs(menuCars[k].x - OptionsX) < 1f;
+                foreach (var l in statusLamps[k]) l.enabled = !(showing && here);
             }
         }
 
@@ -422,7 +458,7 @@ namespace RailTracer
             }
             int slot = LiveSlot >= 0 ? LiveSlot : -1;
             float x = slot >= 0 ? SlotX(slot) : 0f; // the live car (an endless or walk-through car sits at 0)
-            if (screen == MenuScreen.Options || screen == MenuScreen.Controls) x += LiveSlot == Train.DemoCars - 1 ? -Pitch : Pitch;
+            if (screen == MenuScreen.Options || screen == MenuScreen.Controls) x = OptionsX;
             var focusAt = new Vector3(x + (Map[0].Length - 1) / 2f + drift, 0f, -2f);
             var rot = Quaternion.Euler(50f, 0f, 0f);
             return (focusAt - rot * Vector3.forward * 24f, rot);
@@ -483,6 +519,7 @@ namespace RailTracer
         void MenuStep(Keyboard kb, Mouse mouse)
         {
             MenuCamera();
+            SyncSettingLamps(screen == MenuScreen.Options || screen == MenuScreen.Controls);
             var at = mouse != null ? mouse.position.ReadValue() : Vector2.zero;
             bool click = mouse != null && mouse.leftButton.wasPressedThisFrame;
             bool back = kb != null && kb.escapeKey.wasPressedThisFrame;

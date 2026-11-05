@@ -948,7 +948,7 @@ namespace RailTracer
                 else if (kb.nKey.wasPressedThisFrame && c.Won && !busy) { hud.HideCard(); StartCoroutine(ExitCar()); } // debug: straight out
                 else if (endShown && c.Won && !busy)
                 {
-                    if (!kb.spaceKey.isPressed) winHeld = 0f;
+                    if (!kb.spaceKey.isPressed && !(mouse != null && mouse.leftButton.isPressed)) winHeld = 0f; // Space, or the mouse held down
                     else if ((winHeld += Time.unscaledDeltaTime) >= endTurnHold) { winHeld = -1f; hud.HideCard(); StartCoroutine(ExitCar()); }
                 }
                 else if (any && hud.CardDismissable) hud.HideCard();
@@ -1006,6 +1006,24 @@ namespace RailTracer
             hudSlot = mouse != null ? hud.SlotAt(screen) : -1;
             hover = mouse != null && !overHud ? CellUnderMouse(screen) : null;
             if (mouse != null && mouse.leftButton.wasPressedThisFrame && hudSlot >= 0) Select((SkillId)hudSlot);
+            // The HUD's key hints as buttons, for playing with the mouse alone.
+            switch (hud.RefreshButtons(mouse != null ? screen : new Vector2(-9999f, -9999f), mouse != null && mouse.leftButton.isPressed, mouse != null && mouse.leftButton.wasPressedThisFrame))
+            {
+                case "end": if (!busy && !c.Over && !walking) StartCoroutine(EnemyPhase()); break;
+                case "crouch": if (!busy) c.Do("crouch"); break;
+                case "undo":
+                    if (!busy && c.CanReset)
+                    {
+                        c.Do("undo");
+                        playerRoute.Clear();
+                        playerShown = World(c.player);
+                    }
+                    break;
+                case "cancel": selected = null; break;
+                case "pause": if (!busy) OpenChoice("pause"); break;
+                case "controls": hud.ToggleControls(); break;
+                case "log": hud.ShowLog(c.log); Time.timeScale = 0f; break;
+            }
             if (!busy && !c.Over && mouse != null && mouse.leftButton.wasPressedThisFrame && hover.HasValue)
             {
                 var target = c.EnemyAt(hover.Value);
@@ -1066,7 +1084,7 @@ namespace RailTracer
                 if (c.Won)
                 {
                     RecordClear();
-                    hud.ShowCard($"{CarLabel()} cleared", "The assassin washes up", "and steps out as the conductor.", "Hold Space to walk on  /  R to ride again", 0f, false, TicketStates());
+                    hud.ShowCard($"{CarLabel()} cleared", "The assassin washes up", "and steps out as the conductor.", "Hold Space (or the mouse) to walk on  /  R to ride again", 0f, false, TicketStates());
                 }
                 else hud.ShowCard(CarLabel(), "The demon was only", "human after all.", "R to retry", 0f, false);
             }
@@ -1822,7 +1840,7 @@ namespace RailTracer
             bool aiming = leaping || hopping || (throwing && c.held != null);
             var kill = KillMode;
             // With a kill selected the grid shows its attack range instead of where you can walk.
-            var reach = busy || senses || aiming || kill.HasValue ? new HashSet<Cell>() : c.Reachable();
+            var reach = busy || phase != Phase.Play || senses || aiming || kill.HasValue ? new HashSet<Cell>() : c.Reachable();
             // The move or leap under the mouse: per tile, seen or not, and who fires.
             var preview = busy || c.Over || senses || !hover.HasValue || hopping || throwing ? null
                 : leaping ? (c.CanLeapTo(hover.Value) ? c.LeapPreview(hover.Value) : null)
@@ -1871,7 +1889,7 @@ namespace RailTracer
                         col = Fill(Bone, 0.18f); // faint: where you can walk
                     // Every stained tile gets a decal, once the kill or landing that stained it has bled for itself.
                     if (c.IsBloody(cell) && !bloodEdges[x, y]) bloodEdges[x, y] = BloodOutline(cell);
-                    if (bloodEdges[x, y]) bloodEdges[x, y].enabled = bloodOutlines;
+                    if (bloodEdges[x, y]) bloodEdges[x, y].enabled = bloodOutlines && phase == Phase.Play;
                     if (this.blood && c.IsBloody(cell) && !decaled.Contains(cell) && !FreshBlood(cell))
                     {
                         decaled.Add(cell);
@@ -2063,7 +2081,7 @@ namespace RailTracer
             var spots = new HashSet<Cell>(c.enemies.Where(e => e.InPlay && e.awareness == Awareness.Searching && e.hunt != Hunt.Look && e.lastKnown.HasValue && e.lastKnown != ghostAt)
                 .Select(e => e.lastKnown.Value));
             foreach (var s in spots) if (!clueMarks.ContainsKey(s)) clueMarks[s] = ClueMark(s);
-            foreach (var kv in clueMarks) kv.Value.SetActive(spots.Contains(kv.Key));
+            foreach (var kv in clueMarks) kv.Value.SetActive(spots.Contains(kv.Key) && phase == Phase.Play);
         }
 
         // A bone "?" lying on the tile.
@@ -2093,10 +2111,10 @@ namespace RailTracer
             {
                 var e = kv.Key;
                 var (route, arrow) = kv.Value;
-                route.enabled = e.InPlay && e.route != null && e.awareness == Awareness.Unaware;
+                route.enabled = e.InPlay && e.route != null && e.awareness == Awareness.Unaware && phase == Phase.Play;
                 // Only on the turn before the enemy actually turns or moves that way (the rules' own plan).
                 var plan = c.PlannedTurn(e);
-                arrow.enabled = e.InPlay && !busy && !c.Over && plan.HasValue;
+                arrow.enabled = e.InPlay && !busy && !c.Over && phase == Phase.Play && plan.HasValue;
                 if (!arrow.enabled) continue;
                 var f = plan.Value;
                 var dir = new Vector3(f.x, 0f, -f.y);
@@ -2123,7 +2141,7 @@ namespace RailTracer
         void SyncZone()
         {
             var watched = new HashSet<Cell>();
-            if (!busy && !c.Over)
+            if (!busy && !c.Over && phase == Phase.Play) // none behind the menus
                 foreach (var e in c.enemies)
                 {
                     if (!c.WillReact(e)) continue;

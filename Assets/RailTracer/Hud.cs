@@ -311,8 +311,10 @@ namespace RailTracer
             Label(action, "Action", 13, LockedText, 2f);
             var state = Row("State", line, 16f);
             var stance = Row("Stance", state, 6f);
+            var crouchCap = KeyCap(stance, "C");
             stanceIcon = Icon(stance, "stand", 16, 16);
             stanceWord = Label(stance, "Standing", 14, Bone, 1.5f);
+            Button("crouch", stance, crouchCap.border, crouchCap.text, stanceWord);
             var sight = sightRow = Row("Sight", state, 6f);
             sightIcon = Icon(sight, "eye_slash", 18, 12);
             sightWord = Label(sight, "Unseen", 14, Grey, 1.5f);
@@ -325,8 +327,8 @@ namespace RailTracer
             dragging = drag.gameObject;
             // Undo: the key while you can undo, the padlock once it's locked, nothing when there's nothing to undo.
             var undoRow = Row("Undo Key", state, 6f);
-            KeyCap(undoRow, "Z");
-            Label(undoRow, "Undo", 14, Grey, 1.5f);
+            var undoCap = KeyCap(undoRow, "Z");
+            Button("undo", undoRow, undoCap.border, undoCap.text, Label(undoRow, "Undo", 14, Grey, 1.5f));
             undoKey = undoRow.gameObject;
             var lockRow = Row("Undo", state, 6f);
             Icon(lockRow, "lock", 12, 14).color = Grey;
@@ -374,8 +376,8 @@ namespace RailTracer
             bannerHint = Text(banner, body, 17, TextAlignmentOptions.MidlineLeft, Vector2.zero, Vector2.zero);
             bannerHint.color = Bone;
             var esc = Row("Esc", banner, 6f);
-            KeyCap(esc, "Esc");
-            Label(esc, "Cancel", 14, Grey, 2f);
+            var escCap = KeyCap(esc, "Esc");
+            Button("cancel", esc, escCap.border, escCap.text, Label(esc, "Cancel", 14, Grey, 2f));
 
             // ---- Bottom right: end turn (hold Space), the controls hint above it, the log above that ----
             var end = Row("End Turn", root, 6f);
@@ -383,21 +385,27 @@ namespace RailTracer
             Fit(end);
             var spaceCap = Row("Key Space", end, 0f);
             spaceCap.GetComponent<HorizontalLayoutGroup>().padding = new RectOffset(10, 10, 0, 0);
-            Img(spaceCap, Grey, 0f);
+            var spaceBorder = Img(spaceCap, Grey, 0f);
             Img(spaceCap, Black, 1.5f);
             endFill = Img(spaceCap, Alpha(Blood, 0.85f), 1.5f); // fills left to right while held
             Filled(endFill, Image.FillMethod.Horizontal, (int)Image.OriginHorizontal.Left);
             IgnoreLayout(spaceCap);
-            Label(spaceCap, "Space", 14, Grey, 1f).gameObject.AddComponent<LayoutElement>().minHeight = 20;
+            var spaceWord = Label(spaceCap, "Space", 14, Grey, 1f);
+            spaceWord.gameObject.AddComponent<LayoutElement>().minHeight = 20;
             endWord = Label(end, "Hold: end turn", 14, Grey, 2f);
             Glow(endWord);
-            var hint = Row("Controls Hint", root, 6f);
+            Button("end", end, spaceBorder, spaceWord, endWord); // a click ends the turn too
+            var hint = Row("Controls Hint", root, 12f);
             Place(hint, Vector2.right, new Vector2(-32, 54));
             Fit(hint);
-            KeyCap(hint, "H");
-            Glow(Label(hint, "Controls", 14, Grey, 2f));
-            KeyCap(hint, "L");
-            Glow(Label(hint, "Log", 14, Grey, 2f));
+            foreach (var (key, caption, id) in new[] { ("Esc", "Menu", "pause"), ("H", "Controls", "controls"), ("L", "Log", "log") })
+            {
+                var b = Row(caption, hint, 6f);
+                var cap = KeyCap(b, key);
+                var w = Label(b, caption, 14, Grey, 2f);
+                Glow(w);
+                Button(id, b, cap.border, cap.text, w);
+            }
             log = Text(root, body, 14, TextAlignmentOptions.BottomRight, Vector2.right, new Vector2(280, 200)); // clear of the legend number at 72 px
             Place(log.rectTransform, Vector2.right, new Vector2(-32, 84));
             log.textWrappingMode = TextWrappingModes.Normal;
@@ -574,7 +582,7 @@ namespace RailTracer
         }
 
         public bool Blocks(Vector2 screen) =>
-            SlotAt(screen) >= 0 || RectTransformUtility.RectangleContainsScreenPoint(bar, screen, null)
+            SlotAt(screen) >= 0 || ButtonUnder(screen) != null || RectTransformUtility.RectangleContainsScreenPoint(bar, screen, null)
             || (tip.gameObject.activeSelf && RectTransformUtility.RectangleContainsScreenPoint(tip, screen, null))
             || (controls.activeSelf && RectTransformUtility.RectangleContainsScreenPoint((RectTransform)controls.transform, screen, null));
 
@@ -924,19 +932,51 @@ namespace RailTracer
         }
 
         // A key cap: the key's name in a thin box (grey, or another colour).
-        void KeyCap(Transform parent, string key) => KeyCap(parent, key, Grey);
+        (Image border, TMP_Text text) KeyCap(Transform parent, string key) => KeyCap(parent, key, Grey);
 
-        void KeyCap(Transform parent, string key, Color col) => KeyCap(parent, key, col, Black);
+        (Image border, TMP_Text text) KeyCap(Transform parent, string key, Color col) => KeyCap(parent, key, col, Black);
 
-        void KeyCap(Transform parent, string key, Color col, Color fill)
+        (Image border, TMP_Text text) KeyCap(Transform parent, string key, Color col, Color fill)
         {
             var cap = Row("Key " + key, parent, 0f);
             cap.GetComponent<HorizontalLayoutGroup>().padding = new RectOffset(6, 6, 0, 0);
-            Img(cap, col, 0f);
+            var border = Img(cap, col, 0f);
             Img(cap, fill, 1.5f);
             IgnoreLayout(cap);
             var t = Label(cap, key, 14, col, 1f);
             t.gameObject.AddComponent<LayoutElement>().minHeight = 20;
+            return (border, t);
+        }
+
+        // ---- Mouse buttons: the HUD's key hints are clickable too (white under the mouse, red while pressed) ----
+
+        class HudButton { public string id; public RectTransform rt; public (Graphic g, Color normal)[] parts; public bool hot; }
+        readonly List<HudButton> buttons = new List<HudButton>();
+
+        void Button(string id, RectTransform rt, params Graphic[] parts) =>
+            buttons.Add(new HudButton { id = id, rt = rt, parts = parts.Select(g => (g, g.color)).ToArray() });
+
+        HudButton ButtonUnder(Vector2 screen) => hudCanvas.enabled
+            ? buttons.FirstOrDefault(b => b.rt.gameObject.activeInHierarchy && RectTransformUtility.RectangleContainsScreenPoint(b.rt, screen, null)) : null;
+
+        // Colours the buttons for this frame and returns the one clicked (pressed this frame), if any.
+        public string RefreshButtons(Vector2 screen, bool held, bool pressed)
+        {
+            var under = ButtonUnder(screen);
+            foreach (var b in buttons)
+            {
+                if (b == under)
+                {
+                    b.hot = true;
+                    foreach (var (g, _) in b.parts) g.color = held ? Blood : Bone;
+                }
+                else if (b.hot)
+                {
+                    b.hot = false;
+                    foreach (var (g, normal) in b.parts) g.color = normal;
+                }
+            }
+            return pressed ? under?.id : null;
         }
 
         static TMP_Text Text(Transform parent, TMP_FontAsset font, float size, TextAlignmentOptions align, Vector2 pos, Vector2 box)

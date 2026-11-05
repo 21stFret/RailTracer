@@ -97,7 +97,6 @@ namespace RailTracer
                 });
             }
             Add("Heart Stab (crouched)", KillKind.Stealth, "Stab_Heart", TakedownStance.Crouched);
-            Add("Shove Neck Slice (standing)", KillKind.Stealth, "Shove_NeckSlice_Quick", TakedownStance.Standing);
             Add("Duck and Back Stab", KillKind.Brutal, "DuckNBackStab");
             Add("Slash Combo", KillKind.Brutal, "Slash_MidSection", combo: "Slash_Face");
             Add("Shove to Table (half cover)", KillKind.Brutal, "Shove_toTable_Stab_Quick", cover: true);

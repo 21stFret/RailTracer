@@ -45,8 +45,10 @@ namespace RailTracer
         {
             var want = heavy ? TakedownFor.Heavy : TakedownFor.Guard;
             var stance = crouched ? TakedownStance.Crouched : TakedownStance.Standing;
-            var set = takedowns.FindAll(t => t.kind == kind && t.attacker && t.victim && (t.target == want || t.target == TakedownFor.Any)
-                && (t.stance == stance || t.stance == TakedownStance.Any) && (!t.needsCover || cover));
+            bool Fits(Takedown t, bool anyStance) => t.kind == kind && t.attacker && t.victim && (t.target == want || t.target == TakedownFor.Any)
+                && (anyStance || t.stance == stance || t.stance == TakedownStance.Any) && (!t.needsCover || cover);
+            var set = takedowns.FindAll(t => Fits(t, false));
+            if (set.Count == 0) set = takedowns.FindAll(t => Fits(t, true)); // nothing for this stance: any of its kind
             if (set.Exists(t => t.needsCover)) set.RemoveAll(t => !t.needsCover);
             if (set.Count == 0) return null;
             last.TryGetValue(kind, out var prev);

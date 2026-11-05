@@ -5,9 +5,10 @@ using UnityEngine.UI;
 
 namespace RailTracer
 {
-    // The menus' screen layer (on their own canvas, so the HUD can hide under them): a shaded strip down the left
-    // with the "Red Line" title, a heading, the menu lines and a block of text; and for Journey, the car names
-    // under the real train with short links between them. The 3D train behind is Game's (GameFlow).
+    // The menus' screen layer (on their own canvas, so the HUD can hide under them), keeping the middle clear for
+    // the train: the "Red Line" title (or a screen's heading) top left, the menu lines bottom left with a block of
+    // text beside them; and for Journey, the car names under the real train with short links between them. No
+    // panel behind: the text has a dark glow. The 3D train behind is Game's (GameFlow).
     public partial class SkillHud
     {
         Canvas menuCanvas;
@@ -27,30 +28,31 @@ namespace RailTracer
             scaler.matchWidthOrHeight = 0.5f;
             var root = menuCanvas.transform;
 
-            // The shaded strip: the carriage still shows through it.
-            var shade = Rect("Shade", root, Vector2.zero, Vector2.zero, Vector2.zero);
-            shade.anchorMin = Vector2.zero;
-            shade.anchorMax = new Vector2(0f, 1f);
-            shade.pivot = Vector2.zero;
-            shade.sizeDelta = new Vector2(540f, 0f);
-            Img(shade, Alpha(Black, 0.62f), 0f);
-
-            var col = Rect("Menu", root, new Vector2(0f, 0.5f), new Vector2(72f, 0f), Vector2.zero);
-            var v = Column(col, new RectOffset(0, 0, 0, 0), 12f);
-            v.childAlignment = TextAnchor.MiddleLeft;
-            Fit(col);
-            menuTitle = Text(col, title, 104, TextAlignmentOptions.MidlineLeft, Vector2.zero, Vector2.zero);
+            var top = Rect("Title", root, new Vector2(0f, 1f), new Vector2(64f, -40f), Vector2.zero);
+            Column(top, new RectOffset(0, 0, 0, 0), 0f).childAlignment = TextAnchor.UpperLeft;
+            Fit(top);
+            menuTitle = Text(top, title, 104, TextAlignmentOptions.TopLeft, Vector2.zero, Vector2.zero);
             menuTitle.text = $"<color=#C8102E>RED</color> LINE"; // "Red" in blood red, "Line" in bone
             menuTitle.color = Bone;
             menuTitle.fontStyle = FontStyles.UpperCase;
-            menuHeading = Text(col, title, 40, TextAlignmentOptions.MidlineLeft, Vector2.zero, Vector2.zero);
+            Glow(menuTitle);
+            menuHeading = Text(top, title, 48, TextAlignmentOptions.TopLeft, Vector2.zero, Vector2.zero);
             menuHeading.fontStyle = FontStyles.UpperCase;
             menuHeading.color = Bone;
-            for (int i = 0; i < 6; i++) menuItems.Add(Label(col, "", 22, Grey, 1.5f));
-            menuInfo = Text(col, body, 17, TextAlignmentOptions.TopLeft, Vector2.zero, Vector2.zero);
+            Glow(menuHeading);
+
+            var bottom = Row("Menu", root, 56f);
+            Place(bottom, Vector2.zero, new Vector2(64f, 44f));
+            bottom.GetComponent<HorizontalLayoutGroup>().childAlignment = TextAnchor.LowerLeft;
+            Fit(bottom);
+            var col = Rect("Lines", bottom, Vector2.zero, Vector2.zero, Vector2.zero);
+            Column(col, new RectOffset(0, 0, 0, 0), 10f).childAlignment = TextAnchor.LowerLeft;
+            for (int i = 0; i < 6; i++) { var item = Label(col, "", 22, Grey, 1.5f); Glow(item); menuItems.Add(item); }
+            menuInfo = Text(bottom, body, 17, TextAlignmentOptions.BottomLeft, Vector2.zero, Vector2.zero);
             menuInfo.textWrappingMode = TextWrappingModes.Normal;
-            menuInfo.color = LockedText;
-            menuInfo.gameObject.AddComponent<LayoutElement>().preferredWidth = 420f;
+            menuInfo.color = Bone;
+            Glow(menuInfo);
+            menuInfo.gameObject.AddComponent<LayoutElement>().preferredWidth = 460f;
 
             for (int i = 0; i < Train.DemoCars; i++)
             {
