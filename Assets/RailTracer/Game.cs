@@ -22,7 +22,7 @@ namespace RailTracer
         public float lampInset = 0.3f;    // in from the wall, so the light isn't inside it
         public float lampSpread = 3.5f;   // dining car and baggage hold: lit lamps at least this far apart (m)
         public float tableLampIntensity = 0.6f, tableLampRange = 3f; // a lit table lamp (x lampIntensity)
-        public float sunDim = 0.03f;      // the directional light over the kit carriage: on, no shadows, very dim
+        public float sunDim = 0.02f;      // the directional light over the kit carriage: on, no shadows, very dim
         public Color lampColor = new Color(1f, 0.78f, 0.5f);
         public float lampIntensity = 3f, lampRange = 4.5f, lampAngle = 80f;
         // The legend reddens the carriage: lamp colour and brightness (x lampIntensity) at legend 0 (lampColor), 25, 50, 75 and 100,

@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 18.5 (5 Nov 2026).
+Last updated: Update 18.6 (5 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -24,6 +24,7 @@ Inspector; the saved scene matches these.
 | 18.3 (baggage hold props, smashed windows) | Done, not yet seen in Play mode: 6 FBX in Train Assets/Baggage (railtracer_baggage.py), 4 in Train Assets/Glass (railtracer_glass.py) |
 | 18.4 (the bar turned round) | Done, not yet seen in Play mode |
 | 18.5 (Journey: dive into the picked car) | Done, not yet seen in Play mode |
+| 18.6 (table lamp lights in their shades, sun 0.02) | Done, not yet seen in Play mode |
 | Still needed (art) | Rail grab, demon throw and crouched drag-down animations; knife mesh (on hold); unarmed finishers (skipped for now); a searching animation; more idles |
 | Next | Full audio pass |
 
@@ -41,9 +42,9 @@ Inspector; the saved scene matches these.
 | 4 | Baggage hold | Hand-made greybox: crate maze, mail sacks, the safe's cage, a few windows | 8, 2 heavies |
 | 5 | First class | Generated (seed 5005), the passenger layout | 9, 2 heavies |
 
-- **Sun:** the directional light stays on over the kit carriage, with no shadows and very dim (Game "Sun Dim", 0.03); the lamps light the car.
+- **Sun:** the directional light stays on over the kit carriage, with no shadows and very dim (Game "Sun Dim", 0.02); the lamps light the car.
 - **Map tiles:** '.' floor, '_' floor with plain wall (plain wall also behind 'l', 'x' and 'B'), 'S' seat, 'L' / 'l' luggage, 'W' wall, 'P' start. New: 'T' dining table (straight or L groups), 'O' round table (2x2), 'D' dining cart, 'B' bar, 'M' mail sack (seat rules: no walking through, leap over, half cover crouched); 'X' / 'x' crate (luggage rules: blocks walking and sight; leapt over); 'C' the safe's cage (blocks walking, leaps and snatches like a wall, but you can see through it). Chairs sit tucked under the tables and block nothing.
-- **Dining car furniture (models):** `Assets/KitScripts/railtracer_dining.py` (stylized-blender-assets, RailTracer profile) exports to `Train Assets/Dining`: Dining_Table_1, Dining_Table_2 (straight), Dining_Table_L (3 tiles), Dining_Table_Round (2x2), Dining_Cart, Bar_L (4 + 1). Linen cloths, dark wood pedestals, velvet chairs with their seats just under the table edge (reaching ~0.35 m into the open tiles around), brass table lamps (solid shades, Anchor_00 at the bulb) and place settings; the bar's panels and brass foot rail face the room, taps and a register on top, a back shelf of bottles on the wall behind the bartender. New materials Trn_Linen, Trn_Porcelain. The game fits each model to its group of tiles (GameFlow DiningModels: turned to the group, the bar mirrored if needed); any other shape falls back to the greybox.
+- **Dining car furniture (models):** `Assets/KitScripts/railtracer_dining.py` (stylized-blender-assets, RailTracer profile) exports to `Train Assets/Dining`: Dining_Table_1, Dining_Table_2 (straight), Dining_Table_L (3 tiles), Dining_Table_Round (2x2), Dining_Cart, Bar_L (4 + 1). Linen cloths, dark wood pedestals, velvet chairs with their seats just under the table edge (reaching ~0.35 m into the open tiles around), brass table lamps (solid shades; the game puts the bulb 1.01 m up over the lamp, Game "Table Lamp Height", since FBX anchor empties miss the axis conversion) and place settings; the bar's panels and brass foot rail face the room, taps and a register on top, a back shelf of bottles on the wall behind the bartender. New materials Trn_Linen, Trn_Porcelain. The game fits each model to its group of tiles (GameFlow DiningModels: turned to the group, the bar mirrored if needed); any other shape falls back to the greybox.
 - **Baggage hold props (models):** `Assets/KitScripts/railtracer_baggage.py` exports to `Train Assets/Baggage`: Crate_Stack_A / B / C (pine crates with dark frame boards, iron corner plates, labels, parcels; 1.35-1.74 m, full cover), Mail_Sacks_A / B (canvas sacks tied at the neck, under 0.65 m, half cover), Safe_Cage (3 x 2 tiles, back to the wall: iron bars on the three room sides, a beam top, a barred door with a brass padlock, the safe and two strongboxes inside). New materials Trn_Pine, Trn_Canvas. The game puts a crate stack on every crate tile and a sack pile on every sack tile (variant and quarter turn from the tile, so the same each run) and the cage on a 3 x 2 'C' block against a wall; other shapes keep the greybox.
 - **Greybox:** tables (cloth white, chairs tucked under; the round table a cloth cylinder with four chairs), the dining cart (a two-tray trolley), bar, sacks, two-crate stacks and the cage's beams are placeholder blocks the size of the real props; the dining car and baggage hold get Lamp_Wall lamps on their plain wall (one per up to 4 tiles of it) plus the dining tables' lamps; only some are lit, picked along the car so no two lit ones are within Game "Lamp Spread" (3.5 m); a lit table lamp is a warm point light (Table Lamp Intensity 0.6 x, range 3 m, no shadows). Every light has a lamp model.
 - **Every car** starts at legend 0 with cooldowns clear and the lamps warm. You get half your health back (15) at the start of each car, up to 30.

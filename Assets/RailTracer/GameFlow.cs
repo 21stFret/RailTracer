@@ -70,6 +70,7 @@ namespace RailTracer
         bool boardAsked;       // the board popup has shown for this visit to the glowing tile
         GameObject glow;
         int journeyPick = -1;
+        public float tableLampHeight = 1.01f; // a dining table lamp's bulb, above the floor
         public float journeyZoom = 55f; // Journey: how far the camera stands from the picked car
 
         static string SavePath => Path.Combine(Application.persistentDataPath, "save.json");
@@ -783,7 +784,16 @@ namespace RailTracer
                     go.transform.localPosition = pos;
                     go.transform.localRotation = rot;
                     if (mirror) go.transform.localScale = new Vector3(-1f, 1f, 1f);
-                    bulbs?.AddRange(go.GetComponentsInChildren<Transform>().Where(t => t.name.StartsWith("Anchor_"))); // table lamp bulbs
+                    // A table's lamp bulb, in the model's own space (the FBX's anchor empties don't get the meshes' axis
+                    // conversion, so they're not used): 1.01 m up in the lamp's shade, over the pivot tile (the 2-tile
+                    // table: between its tiles).
+                    if (bulbs != null && model.StartsWith("Dining_Table"))
+                    {
+                        var bulb = new GameObject("Lamp Bulb").transform;
+                        bulb.SetParent(go.transform, false);
+                        bulb.localPosition = new Vector3(model == "Dining_Table_2" ? 0.5f : 0f, tableLampHeight, 0f);
+                        bulbs.Add(bulb);
+                    }
                     done.UnionWith(group);
                 }
             return done;
