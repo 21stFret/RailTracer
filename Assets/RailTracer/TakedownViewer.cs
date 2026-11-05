@@ -55,6 +55,13 @@ namespace RailTracer
             StartCoroutine(Loop());
         }
 
+        // Back on their feet after the ragdoll: bones kinematic again, the animator posing them.
+        static void Stand(Animator a)
+        {
+            if (Game.HasRagdoll(a)) Game.SetLimp(a, false);
+            a.enabled = true;
+        }
+
         static Animator Spawn(GameObject model, RuntimeAnimatorController controller, string name)
         {
             var go = Instantiate(model);
@@ -85,6 +92,7 @@ namespace RailTracer
         IEnumerator Play(Takedown t)
         {
             foreach (Transform stain in bloodRoot) Destroy(stain.gameObject);
+            Stand(victim);
             attacker.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
             victim.transform.SetPositionAndRotation(t.victimOffset, Quaternion.Euler(0f, t.victimYaw, 0f));
             Override(attacker, "Finisher Attacker", t.attacker);
@@ -118,7 +126,10 @@ namespace RailTracer
                 yield return null;
             }
             if (!bled) Bleed(t);
-            for (float time = 0f; time < holdAfter && !jump; time += Time.deltaTime) yield return null;
+            // As in the game: the victim goes limp after the last clip (the ragdoll), so every takedown ends on the floor.
+            if (Game.HasRagdoll(victim)) { victim.enabled = false; Game.SetLimp(victim, true); }
+            for (float time = 0f; time < Mathf.Max(holdAfter, 1.6f) && !jump; time += Time.deltaTime) yield return null;
+            Stand(victim);
             attacker.speed = victim.speed = 1f;
             attacker.Play("Idle", 0, 0f);
             victim.Play("Idle", 0, 0f);

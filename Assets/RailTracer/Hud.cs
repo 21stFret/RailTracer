@@ -183,6 +183,27 @@ namespace RailTracer
         public void ToggleControls() => controls.SetActive(!controls.activeSelf);
         public void CloseControls() => controls.SetActive(false);
 
+        // The controls, for the H panel and the Options menu's controls page.
+        public static readonly (string[] keys, string what)[] ControlsList =
+        {
+            (new[] { "Click" }, "Move to a tile; with a kill selected, act on an enemy"),
+            (new[] { "1", "8" }, "Select a skill (again or Esc to cancel); 1 grabs or drops a body"),
+            (new[] { "Shift" }, "Hold and click: leap"),
+            (new[] { "Ctrl" }, "Hold and click: window hop"),
+            (new[] { "G" }, "Grab or drop a body"),
+            (new[] { "C" }, "Crouch: hidden behind seats, half speed"),
+            (new[] { "Space" }, "Hold: end turn"),
+            (new[] { "Z" }, "Undo (until you act, are seen or move a body)"),
+            (new[] { "V" }, "Hold: every enemy's senses"),
+            (new[] { "L" }, "The full log (paused while open)"),
+            (new[] { "B" }, "Blood tile outlines (off at first)"),
+            (new[] { "O" }, "Open or shut the window under the mouse"),
+            (new[] { "R" }, "Restart the car"),
+            (new[] { "Esc" }, "Pause; the main menu is in there"),
+            (new[] { "WASD" }, "Pan the camera (or right-drag); scroll zooms"),
+            (new[] { "H" }, "Close this"),
+        };
+
         public void Build(SkillDef[] table, int maxLegend, int moveRange, int shakenAt, int panickedAt, int brokenAt)
         {
             skills = table;
@@ -395,24 +416,7 @@ namespace RailTracer
             head.fontStyle = FontStyles.UpperCase;
             head.color = Bone;
             head.text = "Controls";
-            foreach (var (keys, what) in new[]
-            {
-                (new[] { "Click" }, "Move to a tile; with a kill selected, act on an enemy"),
-                (new[] { "1", "8" }, "Select a skill (again or Esc to cancel); 1 grabs or drops a body"),
-                (new[] { "Shift" }, "Hold and click: leap"),
-                (new[] { "Ctrl" }, "Hold and click: window hop"),
-                (new[] { "G" }, "Grab or drop a body"),
-                (new[] { "C" }, "Crouch: hidden behind seats, half speed"),
-                (new[] { "Space" }, "Hold: end turn"),
-                (new[] { "Z" }, "Undo (until you act, are seen or move a body)"),
-                (new[] { "V" }, "Hold: every enemy's senses"),
-                (new[] { "L" }, "The full log (paused while open)"),
-                (new[] { "B" }, "Blood tile outlines (off at first)"),
-                (new[] { "O" }, "Open or shut the window under the mouse"),
-                (new[] { "R" }, "Restart the carriage"),
-                (new[] { "WASD" }, "Pan the camera (or right-drag); scroll zooms"),
-                (new[] { "H" }, "Close this"),
-            })
+            foreach (var (keys, what) in ControlsList)
             {
                 var row = Row("Row", panel, 14f);
                 var caps = Row("Keys", row, 4f);
@@ -697,10 +701,11 @@ namespace RailTracer
             g.chipBg.color = combat ? Blood : white ? Bone : broken ? Alpha(Black, 0.7f) : Black;
             g.chipBorder.color = combat ? Blood : broken ? LockedBox : Bone;
             var ink = white ? Black : broken ? Grey : Bone;
-            bool freeze = icon == "freeze"; // a panicked freeze turn: "!", the same as startled (loses the turn)
-            bool glyph = (white && icon == null) || freeze;
+            // Startled, or a panicked freeze turn (it loses the turn the same way): the scared face. Searching: "?".
+            if (icon == "freeze" || (awareness == 2 && icon == null)) icon = "startled";
+            bool glyph = awareness == 1 && icon == null;
             g.glyph.gameObject.SetActive(glyph);
-            g.glyph.text = awareness == 1 && !freeze ? "?" : "!";
+            g.glyph.text = "?";
             g.glyph.color = ink;
             g.icon.enabled = !glyph && (broken || icon != null || awareness == 0);
             if (g.icon.enabled) g.icon.sprite = IconSprite(broken ? "flag" : icon ?? "ring");

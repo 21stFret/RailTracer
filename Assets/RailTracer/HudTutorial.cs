@@ -214,6 +214,7 @@ namespace RailTracer
         // ---- Pause menu ----
 
         RectTransform pause;
+        TMP_Text pauseHead;
         readonly List<TMP_Text> pauseItems = new List<TMP_Text>();
 
         void BuildOverlays(Transform root)
@@ -295,6 +296,7 @@ namespace RailTracer
             head.fontStyle = FontStyles.UpperCase;
             head.color = Bone;
             head.text = "Paused";
+            pauseHead = head;
             for (int i = 0; i < 5; i++) pauseItems.Add(Label(pause, "", 18, Bone, 1.5f));
             pause.gameObject.SetActive(false);
         }
@@ -370,7 +372,12 @@ namespace RailTracer
         // ---- Pause menu ----
 
         public bool PauseOpen => pause.gameObject.activeSelf;
-        public void ShowPause(bool on) => pause.gameObject.SetActive(on);
+        // The centre panel: the pause menu, or another short choice under its own heading (up to 5 lines).
+        public void ShowPause(bool on, string heading = "Paused")
+        {
+            pauseHead.text = heading;
+            pause.gameObject.SetActive(on);
+        }
 
         // items: the menu's lines; the one under the mouse is bone white, the rest grey. Returns its index, or -1.
         public int RefreshPause(string[] items, Vector2 screen)
@@ -378,6 +385,8 @@ namespace RailTracer
             int hit = -1;
             for (int i = 0; i < pauseItems.Count; i++)
             {
+                pauseItems[i].gameObject.SetActive(i < items.Length);
+                if (i >= items.Length) continue;
                 pauseItems[i].text = items[i];
                 bool over = RectTransformUtility.RectangleContainsScreenPoint(pauseItems[i].rectTransform, screen, null);
                 if (over) hit = i;

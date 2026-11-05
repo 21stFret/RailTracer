@@ -135,7 +135,9 @@ namespace RailTracer
 
         public readonly Tuning t;
         public readonly int W, H;
-        readonly bool[,] seat, solid, blankWall; // blankWall: a window-row tile with plain wall behind it, no window
+        readonly bool[,] seat, solid, blankWall, cage; // blankWall: a window-row tile with plain wall behind it, no window
+        // The walk-through car: no enemies, no turns, no move costs (it's never won or lost).
+        public bool freeWalk;
         readonly Random rng;
 
         public Cell player;
@@ -160,7 +162,9 @@ namespace RailTracer
 
         // Map: '.' floor, 'S' seat (half cover), 'L' luggage / 'W' wall (full cover), 'P' player start.
         // Edge rows are windows, middle-row ends are doors; on the edge rows '_' (floor) and 'l' (luggage) have a
-        // plain wall behind them instead of a window.
+        // plain wall behind them instead of a window. Dining car and baggage hold: 'T' table, 'B' bar, 'M' mail
+        // sack (seat rules); 'X' crate ('x' with plain wall behind; luggage rules); 'C' the safe's cage (blocks
+        // walking and leaps like a wall, but you can see through it).
         public Carriage(string[] map, Tuning t, int seed)
         {
             this.t = t;
@@ -169,13 +173,15 @@ namespace RailTracer
             seat = new bool[W, H];
             solid = new bool[W, H];
             blankWall = new bool[W, H];
+            cage = new bool[W, H];
             for (int y = 0; y < H; y++)
                 for (int x = 0; x < W; x++)
                 {
                     char ch = map[y][x];
-                    seat[x, y] = ch == 'S';
-                    solid[x, y] = ch == 'L' || ch == 'l' || ch == 'W';
-                    blankWall[x, y] = ch == '_' || ch == 'l';
+                    seat[x, y] = "STBM".IndexOf(ch) >= 0;
+                    solid[x, y] = "LlWXx".IndexOf(ch) >= 0;
+                    blankWall[x, y] = "_lx".IndexOf(ch) >= 0;
+                    cage[x, y] = ch == 'C';
                     if (ch == 'P') player = new Cell(x, y);
                 }
             hp = t.maxHp;
@@ -233,7 +239,9 @@ namespace RailTracer
         public bool InBounds(Cell c) => c.x >= 0 && c.y >= 0 && c.x < W && c.y < H;
         public bool IsSeat(Cell c) => InBounds(c) && seat[c.x, c.y];
         public bool IsSolid(Cell c) => InBounds(c) && solid[c.x, c.y];
-        public bool Blocked(Cell c) => !InBounds(c) || seat[c.x, c.y] || solid[c.x, c.y];
+        public bool IsCage(Cell c) => InBounds(c) && cage[c.x, c.y];
+        bool Tall(Cell c) => IsSolid(c) || IsCage(c); // stops leaps and snatches (the cage you can still see through)
+        public bool Blocked(Cell c) => !InBounds(c) || seat[c.x, c.y] || solid[c.x, c.y] || cage[c.x, c.y];
         public bool IsWindow(Cell c) => !Blocked(c) && (c.y == 0 || c.y == H - 1) && !blankWall[c.x, c.y];
         public bool BlankWall(Cell c) => InBounds(c) && blankWall[c.x, c.y];
         static int Dist2(Cell a, Cell b) => (a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y);
@@ -787,6 +795,7 @@ namespace RailTracer
             }
             foreach (var e in enemies)
                 if (e.InPlay && e.lastKnown.HasValue && path.Contains(e.lastKnown.Value)) Face(e, e.lastKnown.Value);
+            if (freeWalk) movesLeft = 999;
             return true;
         }
 
@@ -820,7 +829,7 @@ namespace RailTracer
                 double k = (double)i / n, x = a.x + (b.x - a.x) * k, y = a.y + (b.y - a.y) * k;
                 foreach (var dx in new[] { -r, r })
                     foreach (var dy in new[] { -r, r })
-                        if (IsSolid(new Cell((int)Math.Floor(x + dx + 0.5), (int)Math.Floor(y + dy + 0.5)))) return false;
+                        if (Tall(new Cell((int)Math.Floor(x + dx + 0.5), (int)Math.Floor(y + dy + 0.5)))) return false;
             }
             return true;
         }
@@ -1033,7 +1042,7 @@ namespace RailTracer
             {
                 if (!Bloodied(SkillId.Stealth)) return $"Snatch unlocks at {Def(SkillId.Stealth).bloodied} legend.";
                 var mid = Mid(player, e.pos);
-                if (IsSolid(mid)) return "Full cover blocks the snatch.";
+                if (Tall(mid)) return "Full cover blocks the snatch.";
                 if (EnemyAt(mid) != null) return "Someone is in the way.";
                 reach = true;
             }
@@ -1068,7 +1077,7 @@ namespace RailTracer
         // The tiles this kill can reach from where you stand (the grid's attack range).
         public bool InReach(Act a, Cell c) =>
             InBounds(c) && (Next(a, c) || (a == Act.QuietKill && Bloodied(SkillId.Stealth) && Manhattan(player, c) == 2
-                && (player.x == c.x || player.y == c.y) && !IsSolid(Mid(player, c))));
+                && (player.x == c.x || player.y == c.y) && !Tall(Mid(player, c))));
 
         // Two tiles straight out along a row or column: the snatch's range.
         bool IsSnatch(Enemy e) => Manhattan(player, e.pos) == 2 && (player.x == e.pos.x || player.y == e.pos.y);
@@ -1205,11 +1214,46 @@ namespace RailTracer
 
         public void EndPlayerTurn() => turnOver = true;
 
+        // ---- Commands: everything that changes the carriage, as text, so a save can replay it ----
+
+        // Every command, in order (a refused one can still write to the log). A fresh carriage with the same map, spawns, seed and health
+        // that runs them all ends up exactly here (the dice included), which is how a save is restored.
+        public readonly List<string> history = new List<string>();
+
+        public Enemy EnemyById(int id) => enemies.Find(e => e.id == id);
+
+        // "move x y", "leap x y", "hop x y", "throw x y", "act <Act> <enemy id>", "grab", "drop", "crouch", "undo",
+        // "end" (your turn), "enemy <id>" (its turn), "start" (your next turn). False if it did nothing.
+        public bool Do(string cmd)
+        {
+            var w = cmd.Split(' ');
+            Cell At() => new Cell(int.Parse(w[1]), int.Parse(w[2]));
+            bool ok = true;
+            switch (w[0])
+            {
+                case "move": ok = Move(At()); break;
+                case "leap": ok = Leap(At()); break;
+                case "hop": ok = Hop(At()); break;
+                case "throw": ok = Throw(At()); break;
+                case "act": ok = Perform((Act)Enum.Parse(typeof(Act), w[1]), EnemyById(int.Parse(w[2]))); break;
+                case "grab": ok = Grab(); break;
+                case "drop": ok = held != null; Drop(); break;
+                case "crouch": ToggleCrouch(); break;
+                case "undo": ok = CanReset; ResetTurn(); break;
+                case "end": EndPlayerTurn(); break;
+                case "enemy": EnemyAct(EnemyById(int.Parse(w[1]))); break;
+                case "start": StartPlayerTurn(); break;
+                default: throw new ArgumentException("Unknown command: " + cmd);
+            }
+            history.Add(cmd);
+            return ok;
+        }
+
         public void StartPlayerTurn()
         {
             acted = turnOver = leaped = hopped = spotted = noUndo = false;
             round++;
-            movesLeft = t.moveRange;
+            movesLeft = freeWalk ? 999 : t.moveRange;
             turnStart = player;
             if (leapWait > 0) leapWait--;
             if (railWait > 0) railWait--;
@@ -1229,7 +1273,8 @@ namespace RailTracer
                 if (e.InPlay && e.awareness != Awareness.Combat && e.awareness != Awareness.Startled && CanSee(e, player)) Fight(e);
         }
 
-        public bool Won => enemies.TrueForAll(e => e.state != EnemyState.Active);
+        public bool Won => !freeWalk && enemies.TrueForAll(e => e.state != EnemyState.Active);
+        public int Round => round; // player turns started (1 on the first)
         public bool Lost => hp <= 0;
         public bool Over => Won || Lost;
 

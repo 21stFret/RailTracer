@@ -536,7 +536,92 @@ namespace RailTracer
             Update16(t);
 
             Generated(t);
+            Update17(t);
             Scenarios(t);
+        }
+
+        // The demo train, the safe's cage, free walking, and a save replayed from its command history.
+        static void Update17(Tuning t)
+        {
+            int[] counts = { 6, 7, 7, 8, 9 };
+            for (int i = 0; i < Train.DemoCars; i++)
+            {
+                var car = Train.Demo(i);
+                var c = Train.Make(car, t, 1, t.maxHp);
+                Check(c.W == 26 && c.H == 5 && c.player == new Cell(0, 2), $"car {i + 1}: 26 x 5, you start at the door");
+                Check(c.enemies.Count == counts[i] && c.enemies.Count(e => e.tough) == (i == 0 ? 0 : i < 3 ? 1 : 2), $"car {i + 1}: {counts[i]} enemies, heavies from car 2");
+                Check(c.enemies.All(e => !c.Blocked(e.pos)) && c.enemies.Select(e => e.pos).Distinct().Count() == c.enemies.Count, $"car {i + 1}: everyone on free floor, one each");
+                // Every free tile reachable from the start (the far door too).
+                var seen = new HashSet<Cell> { c.player };
+                var todo = new Queue<Cell>(seen);
+                while (todo.Count > 0)
+                {
+                    var at = todo.Dequeue();
+                    foreach (var d in new[] { new Cell(1, 0), new Cell(-1, 0), new Cell(0, 1), new Cell(0, -1) })
+                    {
+                        var n = new Cell(at.x + d.x, at.y + d.y);
+                        if (c.InBounds(n) && !c.Blocked(n) && seen.Add(n)) todo.Enqueue(n);
+                    }
+                }
+                for (int x = 0; x < c.W; x++)
+                    for (int y = 0; y < c.H; y++)
+                        Check(c.Blocked(new Cell(x, y)) || seen.Contains(new Cell(x, y)), $"car {i + 1}: tile {x},{y} reachable");
+                Check(Enumerable.Range(0, c.W).Any(x => c.IsWindow(new Cell(x, 0))) && Enumerable.Range(0, c.W).Any(x => c.IsWindow(new Cell(x, 4))), $"car {i + 1}: windows on both sides");
+            }
+
+            // Dining tables are half cover (hide you crouched, can be leapt); crates block sight; the cage blocks
+            // walking and leaps but not sight.
+            {
+                var c = new Carriage(new[] { "P.T...", "......", "......" }, t, 1);
+                Check(c.IsSeat(new Cell(2, 0)) && c.Blocked(new Cell(2, 0)) && c.LineOfSight(new Cell(0, 0), new Cell(5, 0), false), "a table: seat rules");
+                c = new Carriage(new[] { "P.X...", "......" }, t, 1);
+                Check(!c.LineOfSight(new Cell(0, 0), new Cell(5, 0), false) && c.Blocked(new Cell(2, 0)), "a crate blocks sight and walking");
+                c = new Carriage(new[] { "P.C...", "......" }, t, 1);
+                var g = c.Spawn(4, 0, -1, 0, 0);
+                Check(c.Blocked(new Cell(2, 0)) && c.CanSee(g, c.player) && !c.CanLeapTo(new Cell(3, 0)), "the cage: seen through, not walked or leapt through");
+            }
+
+            // The walk-through car: nobody, never won, walk as far as you like.
+            {
+                var c = Train.Make(Train.WalkThrough(), t, 1, 20);
+                Check(c.enemies.Count == 0 && !c.Over && c.hp == 20, "walk-through: empty, not over, your health kept");
+                Check(c.Do("move 20 2") && c.player == new Cell(20, 2) && c.Do("move 25 2"), "walk-through: no move costs");
+            }
+
+            // A save: the same car, seed and health, replaying the history, lands exactly where the game was (the dice
+            // included), whatever was done.
+            for (int seed = 1; seed <= 40; seed++)
+            {
+                var car = Train.Demo(seed % Train.DemoCars);
+                var tt = new Tuning();
+                var live = Train.Make(car, tt, seed, 25);
+                var rng = new Random(seed);
+                for (int turn = 0; turn < 12 && !live.Over; turn++)
+                {
+                    for (int k = 0; k < 4; k++)
+                    {
+                        var to = new Cell(rng.Next(live.W), rng.Next(live.H));
+                        var near = live.enemies.Where(e => e.state == EnemyState.Active || e.state == EnemyState.Broken).OrderBy(e => Math.Abs(e.pos.x - live.player.x) + Math.Abs(e.pos.y - live.player.y)).FirstOrDefault();
+                        switch (rng.Next(6))
+                        {
+                            case 0: live.Do($"move {to.x} {to.y}"); break;
+                            case 1: live.Do($"leap {to.x} {to.y}"); break;
+                            case 2: live.Do("crouch"); break;
+                            case 3: if (near != null) live.Do($"act {(Act)rng.Next(3)} {near.id}"); break;
+                            case 4: live.Do(rng.Next(2) == 0 ? "grab" : "drop"); break;
+                            default: live.Do("undo"); break;
+                        }
+                    }
+                    live.Do("end");
+                    foreach (var e in live.enemies) if (!live.Over && (e.InPlay || live.Decide(e) == Intent.Flee)) live.Do($"enemy {e.id}");
+                    live.Do("start");
+                }
+                var back = Train.Make(car, tt, seed, 25);
+                foreach (var cmd in live.history) back.Do(cmd);
+                Check(back.log.SequenceEqual(live.log) && back.player == live.player && back.hp == live.hp && back.legend == live.legend
+                      && back.enemies.Select(e => (e.pos, e.state, e.terror, e.awareness, e.facing)).SequenceEqual(live.enemies.Select(e => (e.pos, e.state, e.terror, e.awareness, e.facing)))
+                      && back.bodies.Count == live.bodies.Count && back.stains.Count == live.stains.Count && back.Round == live.Round, $"save replay, seed {seed}");
+            }
         }
 
         // New trains: the right shape for the kit, every floor tile reachable, passengers on the floor and apart.

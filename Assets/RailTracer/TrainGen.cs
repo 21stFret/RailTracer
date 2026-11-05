@@ -14,7 +14,10 @@ namespace RailTracer
         public const int W = 26, H = 5, Aisle = 2;
 
         // spawns: x, y, facing x, facing y, (unused), tough. patrols: waypoints by spawn index.
-        public static (string[] map, int[][] spawns, Dictionary<int, Cell[]> patrols) Make(Random rng)
+        // enemies: how many (0 = 8 to 10 at random), toughs of them heavies; banks: the chance each seat bank is
+        // there; luggage: how many stacks (min, max exclusive). The defaults are the original generator.
+        public static (string[] map, int[][] spawns, Dictionary<int, Cell[]> patrols) Make(Random rng, int enemies = 0, int toughs = 2,
+            double banks = 0.85, int luggageMin = 3, int luggageMax = 6)
         {
             var g = new char[W, H];
             for (int x = 0; x < W; x++) for (int y = 0; y < H; y++) g[x, y] = '.';
@@ -25,7 +28,7 @@ namespace RailTracer
             {
                 for (int x = from; x <= to; x += 3)
                     foreach (int top in new[] { 0, Aisle + 1 })
-                        if (rng.NextDouble() < 0.85) g[x, top] = g[x, top + 1] = 'S';
+                        if (rng.NextDouble() < banks) g[x, top] = g[x, top + 1] = 'S';
             }
             Banks(2, part - 2);
             Banks(part + 1, W - 3);
@@ -37,7 +40,7 @@ namespace RailTracer
             var booths = new HashSet<int>();
             for (int k = 0; k + 1 < seatCols.Count; k += 2)
                 for (int x = seatCols[k] + 1; x < seatCols[k + 1]; x++) booths.Add(x);
-            var spots = Tiles(g, (x, y) => (y == 0 || y == H - 1) && x >= 4 && !booths.Contains(x)).OrderBy(_ => rng.Next()).Take(rng.Next(3, 6));
+            var spots = Tiles(g, (x, y) => (y == 0 || y == H - 1) && x >= 4 && !booths.Contains(x)).OrderBy(_ => rng.Next()).Take(rng.Next(luggageMin, luggageMax));
             foreach (var (x, y) in spots) g[x, y] = 'L';
 
             // Some stretches of outer wall have no windows: each run of window-row tiles between seats and walls is
@@ -70,7 +73,7 @@ namespace RailTracer
                     break;
                 }
             }
-            int want = rng.Next(8, 11);
+            int want = enemies > 0 ? enemies : rng.Next(8, 11);
             foreach (var (x, y) in Tiles(g, (x, y) => true).OrderBy(_ => rng.Next()))
             {
                 if (spawns.Count >= want) break;
@@ -81,7 +84,7 @@ namespace RailTracer
                 spawns.Add(new[] { x, y, fx, fy, 0, 0 });
                 placed.Add((x, y));
             }
-            foreach (int i in Enumerable.Range(0, spawns.Count).OrderBy(_ => rng.Next()).Take(2)) spawns[i][5] = 1; // two tough ones
+            foreach (int i in Enumerable.Range(0, spawns.Count).OrderBy(_ => rng.Next()).Take(toughs)) spawns[i][5] = 1; // the tough ones
 
             var map = new string[H];
             for (int y = 0; y < H; y++)

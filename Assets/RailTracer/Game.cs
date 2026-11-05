@@ -8,7 +8,7 @@ using UnityEngine.Rendering;
 namespace RailTracer
 {
     // White-box view of one carriage: primitives built at runtime, Unity UI for the HUD (Hud.cs).
-    public class Game : MonoBehaviour
+    public partial class Game : MonoBehaviour
     {
         public Tuning tuning = new Tuning();
         public SkillTable skillTable; // empty = Resources/SkillTable
@@ -55,31 +55,6 @@ namespace RailTracer
         float shownBlood;
         Light sun;
 
-        // The hand-made first carriage; New train swaps in a generated one (TrainGen).
-        static readonly string[] FirstMap =
-        {
-            "..S..S..S..S.WS..SL.S..SL.",
-            "..S..S..S..S.WS..S..S..S..",
-            "P.........................",
-            "..S..S..S..S.WS..S..S..S..",
-            "..S..S.LS..S.WS..S.LS..S..",
-        };
-
-        // x, y, facing x, facing y, (unused: was the family), tough (1 = wide long cone, closes in to melee, killable once Shaken)
-        static readonly int[][] FirstSpawns =
-        {
-            new[] { 3, 0, 0, 1, 0, 0 }, new[] { 6, 2, 1, 0, 0, 0 }, new[] { 9, 3, 0, -1, 1, 0 },
-            new[] { 10, 2, -1, 0, 1, 0 }, new[] { 12, 0, 0, 1, 0, 0 }, new[] { 15, 4, 0, -1, 1, 0 },
-            new[] { 18, 2, -1, 0, 0, 1 }, new[] { 21, 1, 0, 1, 1, 0 }, new[] { 24, 3, 0, -1, 0, 1 },
-        };
-
-        // Patrol routes by spawn index (waypoints walked in a loop); everyone else guards their spot, turning now and then.
-        static readonly Dictionary<int, Cell[]> FirstPatrols = new Dictionary<int, Cell[]>
-        {
-            [3] = new[] { new Cell(10, 2), new Cell(12, 2) },
-            [6] = new[] { new Cell(18, 2), new Cell(23, 2) },
-        };
-
         static readonly Color Floor = new Color(0.45f, 0.45f, 0.45f);
         static readonly Color SightCol = new Color(1f, 0.75f, 0.1f), HearCol = new Color(0.6f, 0.2f, 0.9f), ReactCol = new Color(0.9f, 0.15f, 0.1f), BloodEdge = new Color(1f, 0.12f, 0.08f);
         // The HUD palette on the floor: bone white for you and your targets, blood red for danger.
@@ -94,10 +69,7 @@ namespace RailTracer
         SkillId? selected; // hotkeys 1-8; no kill selected = clicking an enemy does nothing
         bool busy, showAllSenses, leaping, hopping, throwing, endShown;
         SkillHud hud;
-        string[] Map = FirstMap;
-        int[][] Spawns = FirstSpawns;
-        Dictionary<int, Cell[]> Patrols = FirstPatrols;
-        int carriageNo = 1;
+        string[] Map => car.map; // the car being played (GameFlow: which car, its seed, your health coming in)
         readonly Tutorial tut = new Tutorial();
         bool walkQueued;          // the opening walkthrough has had its chance this level
         Cell? reactTile;          // a reaction-fire tile on the current path preview (the Reaction fire card)
@@ -175,8 +147,6 @@ namespace RailTracer
         public float snatchTime = 0.25f;         // the snatch: the victim is yanked onto your tile this fast, then the stealth kill plays
         TakedownLibrary takedowns;               // Resources/Takedowns: the finishers kills choose from (else the old pair)
         // Kill cam: brutal kills (as long as the finisher), rail grabs and throws cut in close (no skipping: it always plays out).
-        const string KillCamKey = "RailTracer.KillCam";
-        static bool KillCamOn => PlayerPrefs.GetInt(KillCamKey, 1) == 1;
         public float killCamDistance = 1.9f, killCamHeight = 0.55f, sceneCamTime = 1.2f;
         public float killCamFlyIn = 0.45f, killCamPause = 0.2f, killCamFlyOut = 0.35f; // seconds (real time)
         [Range(0.1f, 1f)] public float killCamSlowMo = 1f, throwCamSlowMo = 0.5f;       // game speed during the shot
@@ -250,7 +220,21 @@ namespace RailTracer
                 sun.type = LightType.Directional;
                 sun.transform.rotation = Quaternion.Euler(50, -30, 0);
             }
-            Build();
+            hud.BuildMenu();
+            LoadSave();
+            ApplySettings();
+            // The start screen over the saved game (loaded and paused), or over an empty car 1.
+            bool resumed = false;
+            if (save.run != null)
+            {
+                try { ResumeSave(); resumed = true; }
+                catch (System.Exception ex) { Debug.LogWarning("Rail Tracer: the save didn't replay (" + ex.Message + "); starting fresh."); save.run = null; WriteSave(); }
+            }
+            if (!resumed) BuildEmptyBackdrop();
+            OpenMenu();
+            cam.transform.SetPositionAndRotation(MenuPose().pos, MenuPose().rot);
+            menuCamPos = cam.transform.position;
+            menuCamRot = cam.transform.rotation;
         }
 
         void Build()
@@ -282,19 +266,22 @@ namespace RailTracer
             bodyOffset.Clear();
             takedownVictim = null;
             selected = null;
-            c = new Carriage(Map, tuning, seed != 0 ? seed : Random.Range(1, int.MaxValue));
-            for (int i = 0; i < Spawns.Length; i++)
+            // The car fresh, or a save's turn replayed onto it (the same dice, so nothing rerolls).
+            c = Train.Make(car, tuning, rulesSeed, startHp);
+            if (replay != null) foreach (var cmd in replay) c.Do(cmd);
+            bool resumed = replay != null && replay.Count > 0;
+            replay = null;
+            if (phase == Phase.Play && !resumed)
             {
-                var s = Spawns[i];
-                c.Spawn(s[0], s[1], s[2], s[3], s[4], s[5] == 1, Patrols.TryGetValue(i, out var route) ? route.ToList() : null);
+                if (car.kind == CarKind.WalkThrough) hud.ShowCard("Between cars", "A quiet carriage.", "Walk on to the far door.", null, 2.5f, true);
+                else hud.ShowCard(CarLabel(), car.name, "Break their nerve.", null, 3f, true);
             }
-            c.NameEnemies();
-            hud.ShowCard($"Carriage {carriageNo}", "A carriage full of gunmen.", "Break their nerve.", null, 3f, true);
             endShown = false;
             walkQueued = false;
             taken.Clear();
             tut.Clear();
             if (hud.TutorialUp) hud.HideTutorial();
+            choice = null;
             hud.ShowPause(false);
             if (hud.LogOpen) hud.HideLog();
             Time.timeScale = 1f;
@@ -332,9 +319,10 @@ namespace RailTracer
                 }
                 marks[e] = (route, Line(Color.white, 0.05f));
             }
-            bool kitBuilt = useTrainKit && BuildKitCarriage(Resources.Load<TrainKit>("Kit/TrainKit"));
+            bool kitBuilt = useTrainKit && BuildKitCarriage(Resources.Load<TrainKit>("Kit/TrainKit"), c, Map, car.kind, root, true);
             if (!kitBuilt) BuildWhitebox();
             if (sun) sun.enabled = !kitBuilt;
+            BuildGlow();
             // Something for flying guts to land on (the tiles themselves have no colliders).
             var floor = new GameObject("Floor").AddComponent<BoxCollider>();
             floor.transform.SetParent(root);
@@ -363,6 +351,9 @@ namespace RailTracer
             ghostRenderers = null;
             ghostCell = pendingGhost = null;
             gone.Clear();
+            // A resumed save: rail-grab bodies hang out of their windows again, fleers are already gone.
+            foreach (var b in c.bodies) if (b.hung) hung.Add(b.who);
+            foreach (var e in c.enemies) if (e.state == EnemyState.Fled) gone.Add(e);
             if (!HasModels) return;
             playerBody.enabled = false;
             playerAnim = Character(characterModel, new AnimatorOverrideController(playerController)); // its "Finisher" takes each takedown's clip
@@ -431,17 +422,19 @@ namespace RailTracer
         // way TrainCarBuilder does: modules run along the shell's local +Z (walls from z = 0.5, end caps outside),
         // side A on local -X. The shell is turned so local +Z runs along the game's +X: cell (x, y) is at local
         // (y - 2, 0, x + 1). Checked z-fighting-free with the kit's joint_check (partition on a joint, racks clear).
-        bool BuildKitCarriage(TrainKit kit)
+        bool BuildKitCarriage(TrainKit kit, Carriage car, string[] map, CarKind kind, Transform parent, bool live)
         {
-            if (!kit || c.H != 5) return false; // the kit's interior is exactly 5 m (rows) wide
+            if (!kit || car.H != 5) return false; // the kit's interior is exactly 5 m (rows) wide
             var missing = new[] { "EndCap_Door", "Floor_1m", "Wall_1m_Solid", "Wall_1m_Pilaster", "Wall_1m_WindowSmall",
                 "Wall_2m_Window", "Partition_Door", "Seat_Double", "LuggageRack_Full_A", "LuggageRack_Full_B", "LuggageRack_Full_C" }
                 .Where(n => !kit.Get(n)).ToArray();
             if (missing.Length > 0) { Debug.LogWarning("Rail Tracer: train kit is missing " + string.Join(", ", missing) + "; using white-box."); return false; }
 
+            char At(int x, int y) => map[y][x];
+            bool Part(int x) => Enumerable.Range(0, car.H).All(y => y == car.H / 2 ? At(x, y) != 'W' : At(x, y) == 'W'); // walled off but for the aisle door
             var shell = new GameObject("Train Car").transform;
-            shell.SetParent(root, false);
-            shell.localPosition = new Vector3(-1f, 0f, -(c.H - 1) / 2f);
+            shell.SetParent(parent, false);
+            shell.localPosition = new Vector3(-1f, 0f, -(car.H - 1) / 2f);
             shell.localRotation = Quaternion.Euler(0f, 90f, 0f);
             GameObject Place(string module, float x, float z, float rotY)
             {
@@ -452,9 +445,9 @@ namespace RailTracer
             }
 
             Place("EndCap_Door", 0f, 0.25f, 0f);
-            Place("EndCap_Door", 0f, c.W + 0.75f, 180f);
+            Place("EndCap_Door", 0f, car.W + 0.75f, 180f);
             PlaceWalls(0, 0f, false);
-            PlaceWalls(c.H - 1, 180f, cutawayNearWall);
+            PlaceWalls(car.H - 1, 180f, cutawayNearWall);
             void PlaceWalls(int row, float rot, bool shadowOnly)
             {
                 // Seat columns get pilasters, the partition column a solid wall, every run of bay tiles windows.
@@ -469,7 +462,7 @@ namespace RailTracer
                 {
                     if (!kit.Get(module)) return; // older kit export without sashes: open windows
                     var sash = Place(module, 0f, z, rot);
-                    sashes.Add((sash.AddComponent<SlidingWindow>(), row, z - 1f, module.EndsWith("Large") ? 1f : 0.5f)); // shell z = game x + 1
+                    if (live) sashes.Add((sash.AddComponent<SlidingWindow>(), row, z - 1f, module.EndsWith("Large") ? 1f : 0.5f)); // shell z = game x + 1
                     Panel(sash);
                 }
                 void Panel(GameObject wall)
@@ -477,10 +470,10 @@ namespace RailTracer
                     if (!shadowOnly) return; // the camera side: still casts shadows, but you can see in
                     foreach (var r in wall.GetComponentsInChildren<Renderer>()) r.shadowCastingMode = ShadowCastingMode.ShadowsOnly;
                 }
-                for (int x = 0; x < c.W; x++)
+                for (int x = 0; x < car.W; x++)
                 {
                     var at = new Cell(x, row);
-                    string solo = c.IsSeat(at) ? "Wall_1m_Pilaster" : IsPartition(x) || c.BlankWall(at) ? "Wall_1m_Solid" : null;
+                    string solo = At(x, row) == 'S' ? "Wall_1m_Pilaster" : Part(x) || car.BlankWall(at) || car.IsCage(at) ? "Wall_1m_Solid" : null;
                     if (solo == null) { run++; continue; }
                     Flush();
                     Panel(Place(solo, 0f, s + 0.5f, rot));
@@ -491,56 +484,62 @@ namespace RailTracer
 
             // The camera-side wall is drawn only as shadow, so its windows get a pale glass-blue line along the floor
             // at the wall's foot, one per window opening.
-            foreach (var (_, row, x, half) in sashes)
+            foreach (var (_, row, x, half) in live ? sashes : new List<(SlidingWindow, int, float, float)>())
             {
-                if (row != c.H - 1) continue;
+                if (row != car.H - 1) continue;
                 var line = Line(new Color(0.65f, 0.82f, 1f, 0.22f), 0.04f); // faint: a hint, not a give-away
-                float z = -(c.H - 1) - 0.42f;
+                float z = -(car.H - 1) - 0.42f;
                 line.positionCount = 2;
                 line.SetPosition(0, new Vector3(x - half + 0.08f, 0.05f, z));
                 line.SetPosition(1, new Vector3(x + half - 0.08f, 0.05f, z));
             }
 
-            var seatColumns = Enumerable.Range(0, c.W).Where(x => Enumerable.Range(0, c.H).Any(y => c.IsSeat(new Cell(x, y)))).ToList();
+            var seatColumns = Enumerable.Range(0, car.W).Where(x => Enumerable.Range(0, car.H).Any(y => At(x, y) == 'S')).ToList();
             var seats = new List<Transform>();
             string[] racks = { "LuggageRack_Full_A", "LuggageRack_Full_B", "LuggageRack_Full_C" };
-            for (int x = 0; x < c.W; x++)
+            for (int x = 0; x < car.W; x++)
             {
                 float z = x + 1f;
                 Place("Floor_1m", 0f, z, 0f);
-                if (IsPartition(x)) Place("Partition_Door", 0f, z + 0.5f, 0f); // on the joint after its tile
-                for (int y = 0; y < c.H; y++)
+                if (Part(x)) Place("Partition_Door", 0f, z + 0.5f, 0f); // on the joint after its tile
+                for (int y = 0; y < car.H; y++)
                 {
-                    if (!c.IsSolid(new Cell(x, y))) continue;
+                    if (At(x, y) != 'L' && At(x, y) != 'l') continue;
                     // Luggage, and racks filling the partition's tile, set back clear of its trims and the window jambs.
-                    float inset = IsPartition(x) ? 0.03f : 0f, setBack = IsPartition(x) ? 0.16f : 0f;
-                    bool sideA = y < c.H / 2;
+                    float inset = Part(x) ? 0.03f : 0f, setBack = Part(x) ? 0.16f : 0f;
+                    bool sideA = y < car.H / 2;
                     Place(racks[(x * 7 + y) % 3], y - 2f + (sideA ? inset : -inset), z - setBack, sideA ? -90f : 90f); // open towards the aisle
                 }
                 int pair = seatColumns.IndexOf(x);
                 if (pair < 0) continue;
                 // Seat banks two rows wide, facing each other in pairs of columns (back at the FBX's local +Z).
                 float rot = pair % 2 == 0 ? 180f : 0f;
-                if (c.IsSeat(new Cell(x, 0)) && c.IsSeat(new Cell(x, 1))) { seats.Add(Place("Seat_Double", -1.45f, z, rot).transform); Lamp(x, true); }
-                if (c.IsSeat(new Cell(x, c.H - 2)) && c.IsSeat(new Cell(x, c.H - 1))) { seats.Add(Place("Seat_Double", 1.45f, z, rot).transform); Lamp(x, false); }
+                if (At(x, 0) == 'S' && At(x, 1) == 'S') { seats.Add(Place("Seat_Double", -1.45f, z, rot).transform); Lamp(x, true); }
+                if (At(x, car.H - 2) == 'S' && At(x, car.H - 1) == 'S') { seats.Add(Place("Seat_Double", 1.45f, z, rot).transform); Lamp(x, false); }
             }
-            ScatterProps(kit, seats);
+            if (kind == CarKind.Dining || kind == CarKind.Baggage)
+            {
+                Greybox(car, map, parent);
+                for (int x = 2; x < car.W - 1; x += 4) { Lamp(x, true); Lamp(x, false); } // no seat banks to hang them over
+            }
+            if (live && kind != CarKind.Dining && kind != CarKind.Baggage) ScatterProps(kit, seats);
             return true;
 
             // A wall lamp over a seat bank: a warm spotlight just above head height, set in from the wall and aimed
             // at the seat, plus the kit's lamp model if it has one (module name in lampModule).
             void Lamp(int x, bool sideA)
             {
-                float wall = sideA ? 0.5f : -(c.H - 1) - 0.5f;     // inner face of that side's wall (world z)
+                float wall = sideA ? 0.5f : -(car.H - 1) - 0.5f;     // inner face of that side's wall (world z)
                 float inward = sideA ? -1f : 1f;
-                var model = kit.Get(lampModule);
+                var model = kind == CarKind.Dining || kind == CarKind.Baggage ? null : kit.Get(lampModule); // greybox cars: bare lights
                 // With the kit's Lamp_Wall: mounted on the pilaster face (4 cm proud of the wall), light inside its
                 // shade (24 cm out, a little below the mount). Without it: a bare light lampInset from the wall.
                 var mount = new Vector3(x, lampHeight, wall + inward * 0.04f);
                 var pos = model ? mount + new Vector3(0f, -0.05f, inward * 0.24f) : new Vector3(x, lampHeight, wall + inward * lampInset);
+                if (!live) return; // the menu train lights itself by progress (MenuTrain)
                 var light = new GameObject("Seat Lamp").AddComponent<Light>();
                 lamps.Add(light);
-                light.transform.SetParent(root, false);
+                light.transform.SetParent(parent, false);
                 light.transform.localPosition = pos;
                 light.transform.localRotation = Quaternion.Euler(lampTilt, sideA ? 180f : 0f, 0f); // tipped down, facing into the car
                 light.type = LightType.Spot;
@@ -551,7 +550,7 @@ namespace RailTracer
                 light.innerSpotAngle = lampAngle * 0.5f;
                 light.shadows = lampShadows ? LightShadows.Soft : LightShadows.None;
                 if (!model) return;
-                var lamp = Instantiate(model, root);
+                var lamp = Instantiate(model, parent);
                 lamp.transform.localPosition = mount;
                 lamp.transform.localRotation = Quaternion.LookRotation(new Vector3(0f, 0f, inward)); // facing into the car
                 foreach (var r in lamp.GetComponentsInChildren<Renderer>()) r.shadowCastingMode = ShadowCastingMode.Off; // don't block its own light
@@ -844,10 +843,6 @@ namespace RailTracer
             }
         }
 
-        // A column walled off except for the aisle doorway.
-        bool IsPartition(int x) =>
-            !c.IsSolid(new Cell(x, c.H / 2)) && Enumerable.Range(0, c.H).All(y => y == c.H / 2 || c.IsSolid(new Cell(x, y)));
-
         // Fallback when the kit isn't there: grey floor, brown seat blocks, dark luggage and walls.
         void BuildWhitebox()
         {
@@ -856,7 +851,7 @@ namespace RailTracer
                 for (int y = 0; y < c.H; y++)
                 {
                     if (c.IsSeat(new Cell(x, y))) Box(new Vector3(x, 0.3f, -y), new Vector3(0.9f, 0.6f, 0.9f), new Color(0.35f, 0.2f, 0.12f), solid: true);
-                    if (c.IsSolid(new Cell(x, y))) Box(new Vector3(x, 0.8f, -y), new Vector3(0.95f, 1.6f, 0.95f), new Color(0.2f, 0.2f, 0.25f), solid: true);
+                    if (c.IsSolid(new Cell(x, y)) || c.IsCage(new Cell(x, y))) Box(new Vector3(x, 0.8f, -y), new Vector3(0.95f, 1.6f, 0.95f), new Color(0.2f, 0.2f, 0.25f), solid: true);
                 }
             var wall = new Color(0.25f, 0.25f, 0.3f);
             Box(new Vector3((c.W - 1) / 2f, 0.5f, 0.6f), new Vector3(c.W, 1f, 0.15f), wall, solid: true);
@@ -903,11 +898,11 @@ namespace RailTracer
         // empty hat hooks fell back to opaque white fedoras).
         static Material Transparent(Color col) => new Material(Shader.Find("Sprites/Default")) { color = col };
 
-        Renderer Box(Vector3 pos, Vector3 scale, Color col, PrimitiveType type = PrimitiveType.Cube, bool solid = false)
+        Renderer Box(Vector3 pos, Vector3 scale, Color col, PrimitiveType type = PrimitiveType.Cube, bool solid = false, Transform parent = null)
         {
             var go = GameObject.CreatePrimitive(type);
             if (!solid) Destroy(go.GetComponent<Collider>()); // solid ones keep theirs for flying guts
-            go.transform.SetParent(root);
+            go.transform.SetParent(parent ? parent : root, false);
             go.transform.localPosition = pos;
             go.transform.localScale = scale;
             var r = go.GetComponent<Renderer>();
@@ -933,21 +928,34 @@ namespace RailTracer
         {
             var kb = Keyboard.current;
             var mouse = Mouse.current;
+            // The menus own the camera and the input; the live car carries on behind them (paused: nobody acts).
+            if (phase != Phase.Play)
+            {
+                if (phase == Phase.Menu) MenuStep(kb, mouse);
+                kb = null;
+                mouse = null;
+            }
             // Debug: F9 forgets all tutorial progress and restarts the carriage, as on a new save.
-            if (kb != null && kb.f9Key.wasPressedThisFrame) { Tutorial.ResetAll(); StopAllCoroutines(); Build(); }
-            // The intro / end card swallows input: any key or click fades a dismissable one; R always restarts.
-            // A tutorial card or the pause menu pauses the game: only their own buttons work.
-            bool carded = hud.CardUp;
+            if (kb != null && kb.f9Key.wasPressedThisFrame) { Tutorial.ResetAll(); RestartCar(); }
+            // The intro / end card swallows input: any key or click fades a dismissable one; R always restarts. The
+            // win card waits for Space held, then you walk out. A tutorial card or a centre panel (pause, board,
+            // demo complete) pauses the game: only their own buttons work.
+            bool carded = kb != null && hud.CardUp;
             if (carded)
             {
-                bool any = (kb != null && kb.anyKey.wasPressedThisFrame) || (mouse != null && (mouse.leftButton.wasPressedThisFrame || mouse.rightButton.wasPressedThisFrame));
-                if (kb != null && kb.rKey.wasPressedThisFrame) { StopAllCoroutines(); Build(); }
-                else if (kb != null && kb.nKey.wasPressedThisFrame && c.Over) NewTrain();
+                bool any = kb.anyKey.wasPressedThisFrame || (mouse != null && (mouse.leftButton.wasPressedThisFrame || mouse.rightButton.wasPressedThisFrame));
+                if (kb.rKey.wasPressedThisFrame) RestartCar();
+                else if (kb.nKey.wasPressedThisFrame && c.Won && !busy) { hud.HideCard(); StartCoroutine(ExitCar()); } // debug: straight out
+                else if (endShown && c.Won && !busy)
+                {
+                    if (!kb.spaceKey.isPressed) winHeld = 0f;
+                    else if ((winHeld += Time.unscaledDeltaTime) >= endTurnHold) { winHeld = -1f; hud.HideCard(); StartCoroutine(ExitCar()); }
+                }
                 else if (any && hud.CardDismissable) hud.HideCard();
                 kb = null;
                 mouse = null;
             }
-            else if (TutorialStep(kb, mouse) || PauseStep(kb, mouse) || LogStep(kb, mouse))
+            else if (phase == Phase.Play && (TutorialStep(kb, mouse) || ChoiceStep(kb, mouse) || LogStep(kb, mouse)))
             {
                 kb = null;
                 mouse = null;
@@ -955,8 +963,7 @@ namespace RailTracer
             if (kb == null) spaceHeld = -1f;
             if (kb != null)
             {
-                if (kb.rKey.wasPressedThisFrame) { StopAllCoroutines(); Build(); }
-                if (kb.nKey.wasPressedThisFrame && c.Over) NewTrain(); // the run is over: on to a fresh carriage
+                if (kb.rKey.wasPressedThisFrame) RestartCar();
                 var digits = new[] { kb.digit1Key, kb.digit2Key, kb.digit3Key, kb.digit4Key, kb.digit5Key, kb.digit6Key, kb.digit7Key, kb.digit8Key };
                 for (int i = 0; i < digits.Length; i++)
                     if (digits[i].wasPressedThisFrame) Select((SkillId)i);
@@ -964,23 +971,23 @@ namespace RailTracer
                 {
                     if (hud.ControlsOpen) hud.CloseControls();
                     else if (selected != null) selected = null;
-                    else if (!busy) hud.ShowPause(true); // nothing to cancel: pause
+                    else if (!busy) OpenChoice("pause"); // nothing to cancel: pause
                 }
                 if (kb.hKey.wasPressedThisFrame) hud.ToggleControls();
                 if (kb.lKey.wasPressedThisFrame) { hud.ShowLog(c.log); Time.timeScale = 0f; }
-                if (kb.gKey.wasPressedThisFrame && !busy) { if (c.held != null) c.Drop(); else c.Grab(); }
+                if (kb.gKey.wasPressedThisFrame && !busy && !walking) c.Do(c.held != null ? "drop" : "grab");
                 showAllSenses = kb.vKey.isPressed;
                 if (kb.zKey.wasPressedThisFrame && !busy && c.CanReset)
                 {
-                    c.ResetTurn();
+                    c.Do("undo");
                     playerRoute.Clear();
                     playerShown = World(c.player); // undo snaps back rather than walking
                 }
-                if (kb.cKey.wasPressedThisFrame && !busy) c.ToggleCrouch();
+                if (kb.cKey.wasPressedThisFrame && !busy) c.Do("crouch");
                 if (kb.bKey.wasPressedThisFrame) bloodOutlines = !bloodOutlines;
                 if (kb.oKey.wasPressedThisFrame && mouse != null) WindowUnderMouse(mouse.position.ReadValue())?.Toggle();
                 // End turn: hold Space (a tap does nothing, so it can't end a turn by accident).
-                if (kb.spaceKey.wasPressedThisFrame && !busy && !c.Over) spaceHeld = 0f;
+                if (kb.spaceKey.wasPressedThisFrame && !busy && !c.Over && !walking) spaceHeld = 0f;
                 if (spaceHeld >= 0f)
                 {
                     if (!kb.spaceKey.isPressed || busy || c.Over) spaceHeld = -1f;
@@ -988,10 +995,11 @@ namespace RailTracer
                 }
             }
 
-            MoveCamera(kb, mouse); // with input held back this only follows the camera target (tutorial pans)
+            if (phase == Phase.Play) MoveCamera(kb, mouse); // with input held back this only follows the camera target (tutorial pans)
+            WalkStep();
             if (selected.HasValue && !c.Has(selected.Value)) selected = null; // lost the legend for it
-            leaping = selected == SkillId.Leap || (kb != null && kb.shiftKey.isPressed);
-            hopping = selected == SkillId.Hop || (kb != null && kb.ctrlKey.isPressed);
+            leaping = !walking && (selected == SkillId.Leap || (kb != null && kb.shiftKey.isPressed));
+            hopping = !walking && (selected == SkillId.Hop || (kb != null && kb.ctrlKey.isPressed));
             throwing = selected == SkillId.Throw;
             var screen = mouse != null ? mouse.position.ReadValue() : Vector2.zero;
             bool overHud = mouse != null && hud.Blocks(screen);
@@ -1006,7 +1014,7 @@ namespace RailTracer
                 if (throwing)
                 {
                     var thrown = c.held;
-                    used = thrown != null && c.Throw(hover.Value);
+                    used = thrown != null && c.Do($"throw {hover.Value.x} {hover.Value.y}");
                     if (used && KillCamOn && anims.TryGetValue(thrown.who, out var ta))
                     {
                         var flat = cam.transform.forward;
@@ -1016,7 +1024,7 @@ namespace RailTracer
                 }
                 else if (target != null)
                 {
-                    if (kill.HasValue && c.Perform(kill.Value, target))
+                    if (kill.HasValue && c.Do($"act {kill.Value} {target.id}"))
                     {
                         used = true;
                         pendingAct = kill;
@@ -1030,9 +1038,9 @@ namespace RailTracer
                         }
                     }
                 }
-                else if (leaping) used = c.Leap(hover.Value);
-                else if (hopping) used = c.Hop(hover.Value);
-                else if (c.Move(hover.Value)) Follow(playerRoute, c.walked);
+                else if (leaping) used = c.Do($"leap {hover.Value.x} {hover.Value.y}");
+                else if (hopping) used = c.Do($"hop {hover.Value.x} {hover.Value.y}");
+                else if (c.Do($"move {hover.Value.x} {hover.Value.y}")) Follow(playerRoute, c.walked);
                 if (used) selected = null;
                 if (paired) StartCoroutine(PairedKill(target, kill.Value)); // the turn only ends when you end it
             }
@@ -1045,17 +1053,22 @@ namespace RailTracer
             Sync();
             Tags();
             Tickets();
-            hud.SetEndTurn(spaceHeld >= 0f ? spaceHeld / endTurnHold : 0f, !busy && !c.Over);
+            hud.SetEndTurn(spaceHeld >= 0f ? spaceHeld / endTurnHold : 0f, !busy && !c.Over && !walking);
             var mode = Mode();
             hud.Refresh(c, selected ?? (leaping ? SkillId.Leap : hopping ? SkillId.Hop : (SkillId?)null), hudSlot, mode?.name, mode?.hint,
                 c.log.Skip(Mathf.Max(0, c.log.Count - 8)).ToList());
             // The level is won the moment nobody is left fighting; anyone broken and fleeing still runs out first.
             if (c.Won && !busy && !endShown && c.enemies.Exists(e => e.state == EnemyState.Broken && e.fleeing)) StartCoroutine(FleersOut());
-            if (c.Over && !busy && !endShown && !tut.Active)
+            if (c.Over && !busy && !endShown && !tut.Active && phase == Phase.Play)
             {
                 endShown = true;
-                if (c.Won) hud.ShowCard($"Carriage {carriageNo} cleared", "The assassin washes up", "and steps out as the conductor.", "R to ride again  /  N for a new train", 0f, true, TicketStates());
-                else hud.ShowCard($"Carriage {carriageNo}", "The demon was only", "human after all.", "R to retry  /  N for a new train", 0f, false);
+                winHeld = 0f;
+                if (c.Won)
+                {
+                    RecordClear();
+                    hud.ShowCard($"{CarLabel()} cleared", "The assassin washes up", "and steps out as the conductor.", "Hold Space to walk on  /  R to ride again", 0f, false, TicketStates());
+                }
+                else hud.ShowCard(CarLabel(), "The demon was only", "human after all.", "R to retry", 0f, false);
             }
         }
 
@@ -1081,7 +1094,7 @@ namespace RailTracer
             if (!walkQueued && !hud.CardVisible)
             {
                 walkQueued = true;
-                if (tut.WantsWalkthrough) tut.QueueWalkthrough(WalkTargets, WalkFocus);
+                if (tut.WantsWalkthrough && !walking) tut.QueueWalkthrough(WalkTargets, WalkFocus);
             }
             if (!busy && !tut.Active) Poll();
             var card = tut.Step();
@@ -1189,24 +1202,6 @@ namespace RailTracer
             if (Mode() != null) tut.Once("targeting", () => new[] { hud.BannerRect }, null);
         }
 
-        // The pause menu (Esc with nothing to cancel): Resume, Tutorial tips on/off, Restart. True while it's open.
-        bool PauseStep(Keyboard kb, Mouse mouse)
-        {
-            if (!hud.PauseOpen) return false;
-            var at = mouse != null ? mouse.position.ReadValue() : Vector2.zero;
-            int hit = hud.RefreshPause(new[] { "Resume", $"Tutorial tips: {(tut.Skipped ? "Off" : "On")}", $"Kill cam: {(KillCamOn ? "On" : "Off")}", "Restart", "New train" }, at);
-            if (kb != null && kb.escapeKey.wasPressedThisFrame) hud.ShowPause(false);
-            else if (mouse != null && mouse.leftButton.wasPressedThisFrame)
-            {
-                if (hit == 0) hud.ShowPause(false);
-                else if (hit == 1) tut.SetTips(tut.Skipped);
-                else if (hit == 2) { PlayerPrefs.SetInt(KillCamKey, KillCamOn ? 0 : 1); PlayerPrefs.Save(); }
-                else if (hit == 3) { StopAllCoroutines(); Build(); }
-                else if (hit == 4) NewTrain();
-            }
-            return true;
-        }
-
         // The full log (L): the game is paused while it's open; the wheel or arrow keys scroll it, L or Esc closes it.
         bool LogStep(Keyboard kb, Mouse mouse)
         {
@@ -1222,15 +1217,6 @@ namespace RailTracer
                 + (kb.pageUpKey.wasPressedThisFrame ? 300f : kb.pageDownKey.wasPressedThisFrame ? -300f : 0f);
             hud.ScrollLog(scroll);
             return true;
-        }
-
-        // A freshly generated carriage and passengers (TrainGen), as the next carriage of the run.
-        void NewTrain()
-        {
-            (Map, Spawns, Patrols) = TrainGen.Make(new System.Random(seed != 0 ? seed + carriageNo : Random.Range(1, int.MaxValue)));
-            carriageNo++;
-            StopAllCoroutines();
-            Build();
         }
 
         // The banner while a skill waits for its target (selected, or Shift / Ctrl held). Null when nothing is.
@@ -1292,10 +1278,10 @@ namespace RailTracer
         // (again to deselect). Greyed-out skills (locked, or unusable right now) and Dread (passive) do nothing.
         void Select(SkillId s)
         {
-            if (c == null || s == SkillId.Dread) return;
+            if (c == null || s == SkillId.Dread || walking) return; // the walk-through car: just walking
             if (selected == s) { selected = null; return; }
             if (busy || !c.Usable(s)) return; // greyed out: nothing to do with it right now
-            if (s == SkillId.Drag) { if (c.held != null) c.Drop(); else c.Grab(); return; }
+            if (s == SkillId.Drag) { c.Do(c.held != null ? "drop" : "grab"); return; }
             selected = s;
         }
 
@@ -1483,12 +1469,16 @@ namespace RailTracer
                 if (!bled) KillBlood(victim, act, playerFacing, Chest(va));
                 if (!anchor.HasValue) playerShown = to;
                 var slideFrom = playerShown;
-                if (cam) yield return FlyOut();
-                if (entry != null && entry.victimFallsAfter) StartCoroutine(Topple(va.transform, playerFacing)); // still on their feet
-                // Hold on the body, easing onto where the rules have you, still facing it. The corpse slides with it so
-                // its hips end over the centre of the body's tile (the finisher's travel is in the pose, not the transform).
+                // Every takedown ends with the victim on the floor: limp after the last clip (a ragdoll), falling as
+                // the camera flies out. Without the ragdoll bones: the old topple for a finisher that leaves them up.
                 var bodyTile = c.bodies.Find(b => b.who == victim)?.pos ?? victim.pos;
-                var hips = va.GetBoneTransform(HumanBodyBones.Hips);
+                bool limp = HasRagdoll(va);
+                if (limp) StartCoroutine(Ragdoll(victim, va, bodyTile));
+                else if (entry != null && entry.victimFallsAfter) StartCoroutine(Topple(va.transform, playerFacing)); // still on their feet
+                if (cam) yield return FlyOut();
+                // Hold on the body, easing onto where the rules have you, still facing it. Without the ragdoll the corpse
+                // slides with it so its hips end over the centre of the body's tile (the ragdoll does that once it settles).
+                var hips = limp ? null : va.GetBoneTransform(HumanBodyBones.Hips);
                 Vector3 OffCentre()
                 {
                     if (!hips) return Vector3.zero;
@@ -1755,7 +1745,7 @@ namespace RailTracer
             busy = true;
             Poll(); // cards from the player's move first
             while (tut.Active) yield return null;
-            c.EndPlayerTurn();
+            c.Do("end");
             foreach (var e in c.enemies)
             {
                 if (c.Over) break;
@@ -1763,7 +1753,7 @@ namespace RailTracer
                 if (followCamera) camTarget = shown[e];
                 yield return new WaitForSeconds(enemyStepDelay);
                 bool fleeing = c.Decide(e) == Intent.Flee;
-                c.EnemyAct(e);
+                c.Do($"enemy {e.id}");
                 if (!routes.TryGetValue(e, out var route)) routes[e] = route = new Queue<Vector3>();
                 if (e.walked != null)
                 {
@@ -1782,7 +1772,8 @@ namespace RailTracer
                 Poll(); // a card pauses the turn before the next enemy acts
                 while (tut.Active) yield return null;
             }
-            c.StartPlayerTurn();
+            c.Do("start");
+            AutoSave(); // after the turn's results, so reloading never rerolls a shot
             if (followCamera) { yield return new WaitForSeconds(enemyStepDelay); camTarget = playerShown; }
             busy = false;
         }
@@ -1798,7 +1789,7 @@ namespace RailTracer
                 foreach (var e in fleers)
                 {
                     if (followCamera) camTarget = shown[e];
-                    c.EnemyAct(e);
+                    c.Do($"enemy {e.id}");
                     if (!routes.TryGetValue(e, out var route)) routes[e] = route = new Queue<Vector3>();
                     if (e.walked != null) { Follow(route, e.walked); e.walked = null; }
                     while (route.Count > 0 || (shown[e] - World(e.pos)).sqrMagnitude > 1e-3f)
@@ -2486,6 +2477,7 @@ namespace RailTracer
         {
             if (!corpses.Add(e) || pairedKills.Contains(e)) return;
             if (hung.Contains(e)) HangOut(e, a);
+            else if (HasRagdoll(a)) StartCoroutine(Ragdoll(e, a, c.bodies.Find(b => b.who == e)?.pos ?? e.pos));
             else StartCoroutine(Topple(a.transform, shown[e] - playerShown));
         }
 
@@ -2515,6 +2507,40 @@ namespace RailTracer
             else t.localRotation = Quaternion.AngleAxis(railLean, axis) * t.localRotation;
             bodyCell[body] = body.pos; // stays put (SyncBodies)
             bodyOffset[e] = t.localPosition - World(body.pos);
+        }
+
+        // Ragdoll bones (added to the character by Editor/RagdollSetup: kinematic, colliders off, on Ignore Raycast so
+        // blood casts and clicks pass through). A body goes limp and falls; once it has settled (ragdollSettle) it
+        // freezes in that pose and slides so its hips sit over the centre of its tile.
+        public float ragdollSettle = 1.6f;
+        internal static bool HasRagdoll(Animator a) => a && a.GetComponentInChildren<Rigidbody>(true);
+
+        internal static void SetLimp(Animator a, bool limp)
+        {
+            foreach (var rb in a.GetComponentsInChildren<Rigidbody>(true))
+            {
+                rb.isKinematic = !limp;
+                if (limp) rb.linearVelocity = rb.angularVelocity = Vector3.zero;
+            }
+            foreach (var col in a.GetComponentsInChildren<Collider>(true)) col.enabled = limp; // the character has only the ragdoll's
+        }
+
+        IEnumerator Ragdoll(Enemy e, Animator a, Cell tile)
+        {
+            var hips = a.GetBoneTransform(HumanBodyBones.Hips);
+            a.enabled = false; // the pose is the physics' now
+            SetLimp(a, true);
+            for (float time = 0f; time < ragdollSettle; time += Time.deltaTime)
+            {
+                yield return null;
+                if (!a) yield break; // restarted mid-fall
+            }
+            SetLimp(a, false); // frozen where it fell (the animator stays off)
+            if (!hips) yield break;
+            var d = World(tile) - root.InverseTransformPoint(hips.position);
+            d.y = 0f;
+            if (bodyOffset.ContainsKey(e)) bodyOffset[e] += d; // SyncBodies eases the corpse over
+            else a.transform.localPosition += d;
         }
 
         IEnumerator Topple(Transform t, Vector3 away)
