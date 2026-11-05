@@ -27,7 +27,21 @@ namespace RailTracer
         public Vector3 victimOffset = new Vector3(0f, 0f, 1.5f); // where the victim stands, in your space (metres at full size; scaled with the characters). The pack's pairs: 1.5 m apart, facing
         public float victimYaw = 180f;                           // the victim's facing relative to yours: 180 = facing you
         public float speed = 1f;                                 // playback speed of both clips
-        [Range(0f, 1f)] public float bloodAt = 0.5f;             // point in the clip where the blood flies
+        [Range(0f, 1f)] public float bloodAt = 0.5f;             // point in the clip where the blood flies (and the stains land)
+        [Tooltip("More strikes: extra splashes at these points, 0-1 over the WHOLE takedown (both clips of a combo). " +
+                 "Blood At still lays the stains. Set them in the animation test scene (N adds one at the current frame).")]
+        public List<float> extraBlood = new List<float>();
+
+        // How far through the whole takedown (0-1, both clips of a combo) a point in its first or second clip is.
+        public float Overall(bool second, float k)
+        {
+            float l1 = attacker ? attacker.length : 1f;
+            bool chained = attacker2 && victim2;
+            if (!chained) return k;
+            float l2 = attacker2.length * (1f - comboStart);
+            float total = comboFrom * l1 + l2;
+            return total <= 0f ? k : (second ? comboFrom * l1 + k * l2 : k * l1) / total;
+        }
         public Vector3 camOffset;                                // kill cam position in the pair's space (zero = low, close, side-on)
     }
 

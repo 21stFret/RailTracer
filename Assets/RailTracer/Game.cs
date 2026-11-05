@@ -1533,6 +1533,7 @@ namespace RailTracer
                 float length = playerAnim.GetCurrentAnimatorStateInfo(0).length;
                 float length2 = 0f;
                 bool second = false, bled = false;
+                var struck = new HashSet<int>(); // extra blood points already fired
                 // Handing back to idle: once the last clip starts blending out, your hips stay where the finisher left
                 // them (the transform follows the pose), then you slide onto the tile the rules gave you.
                 var playerHips = playerAnim.GetBoneTransform(HumanBodyBones.Hips);
@@ -1555,6 +1556,18 @@ namespace RailTracer
                     else if (time >= length2) break;
                     float t = second ? time / length2 : time / length;
                     if ((!chained || second) && !bled && t >= bloodAt) { KillBlood(victim, act, playerFacing, Chest(va)); bled = true; }
+                    if (entry != null && blood)
+                    {
+                        // More strikes: a splash at each of the entry's extra points over the whole takedown.
+                        float whole = entry.Overall(second, t);
+                        for (int s = 0; s < entry.extraBlood.Count; s++)
+                            if (!struck.Contains(s) && whole >= entry.extraBlood[s])
+                            {
+                                struck.Add(s);
+                                var chestNow = Chest(va) ?? va.transform.localPosition + Vector3.up * FigureHeight * 0.6f;
+                                blood.Splash(root, chestNow, playerFacing, brutal);
+                            }
+                    }
                     if (entry != null && playerHips && (anchor.HasValue || ((!chained || second) && t > 0.3f && playerAnim.IsInTransition(0))))
                     {
                         var h = root.InverseTransformPoint(playerHips.position) - playerShown;
@@ -1575,9 +1588,9 @@ namespace RailTracer
                 bool stayPut = useCover;
                 if (stayPut) { end = slideFrom; parkedOn = c.player; posedBodies.Add(victim); }
                 bool limp = !stayPut && HasRagdoll(va);
-                if (limp) StartCoroutine(Ragdoll(victim, va, bodyTile));
+                if (limp) StartCoroutine(Ragdoll(victim, va, bodyTile, takedownHold)); // slides with you, then falls
                 else if (!stayPut && entry != null && entry.victimFallsAfter) StartCoroutine(Topple(va.transform, playerFacing)); // still on their feet
-                if (cam) yield return FlyOut();
+                var flyOut = cam ? StartCoroutine(FlyOut()) : null; // the camera flies back while you both slide
                 // Hold on the body, easing onto where the rules have you, still facing it. Without the ragdoll the corpse
                 // slides with it so its hips end over the centre of the body's tile (the ragdoll does that once it settles).
                 var hips = limp || stayPut ? null : va.GetBoneTransform(HumanBodyBones.Hips);
@@ -1595,6 +1608,7 @@ namespace RailTracer
                 }
                 va.transform.localPosition += OffCentre();
                 playerShown = end;
+                if (flyOut != null) yield return flyOut;
                 playerAnim.speed = va.speed = 1f;
                 pairedKills.Add(victim);
                 takedownVictim = null;
@@ -2752,8 +2766,11 @@ namespace RailTracer
             foreach (var col in a.GetComponentsInChildren<Collider>(true)) col.enabled = limp; // the character has only the ragdoll's
         }
 
-        IEnumerator Ragdoll(Enemy e, Animator a, Cell tile)
+        // slide: how long the slide over its tile takes (a takedown: the same as yours onto your tile, so you move
+        // together); else Ragdoll Slide.
+        IEnumerator Ragdoll(Enemy e, Animator a, Cell tile, float slide = -1f)
         {
+            if (slide <= 0f) slide = ragdollSlide;
             var hips = a.GetBoneTransform(HumanBodyBones.Hips);
             a.enabled = false; // hold the clip's last pose
             // First a quick slide so the hips are over the body's tile, then it falls there.
@@ -2763,9 +2780,9 @@ namespace RailTracer
                 d.y = 0f;
                 if (bodyOffset.ContainsKey(e)) bodyOffset[e] += d; // SyncBodies heads the same way
                 var start = a.transform.localPosition;
-                for (float time = 0f; time < ragdollSlide; time += Time.deltaTime)
+                for (float time = 0f; time < slide; time += Time.deltaTime)
                 {
-                    a.transform.localPosition = start + d * Mathf.SmoothStep(0f, 1f, time / ragdollSlide);
+                    a.transform.localPosition = start + d * Mathf.SmoothStep(0f, 1f, time / slide);
                     yield return null;
                     if (!a) yield break;
                 }

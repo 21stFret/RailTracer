@@ -9,7 +9,7 @@ namespace RailTracer
     // so edits to the asset show on the next loop). For tuning each takedown's timing:
     //   Left / Right: previous / next     R: replay     Space: pause     Up / Down: playback speed (1, 0.5, 0.25, 0.1)
     //   . / , : one frame forward / back (pauses)     click the timeline: jump there
-    //   B: Blood At = now (saved to the asset)     K: kill cam view (the entry's Cam Offset) / orbit     Right-drag: orbit, scroll: zoom
+    //   B: Blood At = now     N / X: add / remove an extra blood point here (all saved to the asset)     K: kill cam view (the entry's Cam Offset) / orbit     Right-drag: orbit, scroll: zoom
     // The clips are stepped by hand (the animators are evaluated by this script), so pausing, slow motion and seeking
     // are exact. As in the game: the blood fires at Blood At of the last clip, the victim slides over its tile and goes
     // limp after the last clip, and a cover finisher (Shove to Table) leaves the pair as the clip ends, at a stand-in table.
@@ -18,7 +18,7 @@ namespace RailTracer
         public float holdAfter = 1.6f;  // the end pose (the fall) stays this long
         public float resetPause = 0.4f; // back to idle this long before the next one
         public float bloodCastStanding = 1.8f, bloodCastCrouched = 1f, bloodCastReach = 1.5f; // as on the Game component
-        public float killCamClose = 1.25f, killCamHeight = 0.55f, ragdollSlide = 0.15f;       // as on the Game component
+        public float killCamClose = 1.25f, killCamHeight = 0.55f, takedownHold = 0.5f;        // as on the Game component (the body's slide takes Takedown Hold)
         const float Frame = 1f / 30f;
         static readonly float[] Rates = { 1f, 0.5f, 0.25f, 0.1f };
 
@@ -178,6 +178,7 @@ namespace RailTracer
             victim.Update(0f);
             clock = 0f;
             bool comboStarted = false, bled = false;
+            var struck = new System.Collections.Generic.HashSet<int>();
             while (clock < total)
             {
                 if (jump) yield break; // a seek restarts the takedown and runs on to seekTo
@@ -202,6 +203,8 @@ namespace RailTracer
                     }
                     clock += dt;
                     if (!bled && clock >= bloodTime) { Bleed(t); bled = true; }
+                    for (int s = 0; s < t.extraBlood.Count; s++)
+                        if (!struck.Contains(s) && clock >= t.extraBlood[s] * total) { struck.Add(s); Strike(t); }
                 }
                 if (seekTo >= 0f && clock >= seekTo - 1e-4f) { seekTo = -1f; paused = true; }
                 if (seekTo >= 0f) continue; // a seek runs on within the frame
@@ -221,9 +224,9 @@ namespace RailTracer
                     var d = tile - hips.position;
                     d.y = 0f;
                     var start = victim.transform.position;
-                    for (float time = 0f; time < ragdollSlide && !jump; time += Time.deltaTime * Rates[rate])
+                    for (float time = 0f; time < takedownHold && !jump; time += Time.deltaTime * Rates[rate])
                     {
-                        victim.transform.position = start + d * Mathf.SmoothStep(0f, 1f, time / ragdollSlide);
+                        victim.transform.position = start + d * Mathf.SmoothStep(0f, 1f, time / takedownHold);
                         yield return null;
                     }
                     victim.transform.position = start + d;
@@ -268,6 +271,46 @@ namespace RailTracer
                     blood.TileSplat(bloodRoot, tile + d, height, bloodCastReach, blood.spatterScale, blood.smearScale);
         }
 
+        // An extra strike: just the splash (Blood At lays the stains).
+        void Strike(Takedown t)
+        {
+            bloodFlash = Time.time;
+            if (!blood) return;
+            var bone = victim.GetBoneTransform(HumanBodyBones.Chest);
+            var chest = bone ? bone.position : victim.transform.position + Vector3.up * 1.1f;
+            var dir = victim.transform.position - attacker.transform.position;
+            dir.y = 0f;
+            blood.Splash(bloodRoot, chest, dir.sqrMagnitude > 1e-4f ? dir.normalized : Vector3.forward, t.kind == KillKind.Brutal);
+        }
+
+        // N: an extra blood point at the current frame; X: remove the one nearest it. Saved to the asset.
+        void EditStrikes(bool add)
+        {
+            var t = Current;
+            if (t == null || total <= 0f) return;
+            float now = Mathf.Clamp01(clock / total);
+            if (add) t.extraBlood.Add(now);
+            else
+            {
+                if (t.extraBlood.Count == 0) { note = "No extra blood to remove."; return; }
+                int near = 0;
+                for (int i = 1; i < t.extraBlood.Count; i++)
+                    if (Mathf.Abs(t.extraBlood[i] - now) < Mathf.Abs(t.extraBlood[near] - now)) near = i;
+                t.extraBlood.RemoveAt(near);
+            }
+            t.extraBlood.Sort();
+            Save();
+            note = $"{t.name}: extra blood at {string.Join(", ", t.extraBlood.ConvertAll(v => v.ToString("0.000")))} (of the whole takedown), saved.";
+        }
+
+        void Save()
+        {
+#if UNITY_EDITOR
+            UnityEditor.EditorUtility.SetDirty(library);
+            UnityEditor.AssetDatabase.SaveAssets();
+#endif
+        }
+
         static void Override(Animator a, string slot, AnimationClip clip)
         {
             if (a.runtimeAnimatorController is AnimatorOverrideController o) o[slot] = clip;
@@ -287,10 +330,7 @@ namespace RailTracer
             if (clock < lastFrom) { note = "Blood At is for the combo's second clip: move past the blend first."; return; }
             t.bloodAt = Mathf.Clamp01((clock - lastFrom) / (total - lastFrom));
             bloodTime = clock;
-#if UNITY_EDITOR
-            UnityEditor.EditorUtility.SetDirty(library);
-            UnityEditor.AssetDatabase.SaveAssets();
-#endif
+            Save();
             note = $"{t.name}: Blood At = {t.bloodAt:0.000}, saved to Resources/Takedowns.";
         }
 
@@ -309,6 +349,8 @@ namespace RailTracer
                 if (kb.periodKey.wasPressedThisFrame) { paused = true; stepFrames++; }
                 if (kb.commaKey.wasPressedThisFrame) { paused = true; Seek(clock - Frame); }
                 if (kb.bKey.wasPressedThisFrame) SetBloodHere();
+                if (kb.nKey.wasPressedThisFrame) EditStrikes(true);
+                if (kb.xKey.wasPressedThisFrame) EditStrikes(false);
                 if (kb.kKey.wasPressedThisFrame) killCam = !killCam;
             }
             if (mouse != null)
@@ -356,7 +398,7 @@ namespace RailTracer
             GUI.Label(new Rect(16, 12, 1600, 24), label);
             GUI.Label(new Rect(16, 34, 1600, 24),
                 "Left / Right: previous / next   R: replay   Space: pause   Up / Down: speed   . / , : frame forward / back   " +
-                "click the timeline: jump   B: Blood At = now (saved)   K: kill cam view   Right-drag: orbit   Scroll: zoom");
+                "click the timeline: jump   B: Blood At = now   N / X: add / remove an extra blood here (all saved)   K: kill cam view   Right-drag: orbit   Scroll: zoom");
             GUI.Label(new Rect(16, 56, 1600, 24),
                 $"{(paused ? "PAUSED" : "playing")} at {Rates[rate]:0.##}x   {clock:0.000} / {total:0.000} s" +
                 (total > lastFrom && clock >= lastFrom ? $"   last clip {(clock - lastFrom) / (total - lastFrom):0.000}" : "") +
@@ -371,8 +413,12 @@ namespace RailTracer
             Fill(new Rect(bar.x, bar.y, bar.width * Mathf.Clamp01(clock / total), bar.height), new Color(0.95f, 0.94f, 0.92f, 0.35f));
             if (comboAt >= 0f) Fill(new Rect(bar.x + bar.width * comboAt / total - 1, bar.y - 4, 3, bar.height + 8), new Color(1f, 0.8f, 0.2f));
             Fill(new Rect(bar.x + bar.width * bloodTime / total - 1, bar.y - 6, 3, bar.height + 12), new Color(0.85f, 0.06f, 0.15f));
+            var t = Current;
+            if (t != null)
+                foreach (var e in t.extraBlood)
+                    Fill(new Rect(bar.x + bar.width * Mathf.Clamp01(e) - 1, bar.y - 3, 2, bar.height + 6), new Color(1f, 0.45f, 0.5f));
             Fill(new Rect(bar.x + bar.width * Mathf.Clamp01(clock / total) - 1, bar.y - 2, 2, bar.height + 4), Color.white);
-            GUI.Label(new Rect(bar.x, bar.y - 22, 400, 20), "red: blood   yellow: combo blend   white: now");
+            GUI.Label(new Rect(bar.x, bar.y - 22, 400, 20), "red: blood   pink: extra blood   yellow: combo blend   white: now");
         }
 
         static void Fill(Rect r, Color c)

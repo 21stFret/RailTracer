@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 18.12 (5 Nov 2026).
+Last updated: Update 18.13 (5 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -31,6 +31,7 @@ Inspector; the saved scene matches these.
 | 18.10 (lamps: all wall lamps on and even, half the table lamps, green shades) | Done, not yet seen in Play mode |
 | 18.11 (chairs in closer) | Done, not yet seen in Play mode |
 | 18.12 (animation test: timing tools) | Done, not yet tried in Unity |
+| 18.13 (extra blood per strike, the body slides with you) | Done, not yet tried in Unity |
 | Still needed (art) | Rail grab, demon throw and crouched drag-down animations; knife mesh (on hold); unarmed finishers (skipped for now); a searching animation; more idles |
 | Next | Full audio pass |
 
@@ -176,7 +177,7 @@ Hover label: name, role, one state line ("Searching · Shaken", "Panicked · Fre
 ## Animation test
 
 `Assets/RailTracer/AnimationTest.unity`: no train, just an attacker and a victim on a bare floor at full size, replaying one takedown from `Resources/Takedowns` on a loop until you switch, spaced and turned by each entry's Victim Offset / Victim Yaw (edits show on the next play). The game's kill blood fires at each entry's Blood At (of the last clip, for a combo), from the victim's chest, and "BLOOD" flashes on screen; stains clear each loop. A 1 m floor grid shows the game's tiles.
-- **Timing tools:** the viewer steps the clips itself (the animators are evaluated by the script), so pausing, slow motion and seeking are exact. Left / right arrows: previous / next; R: replay; Space: pause; Up / Down: playback speed (1, 0.5, 0.25, 0.1x); . / , : one frame (1/30 s) forward / back; click the timeline at the bottom to jump there (red: blood, yellow: combo blend, white: now). **B sets Blood At to the current frame and saves it to Resources/Takedowns** (for a combo, of the second clip). The top lines show the entry (kind, stance, cover), its values, the time and the last clip's 0-1 position.
+- **Timing tools:** the viewer steps the clips itself (the animators are evaluated by the script), so pausing, slow motion and seeking are exact. Left / right arrows: previous / next; R: replay; Space: pause; Up / Down: playback speed (1, 0.5, 0.25, 0.1x); . / , : one frame (1/30 s) forward / back; click the timeline at the bottom to jump there (red: blood, yellow: combo blend, white: now). **B sets Blood At to the current frame and saves it to Resources/Takedowns** (for a combo, of the second clip). For takedowns with several strikes, **N adds an extra blood point at the current frame, X removes the nearest** (Extra Blood on the entry: 0-1 over the whole takedown, both clips; each fires a splash, in the game too; Blood At still lays the stains). Pink marks on the timeline. The top lines show the entry (kind, stance, cover), its values, the time and the last clip's 0-1 position.
 - **K: kill cam view** from the entry's Cam Offset (or the game's default low side angle), to tune it; right-drag goes back to orbiting. Other values (offset, yaw, speed, combo timings, Cam Offset) are edited on the asset in the Inspector and show on the next loop.
 - As in the game: after the last clip the victim slides so its hips are over its tile (stealth: your tile) and goes limp; a cover finisher (Shove to Table) keeps its end pose, with a stand-in table where the seat would be.
 
@@ -184,7 +185,7 @@ In the game too, finisher blood now comes from the victim's chest bone (where th
 
 ## Bodies
 
-- Ragdolls: the character has ragdoll bones from Unity's Ragdoll Builder (Editor/RagdollSetup, kinematic and collider-off until needed, on Ignore Raycast). After the last clip of every takedown the victim goes limp and falls (during the kill cam's fly-out); other deaths too, except rail grabs (posed over the sill). First the body slides quickly (Game "Ragdoll Slide", 0.15 s) so its hips are over its tile, then goes limp and falls there; after "Ragdoll Settle" (1.6 s) it freezes; drags and throws move the frozen pose. Shove to Table is the exception: the pair stays where the clip leaves them (the victim bent over the seat, you beside it in the stance you had, until you move); the body still counts as on its tile for drags, sight, blood and searchers, and goes limp once moved. The takedown viewer ragdolls its victim the same way.
+- Ragdolls: the character has ragdoll bones from Unity's Ragdoll Builder (Editor/RagdollSetup, kinematic and collider-off until needed, on Ignore Raycast). After the last clip of every takedown the victim goes limp and falls (during the kill cam's fly-out); other deaths too, except rail grabs (posed over the sill). First the body slides (Game "Ragdoll Slide", 0.15 s; after a takedown it slides with you instead, both over Takedown Hold, 0.5 s, starting as the clip ends while the kill cam flies back) so its hips are over its tile, then goes limp and falls there; after "Ragdoll Settle" (1.6 s) it freezes; drags and throws move the frozen pose. Shove to Table is the exception: the pair stays where the clip leaves them (the victim bent over the seat, you beside it in the stance you had, until you move); the body still counts as on its tile for drags, sight, blood and searchers, and goes limp once moved. The takedown viewer ragdolls its victim the same way.
 - You too: when the finisher blends back to idle your hips stay where the clip left them, then you slide onto your tile over the same hold.
 
 ## Blood
