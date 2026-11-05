@@ -1113,7 +1113,7 @@ namespace RailTracer
                 {
                     var thrown = c.held;
                     used = thrown != null && c.Do($"throw {hover.Value.x} {hover.Value.y}");
-                    if (used && KillCamOn && anims.TryGetValue(thrown.who, out var ta))
+                    if (used && RollKillCam() && anims.TryGetValue(thrown.who, out var ta))
                     {
                         var flat = cam.transform.forward;
                         flat.y = 0f;
@@ -1127,7 +1127,7 @@ namespace RailTracer
                         used = true;
                         pendingAct = kill;
                         paired = kill == Act.BrutalKill || kill == Act.QuietKill;
-                        if (kill == Act.RailGrab && KillCamOn)
+                        if (kill == Act.RailGrab && RollKillCam())
                         {
                             var hungAt = c.bodies[c.bodies.Count - 1].pos;
                             var w = World(hungAt);
@@ -1539,7 +1539,7 @@ namespace RailTracer
                     }
                     playerShown = to;
                 }
-                bool cam = KillCamOn; // every takedown, stealth too
+                bool cam = RollKillCam(); // every takedown, stealth too (on, and the chance comes up)
                 if (cam)
                 {
                     // Fly in and hold a beat before the strike; the shot then stays put (no chasing the pair).
@@ -1547,6 +1547,8 @@ namespace RailTracer
                     playerShown = to;
                     yield return FlyIn(KillCamPose(to, at, entry != null ? entry.camOffset : Vector3.zero, entry != null ? entry.camLook : Vector3.zero));
                     Time.timeScale = killCamSlowMo;
+                    // Slow motion overrides the takedown's own speed: 0.5x is half speed, whatever the clip plays at.
+                    if (killCamSlowMo < 1f) playerAnim.speed = va.speed = 1f;
                 }
                 playerAnim.Play(hash, 0, 0f);
                 va.Play(hash, 0, 0f);

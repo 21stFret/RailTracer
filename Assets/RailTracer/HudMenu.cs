@@ -49,7 +49,7 @@ namespace RailTracer
             Fit(bottom);
             var col = Rect("Lines", bottom, Vector2.zero, Vector2.zero, Vector2.zero);
             Column(col, new RectOffset(0, 0, 0, 0), 10f).childAlignment = TextAnchor.LowerLeft;
-            for (int i = 0; i < 6; i++) { var item = Label(col, "", 22, Grey, 1.5f); Glow(item); menuItems.Add(item); }
+            for (int i = 0; i < 8; i++) { var item = Label(col, "", 22, Grey, 1.5f); Glow(item); menuItems.Add(item); }
             menuInfo = Text(bottom, body, 17, TextAlignmentOptions.BottomLeft, Vector2.zero, Vector2.zero);
             menuInfo.textWrappingMode = TextWrappingModes.Normal;
             menuInfo.color = Bone;

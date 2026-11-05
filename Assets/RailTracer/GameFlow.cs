@@ -44,6 +44,7 @@ namespace RailTracer
     {
         public bool killCam = true;
         public float killCamSlowMo = 1f;
+        public float killCamChance = 1f; // how often a kill gets the kill cam (0-1), when it's on
         public int windowMode = -1; // FullScreenMode, -1 = as the player started
         public int width, height;   // 0 = as the player started
     }
@@ -75,7 +76,10 @@ namespace RailTracer
 
         static string SavePath => Path.Combine(Application.persistentDataPath, "save.json");
         static readonly float[] SlowMos = { 1f, 0.75f, 0.5f, 0.25f };
+        static readonly float[] Chances = { 1f, 0.75f, 0.5f, 0.25f };
         bool KillCamOn => save.settings.killCam;
+        // Whether this kill gets the kill cam: on, and the Options chance comes up.
+        bool RollKillCam() => KillCamOn && Random.value < save.settings.killCamChance;
         public const int MaxHpCarry = 30;
 
         // ---- Saves ----
@@ -411,11 +415,11 @@ namespace RailTracer
                 }
             }
             // The Options car: a lamp per setting, down the car in menu order (SyncSettingLamps).
-            for (int i = 0; i < 4; i++)
+            for (int i = 0; i < 5; i++)
             {
                 var l = new GameObject("Setting Lamp " + (i + 1)).AddComponent<Light>();
                 l.transform.SetParent(menuTrain.transform, false);
-                l.transform.localPosition = new Vector3(OptionsX + 4f + i * 6f, 2.1f, -2f);
+                l.transform.localPosition = new Vector3(OptionsX + 3f + i * 5f, 2.1f, -2f);
                 l.type = LightType.Point;
                 l.color = new Color(1f, 0.9f, 0.75f);
                 l.range = 7f;
@@ -432,7 +436,7 @@ namespace RailTracer
         void SyncSettingLamps(bool showing)
         {
             var s = save.settings;
-            float[] level = { s.killCam ? 1f : 0f, s.killCamSlowMo, 1f, 1f }; // kill cam, slow motion, window mode, resolution
+            float[] level = { s.killCam ? 1f : 0f, s.killCam ? s.killCamChance : 0f, s.killCamSlowMo, 1f, 1f }; // kill cam, chance, slow motion, window mode, resolution
             for (int i = 0; i < settingLamps.Count; i++) settingLamps[i].intensity = showing ? 2.8f * level[i] : 0f;
             for (int k = 0; k < menuCars.Count; k++)
             {
@@ -595,20 +599,21 @@ namespace RailTracer
                     int w = s.width > 0 ? s.width : Screen.width, h = s.height > 0 ? s.height : Screen.height;
                     var items = new[]
                     {
-                        $"Kill cam: {(s.killCam ? "On" : "Off")}", $"Kill cam slow motion: {s.killCamSlowMo:0.##}x",
-                        $"Window: {modeName}", $"Resolution: {w} x {h}", "Controls", "Back",
+                        $"Kill cam: {(s.killCam ? "On" : "Off")}", $"Kill cam chance: {Mathf.RoundToInt(100 * s.killCamChance)}%",
+                        $"Kill cam slow motion: {s.killCamSlowMo:0.##}x", $"Window: {modeName}", $"Resolution: {w} x {h}", "Controls", "Back",
                     };
                     int hit = hud.RefreshMenu(false, "Options", items, null, "Audio comes with the sound pass.", at, held);
-                    if (back || (click && (hit == 5 || hit == -2))) { screen = MenuScreen.Start; break; }
+                    if (back || (click && (hit == 6 || hit == -2))) { screen = MenuScreen.Start; break; }
                     if (!click) break;
                     if (hit == 0) s.killCam = !s.killCam;
-                    else if (hit == 1) s.killCamSlowMo = SlowMos[(System.Array.IndexOf(SlowMos, s.killCamSlowMo) + 1) % SlowMos.Length];
-                    else if (hit == 2)
+                    else if (hit == 1) s.killCamChance = Chances[(System.Array.IndexOf(Chances, s.killCamChance) + 1) % Chances.Length];
+                    else if (hit == 2) s.killCamSlowMo = SlowMos[(System.Array.IndexOf(SlowMos, s.killCamSlowMo) + 1) % SlowMos.Length];
+                    else if (hit == 3)
                     {
                         var modes = new[] { FullScreenMode.FullScreenWindow, FullScreenMode.ExclusiveFullScreen, FullScreenMode.Windowed };
                         s.windowMode = (int)modes[(System.Array.IndexOf(modes, mode) + 1) % modes.Length];
                     }
-                    else if (hit == 3)
+                    else if (hit == 4)
                     {
                         var sizes = Screen.resolutions.Select(r => (r.width, r.height)).Distinct().ToList();
                         if (sizes.Count > 0)
@@ -617,7 +622,7 @@ namespace RailTracer
                             (s.width, s.height) = sizes[(i + 1) % sizes.Count];
                         }
                     }
-                    else if (hit == 4) { screen = MenuScreen.Controls; break; }
+                    else if (hit == 5) { screen = MenuScreen.Controls; break; }
                     else break;
                     ApplySettings();
                     WriteSave();
