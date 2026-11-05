@@ -1545,7 +1545,7 @@ namespace RailTracer
                     // Fly in and hold a beat before the strike; the shot then stays put (no chasing the pair).
                     BeginKillCam();
                     playerShown = to;
-                    yield return FlyIn(KillCamPose(to, at, entry != null ? entry.camOffset : Vector3.zero));
+                    yield return FlyIn(KillCamPose(to, at, entry != null ? entry.camOffset : Vector3.zero, entry != null ? entry.camLook : Vector3.zero));
                     Time.timeScale = killCamSlowMo;
                 }
                 playerAnim.Play(hash, 0, 0f);
@@ -1675,14 +1675,20 @@ namespace RailTracer
 
         // Where to film a pair (`a` and `b`, root space) from: low and close, side-on (or the takedown's own offset,
         // in the pair's space), trying other angles until nothing solid is between the camera and the pair.
-        (Vector3 pos, Vector3 look) KillCamPose(Vector3 a, Vector3 b, Vector3 offset)
+        (Vector3 pos, Vector3 look) KillCamPose(Vector3 a, Vector3 b, Vector3 offset, Vector3 lookShift = default)
         {
             var mid = (a + b) / 2f + Vector3.up * FigureHeight * 0.5f;
             var along = b - a;
             along.y = 0f;
             var pair = Quaternion.LookRotation(along.sqrMagnitude > 1e-6f ? along : Vector3.forward);
+            // The takedown's own shot first (set in the animation test): its look point moved by Cam Look, the camera
+            // Cam Offset from that, if nothing is in the way.
+            if (offset != Vector3.zero)
+            {
+                var focusAt = mid + pair * lookShift;
+                if (!CamBlocked(focusAt, focusAt + pair * offset)) return (focusAt + pair * offset, focusAt);
+            }
             var tries = new List<Vector3>();
-            if (offset != Vector3.zero) tries.Add(pair * offset);
             // the side nearer the view you had first, then three-quarter views, the other side, and finally from above
             var side = pair * Vector3.right;
             if (Vector3.Dot(side, savedCamRot * Vector3.back) < 0f) side = -side;

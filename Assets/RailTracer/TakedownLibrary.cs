@@ -45,6 +45,7 @@ namespace RailTracer
             return total <= 0f ? k : (second ? comboFrom * l1 + k * l2 : k * l1) / total;
         }
         public Vector3 camOffset;                                // kill cam position in the pair's space (zero = low, close, side-on)
+        public Vector3 camLook;                                  // with a Cam Offset: the point it looks at (and the camera with it) moved this far from the middle of the pair, in the pair's space
     }
 
     // The takedowns kills choose from (Resources/Takedowns, made by Editor/FinisherSetup.cs and yours to edit).

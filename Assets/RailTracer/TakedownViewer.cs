@@ -10,7 +10,8 @@ namespace RailTracer
     //   Left / Right: previous / next     R: replay     Space: pause     Up / Down: playback speed (1, 0.5, 0.25, 0.1)
     //   . / , : one frame forward / back (pauses)     click the timeline: jump there
     //   B: Blood At = now     N / X: add / remove an extra blood point here (all saved to the asset)
-    //   K: kill cam view; in it right-drag sets the angle, scroll the distance, C saves it as the entry's Cam Offset,
+    //   K: kill cam view; in it right-drag sets the angle, scroll the distance, middle-drag or A/D/W/S pans (Cam Look),
+    //   C saves them as the entry's Cam Offset and Cam Look,
     //   Backspace clears it (the game's default angle)     K: kill cam view (the entry's Cam Offset) / orbit     Right-drag: orbit, scroll: zoom
     // The clips are stepped by hand (the animators are evaluated by this script), so pausing, slow motion and seeking
     // are exact. As in the game: the blood fires at Blood At of the last clip, the victim slides over its tile and goes
@@ -24,6 +25,7 @@ namespace RailTracer
         public float soakBrutal = 0.7f, soakStealth = 0.35f, soakHeight = 0.3f, soakDepth = 1.2f; // as on the Game component
         // The kill cam being set (K): its direction from the middle of the pair, in the pair's space, and distance.
         float camYaw, camPitch, camDist = 1.3f;
+        Vector3 camPan; // the look point's shift from the middle of the pair (pair space): Cam Look
         int camFor = -1; // the takedown the kill cam values were read from
         const float Frame = 1f / 30f;
         static readonly float[] Rates = { 1f, 0.5f, 0.25f, 0.1f };
@@ -411,8 +413,25 @@ namespace RailTracer
                 along.y = 0f;
                 var pair = Quaternion.LookRotation(along.sqrMagnitude > 1e-6f ? along : Vector3.forward);
                 if (camFor != index) ReadKillCam(t);
-                cam.transform.position = mid + pair * KillCamOffset();
-                cam.transform.LookAt(mid);
+                // Pan: middle-drag, or A / D (left / right) and W / S (up / down), moving the look point and the camera together.
+                var pan = Vector3.zero;
+                if (mouse != null && mouse.middleButton.isPressed)
+                {
+                    var md = mouse.delta.ReadValue() * 0.0015f * camDist;
+                    pan += -cam.transform.right * md.x - cam.transform.up * md.y;
+                }
+                if (kb != null)
+                {
+                    float step = 0.6f * Time.unscaledDeltaTime;
+                    if (kb.aKey.isPressed) pan -= cam.transform.right * step;
+                    if (kb.dKey.isPressed) pan += cam.transform.right * step;
+                    if (kb.wKey.isPressed) pan += Vector3.up * step;
+                    if (kb.sKey.isPressed) pan -= Vector3.up * step;
+                }
+                camPan += Quaternion.Inverse(pair) * pan;
+                var focusAt = mid + pair * camPan;
+                cam.transform.position = focusAt + pair * KillCamOffset();
+                cam.transform.LookAt(focusAt);
                 return;
             }
             // Orbit the middle of the pair at chest height.
@@ -436,6 +455,7 @@ namespace RailTracer
             camDist = Mathf.Max(0.4f, off.magnitude);
             camPitch = Mathf.Asin(Mathf.Clamp(off.y / camDist, -1f, 1f)) * Mathf.Rad2Deg;
             camYaw = Mathf.Atan2(off.x, off.z) * Mathf.Rad2Deg;
+            camPan = t.camOffset != Vector3.zero ? t.camLook : Vector3.zero;
         }
 
         void SaveKillCam()
@@ -443,15 +463,16 @@ namespace RailTracer
             var t = Current;
             if (t == null) return;
             t.camOffset = KillCamOffset();
+            t.camLook = camPan;
             Save();
-            note = $"{t.name}: Cam Offset = {t.camOffset}, saved to Resources/Takedowns.";
+            note = $"{t.name}: Cam Offset = {t.camOffset}, Cam Look = {t.camLook}, saved to Resources/Takedowns.";
         }
 
         void ResetKillCam()
         {
             var t = Current;
             if (t == null) return;
-            t.camOffset = Vector3.zero;
+            t.camOffset = t.camLook = Vector3.zero;
             Save();
             camFor = -1;
             note = $"{t.name}: Cam Offset cleared (the game's default angle), saved.";
@@ -466,7 +487,7 @@ namespace RailTracer
             GUI.Label(new Rect(16, 56, 1600, 24),
                 $"{(paused ? "PAUSED" : "playing")} at {Rates[rate]:0.##}x   {clock:0.000} / {total:0.000} s" +
                 (total > lastFrom && clock >= lastFrom ? $"   last clip {(clock - lastFrom) / (total - lastFrom):0.000}" : "") +
-                (killCam ? $"   KILL CAM: right-drag angle, scroll distance ({camDist:0.00} m), C save as Cam Offset, Backspace clear" : "") + "   (other values: select Resources/Takedowns; edits show on the next loop)");
+                (killCam ? $"   KILL CAM: right-drag angle, scroll distance ({camDist:0.00} m), middle-drag or A/D/W/S pan, C save, Backspace clear" : "") + "   (other values: select Resources/Takedowns; edits show on the next loop)");
             if (!string.IsNullOrEmpty(note)) GUI.Label(new Rect(16, 78, 1600, 24), note);
             if (Time.time - bloodFlash < 0.6f) GUI.Label(new Rect(16, 100, 300, 24), "BLOOD");
 

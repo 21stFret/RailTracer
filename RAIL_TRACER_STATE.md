@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 18.21 (5 Nov 2026).
+Last updated: Update 18.22 (5 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -40,6 +40,7 @@ Inspector; the saved scene matches these.
 | 18.19 (ornate brass cutlery) | Done, not yet seen in Play mode |
 | 18.20 (smaller kill stains at the blood, window body moved, kill cam editor) | Done, not yet seen in Play mode |
 | 18.21 (animation test: scroll zoom x3) | Done |
+| 18.22 (kill cam pan: Cam Look) | Done, not yet tried in Unity |
 | Still needed (art) | Rail grab, demon throw and crouched drag-down animations; knife mesh (on hold); unarmed finishers (skipped for now); a searching animation; more idles |
 | Next | Full audio pass |
 
@@ -186,7 +187,7 @@ Hover label: name, role, one state line ("Searching · Shaken", "Panicked · Fre
 
 `Assets/RailTracer/AnimationTest.unity`: no train, just an attacker and a victim on a bare floor at full size, replaying one takedown from `Resources/Takedowns` on a loop until you switch, spaced and turned by each entry's Victim Offset / Victim Yaw (edits show on the next play). The game's kill blood fires at each entry's Blood At (of the last clip, for a combo), from the victim's chest, and "BLOOD" flashes on screen; stains clear each loop. A 1 m floor grid shows the game's tiles.
 - **Timing tools:** the viewer steps the clips itself (the animators are evaluated by the script), so pausing, slow motion and seeking are exact. Left / right arrows: previous / next; R: replay; Space: pause; Up / Down: playback speed (1, 0.5, 0.25, 0.1x); . / , : one frame (1/30 s) forward / back; click the timeline at the bottom to jump there (red: blood, yellow: combo blend, white: now). **B sets Blood At to the current frame and saves it to Resources/Takedowns** (for a combo, of the second clip). For takedowns with several strikes, **N adds an extra blood point at the current frame, X removes the nearest** (Extra Blood on the entry: 0-1 over the whole takedown, both clips; each fires a splash, in the game too; Blood At still lays the stains). Pink marks on the timeline. The top lines show the entry (kind, stance, cover), its values, the time and the last clip's 0-1 position.
-- **K: kill cam view** from the entry's Cam Offset (or the game's default low side angle). In it, right-drag sets the angle round the middle of the pair and scroll the distance; **C saves it as the entry's Cam Offset** (the game uses it first, unless a wall or seat is in the way), Backspace clears it back to the default. K again: orbit. Other values (offset, yaw, speed, combo timings, Cam Offset) are edited on the asset in the Inspector and show on the next loop.
+- **K: kill cam view** from the entry's Cam Offset (or the game's default low side angle). In it, right-drag sets the angle round the middle of the pair, scroll the distance, and middle-drag or A/D (left/right) and W/S (up/down) pan the shot (the look point and the camera together: the entry's Cam Look); **C saves them as the entry's Cam Offset and Cam Look** (the game uses it first, unless a wall or seat is in the way), Backspace clears it back to the default. K again: orbit. Other values (offset, yaw, speed, combo timings, Cam Offset) are edited on the asset in the Inspector and show on the next loop.
 - As in the game: after the last clip the victim slides so its hips are over its tile (stealth: your tile) and goes limp; a cover finisher (Shove to Table) keeps its end pose, with a stand-in table where the seat would be.
 
 In the game too, finisher blood now comes from the victim's chest bone (where the clip has carried them), not above their tile.
