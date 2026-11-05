@@ -130,6 +130,7 @@ namespace RailTracer
         bool hopRunning, hopMoving;
         public float endTurnHold = 0.5f; // seconds Space must be held to end the turn
         float spaceHeld = -1f;
+        bool endByMouse; // the end-turn hold was started on the HUD button (the mouse held, not Space)
         public float hopClimbTime = 0.45f, hopWalkSpeed = 3f;
         // Brutal kill: player and victim play their "Takedown" states facing each other, locked to the tiles.
         public float takedownHold = 0.5f; // the corpse lingers this long after the clip
@@ -988,10 +989,11 @@ namespace RailTracer
                 if (kb.bKey.wasPressedThisFrame) bloodOutlines = !bloodOutlines;
                 if (kb.oKey.wasPressedThisFrame && mouse != null) WindowUnderMouse(mouse.position.ReadValue())?.Toggle();
                 // End turn: hold Space (a tap does nothing, so it can't end a turn by accident).
-                if (kb.spaceKey.wasPressedThisFrame && !busy && !c.Over && !walking) spaceHeld = 0f;
+                if (kb.spaceKey.wasPressedThisFrame && !busy && !c.Over && !walking) { spaceHeld = 0f; endByMouse = false; }
                 if (spaceHeld >= 0f)
                 {
-                    if (!kb.spaceKey.isPressed || busy || c.Over) spaceHeld = -1f;
+                    bool holding = kb.spaceKey.isPressed || (endByMouse && mouse != null && mouse.leftButton.isPressed);
+                    if (!holding || busy || c.Over) spaceHeld = -1f;
                     else if ((spaceHeld += Time.deltaTime) >= endTurnHold) { spaceHeld = -1f; StartCoroutine(EnemyPhase()); }
                 }
             }
@@ -1010,7 +1012,7 @@ namespace RailTracer
             // The HUD's key hints as buttons, for playing with the mouse alone.
             switch (hud.RefreshButtons(mouse != null ? screen : new Vector2(-9999f, -9999f), mouse != null && mouse.leftButton.isPressed, mouse != null && mouse.leftButton.wasPressedThisFrame))
             {
-                case "end": if (!busy && !c.Over && !walking) StartCoroutine(EnemyPhase()); break;
+                case "end": if (!busy && !c.Over && !walking) { spaceHeld = 0f; endByMouse = true; } break; // hold the button, like Space
                 case "crouch": if (!busy) c.Do("crouch"); break;
                 case "undo":
                     if (!busy && c.CanReset)

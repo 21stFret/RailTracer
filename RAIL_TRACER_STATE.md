@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 17.5 (4 Nov 2026).
+Last updated: Update 17.6 (4 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -185,5 +185,5 @@ In the game too, finisher blood now comes from the victim's chest bone (where th
   - The clips keep their own travel in the pose (imported with root XZ baked from the original position), so a pair lines up through the whole clip once its start offset is right. The exported clips start with both characters on the same spot; each pair has its own starting distance (as set up in Unreal), facing you: Victim Offset Z 1.5 (Shove Neck Slice 1.3), Victim Yaw 180.
   - Each entry can be tagged Guard / Heavy / Any (all Any for now).
 - Ghosts: the move-preview ghost and the last-seen ghost are see-through outlines (last-seen fainter). The last-seen ghost marks only where an enemy actually last saw you.
-- Mouse only works too: the skill boxes, and the HUD's key hints are buttons (white under the mouse, red while pressed): Space end turn (a click ends it), C crouch, Z undo, Esc menu, H controls, L log, and Esc cancel on the targeting banner. The win card's walk on: hold Space or the mouse; the loss card: a click retries. Every closable panel has a close button in its top-right corner (a red X on black, white border; the X turns white under the mouse, red while pressed): the log, the controls panel, the pause and Board panels (not Demo complete), and the menu's Journey, Options and Controls screens (back).
+- Mouse only works too: the skill boxes, and the HUD's key hints are buttons (white under the mouse, red while pressed): Space end turn (hold the mouse on it, like Space), C crouch, Z undo, Esc menu, H controls, L log, and Esc cancel on the targeting banner. The win card's walk on: hold Space or the mouse; the loss card: a click retries. Every closable panel has a close button in its top-right corner (a red X on black, white border; the X turns white under the mouse, red while pressed): the log, the controls panel, the pause and Board panels (not Demo complete), and the menu's Journey, Options and Controls screens (back).
 - Keys: 1–8 skills, Shift leap, Ctrl hop, G grab, C crouch, Z undo, V all senses, B blood outlines, L log, H controls, R restart the car, Esc pause (Main menu is in there).
