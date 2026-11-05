@@ -35,14 +35,14 @@ namespace RailTracer
 
         // Dining car: tables by the windows and a few out in the room, straight, L-shaped ('T') and round ('O',
         // 2x2), each a tile clear of the next; a dining cart ('D') in the aisle; an L-shaped bar at the far end.
-        // Long sightlines, half cover only.
+        // Long sightlines, half cover only. Plain wall ('_') between some of the window tables and behind the bar.
         static readonly string[] DiningMap =
         {
-            "..TT...OO...TT.......BBBB.",
+            "..TT...OO___TT...____BBBB.",
             ".......OO...T...T....B....",
             "P.........D...............",
             "...T..T.......OO......T...",
-            "..TT.....TT...OO..TT......",
+            "..TT_____TT...OO..TT..____",
         };
 
         // Baggage hold: crates and luggage stacked into a maze of full cover, mail sacks for half cover, the safe's

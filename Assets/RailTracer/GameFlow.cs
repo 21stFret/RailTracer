@@ -66,12 +66,11 @@ namespace RailTracer
         SaveData save = new SaveData();
         string choice;         // the centre panel: null, "pause", "board" (the next car) or "done" (demo complete)
         float winHeld = -1f;   // holding Space on the win card
-        bool exiting; // walking out of a cleared car
         public float standUpTime = 0.4f; // clearing a car crouched: the beat to stand before walking out
         bool boardAsked;       // the board popup has shown for this visit to the glowing tile
         GameObject glow;
         int journeyPick = -1;
-        int journeyConfirm = -1; // a Replay that would replace the saved run, waiting for a yes
+        public float journeyZoom = 40f; // Journey: how far the camera stands from the picked car
 
         static string SavePath => Path.Combine(Application.persistentDataPath, "save.json");
         static readonly float[] SlowMos = { 1f, 0.75f, 0.5f, 0.25f };
@@ -195,15 +194,15 @@ namespace RailTracer
         IEnumerator ExitCar()
         {
             busy = true;
-            // Triumphant: on your feet first, then out of the far door (the confident walk: the normal walk for now).
+            // Triumphant: on your feet first, then out of the far door at the normal pace (a confident walk clip later).
             if (c.crouched)
             {
-                c.Do("crouch");
+                c.crouched = false; // the car is won, so the rules take no more moves: just stand
                 for (float time = 0f; time < standUpTime; time += Time.deltaTime) yield return null;
             }
             var door = new Cell(c.W - 1, c.H / 2);
             var path = PathOut(c.player, door);
-            hopRunning = exiting = true; // the view walks you, not the rules
+            hopRunning = true; // the view walks you, not the rules
             var points = path.Select(World).ToList();
             points.Add(World(door) + Vector3.right * 1.6f); // through the door
             foreach (var p in points)
@@ -211,7 +210,7 @@ namespace RailTracer
                 while ((playerShown - p).sqrMagnitude > 1e-4f)
                 {
                     var before = playerShown;
-                    playerShown = Vector3.MoveTowards(playerShown, p, walkOutSpeed * Time.deltaTime);
+                    playerShown = Vector3.MoveTowards(playerShown, p, unitSpeed * Time.deltaTime);
                     hopMoving = true;
                     var step = playerShown - before;
                     if (step.sqrMagnitude > 1e-6f) playerFacing = step.normalized;
@@ -220,7 +219,7 @@ namespace RailTracer
                 }
             }
             hopMoving = false;
-            hopRunning = exiting = false;
+            hopRunning = false;
             busy = false;
             if (!endless && carIndex == Train.DemoCars - 1)
             {
@@ -461,9 +460,11 @@ namespace RailTracer
             float drift = Mathf.Sin(Time.unscaledTime * 0.08f) * 1.5f;
             if (screen == MenuScreen.Journey)
             {
-                float mid = (SlotX(0) + SlotX(Train.DemoCars - 1)) / 2f + (Map[0].Length - 1) / 2f;
+                // Side-on, closed in on the picked car (its neighbours still in view, to pick them).
+                float mid = (journeyPick >= 0 ? SlotX(journeyPick) : (SlotX(0) + SlotX(Train.DemoCars - 1)) / 2f) + (Map[0].Length - 1) / 2f;
+                float back = journeyPick >= 0 ? journeyZoom : 95f;
                 var look = new Vector3(mid, 0.6f, -2f);
-                var pos = new Vector3(mid + drift, 7f, -2f - 95f);
+                var pos = new Vector3(mid + drift * back / 95f, 7f * back / 95f + 1f, -2f - back);
                 return (pos, Quaternion.LookRotation(look - pos));
             }
             int slot = LiveSlot >= 0 ? LiveSlot : -1;
@@ -542,7 +543,7 @@ namespace RailTracer
                     int hit = hud.RefreshMenu(true, null, items, null, null, at);
                     if (!click) break;
                     if (hit == 0) Dive(BackdropIsEmpty ? () => StartCar(false, 0, MaxHpCarry) : (System.Action)null);
-                    else if (hit == 1) { screen = MenuScreen.Journey; journeyPick = Mathf.Min(NextDemo, Train.DemoCars - 1); journeyConfirm = -1; }
+                    else if (hit == 1) { screen = MenuScreen.Journey; journeyPick = Mathf.Min(NextDemo, Train.DemoCars - 1); }
                     else if (hit == 2) Dive(() => StartCar(true, 1, MaxHpCarry));
                     else if (hit == 3) screen = MenuScreen.Options;
                     else if (hit == 4) Quit();
@@ -559,14 +560,6 @@ namespace RailTracer
                         return new Vector2(p.x, p.y);
                     }).ToArray();
                     int over = hud.RefreshJourney(screenAt, names, states, journeyPick, at);
-                    if (journeyConfirm >= 0)
-                    {
-                        var info2 = $"Replaying {Train.Demo(journeyConfirm).name} replaces your saved run.";
-                        int yes = hud.RefreshMenu(false, "Journey", new[] { "Replay anyway", "Keep my run" }, null, info2, at, held);
-                        if (back || (click && (yes == 1 || yes == -2))) journeyConfirm = -1;
-                        else if (click && yes == 0) { int k = journeyConfirm; journeyConfirm = -1; Dive(() => StartCar(false, k, MaxHpCarry)); }
-                        break;
-                    }
                     bool again = click && over >= 0 && over == journeyPick; // clicking the picked car plays it, like a double click
                     if (click && over >= 0) journeyPick = over;
                     var pick = Train.Demo(journeyPick);
@@ -579,8 +572,7 @@ namespace RailTracer
                     if ((again || (click && hit == 0)) && (cleared || isNext))
                     {
                         int k = journeyPick;
-                        if (cleared && save.run != null) journeyConfirm = k; // ask before a Replay replaces the saved run
-                        else Dive(resumable ? (System.Action)null : () => StartCar(false, k, MaxHpCarry));
+                        Dive(resumable ? (System.Action)null : () => StartCar(false, k, MaxHpCarry));
                     }
                     break;
                 }
@@ -632,9 +624,9 @@ namespace RailTracer
 
         // Greybox stand-ins for the dining car and baggage hold, until their art arrives: tables with chairs tucked
         // under (cloth white), the bar counter, mail sacks, crates, and the safe's cage of heavy beams with gaps.
-        void Greybox(Carriage car, string[] map, Transform parent, TrainKit kit = null)
+        void Greybox(Carriage car, string[] map, Transform parent, TrainKit kit = null, List<Transform> bulbs = null)
         {
-            var modelled = kit ? DiningModels(car, map, parent, kit) : new HashSet<Cell>();
+            var modelled = kit ? DiningModels(car, map, parent, kit, bulbs) : new HashSet<Cell>();
             Color cloth = new Color(0.86f, 0.83f, 0.76f), wood = new Color(0.3f, 0.19f, 0.11f), sack = new Color(0.55f, 0.48f, 0.34f),
                 crate = new Color(0.5f, 0.36f, 0.2f), beam = new Color(0.25f, 0.16f, 0.09f), metal = new Color(0.62f, 0.6f, 0.56f);
             for (int x = 0; x < car.W; x++)
@@ -698,7 +690,7 @@ namespace RailTracer
         // The dining car's furniture from the kit (Train Assets/Dining), each fitted to its group of tiles: tables
         // of 1, 2 (straight) or 3 (L) 'T' tiles, the 2x2 round table, the cart, the L bar (4 + 1). Returns the
         // tiles they cover; any other shape keeps the greybox.
-        HashSet<Cell> DiningModels(Carriage car, string[] map, Transform parent, TrainKit kit)
+        HashSet<Cell> DiningModels(Carriage car, string[] map, Transform parent, TrainKit kit, List<Transform> bulbs)
         {
             var done = new HashSet<Cell>();
             var seen = new HashSet<Cell>();
@@ -759,6 +751,7 @@ namespace RailTracer
                     go.transform.localPosition = pos;
                     go.transform.localRotation = rot;
                     if (mirror) go.transform.localScale = new Vector3(-1f, 1f, 1f);
+                    bulbs?.AddRange(go.GetComponentsInChildren<Transform>().Where(t => t.name.StartsWith("Anchor_"))); // table lamp bulbs
                     done.UnionWith(group);
                 }
             return done;

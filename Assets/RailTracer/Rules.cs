@@ -181,7 +181,7 @@ namespace RailTracer
                     char ch = map[y][x];
                     seat[x, y] = "STBMOD".IndexOf(ch) >= 0;
                     solid[x, y] = "LlWXx".IndexOf(ch) >= 0;
-                    blankWall[x, y] = "_lx".IndexOf(ch) >= 0;
+                    blankWall[x, y] = "_lxB".IndexOf(ch) >= 0; // a bar stands against plain wall
                     cage[x, y] = ch == 'C';
                     wall[x, y] = ch == 'W';
                     if (ch == 'P') player = new Cell(x, y);
