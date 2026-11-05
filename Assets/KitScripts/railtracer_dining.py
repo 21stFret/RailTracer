@@ -15,9 +15,10 @@ asset's first tile (the round table: the centre of its 2x2 block). Directions be
   Dining_Table_Round  2 x 2 tiles  pivot = centre of the block; 1.32 m round table, four chairs at the sides.
   Dining_Cart         1 tile       0.86 x 0.5 x 0.98 m brass-framed trolley, long side along X, push handle
                       at +X; teapot, cups and a cloche on top, plates below.
-  Bar_L               L of 5 tiles corner tile at the pivot, the counter runs 4 tiles along +X with its back
-                      to the wall at +Z, and turns 1 tile into the room along -Z. 1.1 m tall, brass foot
-                      rail on the room side, taps, bottles, glasses and a cash register on top.
+  Bar_L               L of 5 tiles corner tile at the pivot: the counter stands in the room, 4 tiles along +X,
+                      its front and brass foot rail facing -Z; the short leg runs 1 tile along +Z back to the wall.
+                      The bartender stands behind it (the row at +Z), with a back shelf of bottles on the wall.
+                      1.1 m tall; taps, a cash register, glasses and bottles on top.
 Chairs reach about 0.35 m past the table's tiles into the open floor around it (the map keeps a tile clear
 round every table); nothing reaches past the wall side of a window table.
 """
@@ -1128,58 +1129,76 @@ def cart():
 
 
 def bar_l():
-    """Corner tile at the pivot; counter along +X (4 tiles), back to the wall (+Z), return 1 tile along -Z."""
+    """A normal bar: the counter stands out in the room (4 tiles along +X from the corner tile at the pivot), its
+    front and foot rail facing the room (-Z); the short leg runs from the corner back to the wall (1 tile along +Z,
+    the wall's inner face at w = 1.5). The bartender stands behind it, between the counter and a back shelf on the
+    wall (both inside the L's tiles' row and the row behind)."""
     a = Asset("Bar_L", seed=SEED)
     S, P = a.S, a.P
     top = 1.06
-    back, front = 0.45, -0.18                         # the long run's body, across (w)
-    left, inner = -0.45, 0.18                         # the return's body, along (u)
-    end, return_end = 3.45, -1.45
-    # bodies: the long run full length, the return fitted against its front (corners: no overlap)
+    front, back = -0.25, 0.3                          # the counter's body, across (w)
+    left, inner = -0.45, 0.18                         # the short leg's body, along (u)
+    end, wall = 3.45, 1.45                            # the counter's far end; the short leg stops at the wall
+    # bodies: the counter full length, the short leg fitted behind it (corners: no overlap)
     R(S, left, end, front, back, 0.0, top, WOOD)
-    R(S, left, inner, return_end, front, 0.0, top, WOOD)
-    # kick plates (dark, recessed look: proud 1 cm, start 4 mm up)
-    R(S, inner, end - 0.01, front - 0.01, front, 0.004, 0.12, WOODDARK)
-    R(S, inner, inner + 0.01, return_end + 0.01, front - 0.01, 0.004, 0.12, WOODDARK)
-    R(S, left - 0.01, left, return_end, back - 0.01, 0.004, 0.12, WOODDARK)
-    R(S, left - 0.01, inner, return_end - 0.01, return_end, 0.004, 0.12, WOODDARK)
-    # raised panels on the room faces: long front, return inner side, return outer side, return end
+    R(S, left, inner, back, wall, 0.0, top, WOOD)
+    # kick plates (proud 1 cm, start 4 mm up) on the room faces: the front, the corner's end, the leg's outer side
+    R(S, left - 0.01, end, front - 0.01, front, 0.004, 0.12, WOODDARK)
+    R(S, end, end + 0.01, front - 0.01, back, 0.004, 0.12, WOODDARK)
+    R(S, left - 0.01, left, front, wall, 0.004, 0.12, WOODDARK)
+    # raised panels: six along the front, two down the leg's outer side, one on the far end
+    span = (end - left) / 6
     for i in range(6):
-        u0 = inner + 0.06 + i * ((end - inner - 0.06) / 6)
-        R(S, u0 + 0.05, u0 + (end - inner - 0.06) / 6 - 0.05, front - 0.02, front, 0.22, top - 0.14, WOODDARK)
-    for (w0, w1) in ((return_end + 0.08, front - 0.1),):
-        R(S, inner, inner + 0.02, w0, w1, 0.22, top - 0.14, WOODDARK)
+        u0 = left + i * span
+        R(S, u0 + 0.06, u0 + span - 0.06, front - 0.02, front, 0.22, top - 0.14, WOODDARK)
+    for (w0, w1) in ((front + 0.08, back + 0.5), (back + 0.6, wall - 0.08)):
         R(S, left - 0.02, left, w0, w1, 0.22, top - 0.14, WOODDARK)
-    R(S, left + 0.08, inner - 0.08, return_end - 0.02, return_end, 0.22, top - 0.14, WOODDARK)
-    R(S, left - 0.02, left, front + 0.08, back - 0.08, 0.22, top - 0.14, WOODDARK)          # corner's outer end
-    # counter top: one slab for the long run, one for the return (abutting), overhanging the room side
-    R(S, left - 0.03, end + 0.03, front - 0.1, back + 0.02, top, top + 0.05, WOODDARK)
-    R(S, left - 0.03, inner + 0.1, return_end - 0.03, front - 0.1, top, top + 0.05, WOODDARK)
-    # brass edge strip just under the top on the room side
-    R(S, inner + 0.1, end + 0.03, front - 0.105, front - 0.1, top + 0.005, top + 0.045, BRASS)
-    # brass foot rail on brackets, inside the L
-    rw, ru = front - 0.14, inner + 0.14
+    R(S, end, end + 0.02, front + 0.08, back - 0.08, 0.22, top - 0.14, WOODDARK)
+    # the bartender's side: a dark plain back with an under-counter shelf
+    R(S, inner, end, back, back + 0.01, 0.004, top - 0.02, WOODDARK)
+    R(S, inner + 0.01, end - 0.05, back + 0.01, back + 0.25, 0.45, 0.48, WOODDARK)
+    # counter top: one slab along the counter, one on the leg (abutting), overhanging the room side
+    R(S, left - 0.1, end + 0.08, front - 0.1, back + 0.03, top, top + 0.05, WOODDARK)
+    R(S, left - 0.1, inner + 0.03, back + 0.03, wall - 0.01, top, top + 0.05, WOODDARK)
+    R(S, left - 0.1, end + 0.08, front - 0.105, front - 0.1, top + 0.005, top + 0.045, BRASS)    # brass edge strip
+    # brass foot rail round the room side: along the front and down the leg's outer side, on brackets
+    rw, ru = front - 0.14, left - 0.14
     tube_u(S, ru, end - 0.05, rw, 0.17, 0.022, BRASS, segs=12)
-    tube_w(S, return_end + 0.05, rw, ru, 0.17, 0.022, BRASS, segs=12)
-    L(S, [(0.026, 0.17 - 0.026), (0.026, 0.17 + 0.026)], ru, rw, BRASS, segs=12)           # corner knuckle
-    for u in (0.8, 1.8, 2.8):
+    tube_w(S, rw, wall - 0.08, ru, 0.17, 0.022, BRASS, segs=12)
+    L(S, [(0.026, 0.17 - 0.026), (0.026, 0.17 + 0.026)], ru, rw, BRASS, segs=12)              # corner knuckle
+    for u in (0.6, 1.6, 2.6):
         R(S, u - 0.015, u + 0.015, rw + 0.02, front - 0.01, 0.15, 0.19, BRASS)
-    R(S, inner + 0.01, ru - 0.02, -0.95 - 0.015, -0.95 + 0.015, 0.15, 0.19, BRASS)
-    # on top: beer taps, a cash register at the far end, bottles and glasses
+    for w in (0.4, 1.1):
+        R(S, ru + 0.02, left - 0.01, w - 0.015, w + 0.015, 0.15, 0.19, BRASS)
+    # the back shelf on the wall behind the bartender: a low cupboard and two shelves of bottles
+    sb0, sb1 = 1.22, 1.45
+    R(S, inner + 0.3, end, sb0, sb1, 0.0, 0.9, WOODDARK)
+    R(S, inner + 0.3, end, sb0 - 0.02, sb1, 0.9, 0.94, WOOD)
+    for y in (1.35, 1.75):
+        R(S, inner + 0.3, end, sb0 + 0.06, sb1, y, y + 0.03, WOOD)
+    for u in (inner + 0.31, end - 0.03):
+        R(S, u - 0.01, u + 0.02, sb0 + 0.06, sb1, 0.94, 2.0, WOOD)                           # shelf ends
+    rng = a.rng
+    for y in (0.94, 1.38, 1.78):
+        u = inner + 0.42
+        while u < end - 0.12:
+            h = rng.uniform(0.2, 0.3)
+            L(P, [(0.03, y), (0.03, y + h), (0.011, y + h + 0.06), (0.011, y + h + 0.09)], u, sb0 + 0.14, GLASS, segs=10)
+            u += rng.uniform(0.1, 0.17)
+    # on the counter: beer taps facing the bartender, a cash register at the far end, glasses, a bottle or two
     ty = top + 0.05
     for u in (1.2, 1.45):
-        R(P, u - 0.03, u + 0.03, 0.12, 0.2, ty, ty + 0.03, BRASS)
-        L(P, [(0.018, ty + 0.03), (0.018, ty + 0.3)], u, 0.16, BRASS, segs=10)
-        tube_w(P, 0.02, 0.16, u, ty + 0.28, 0.012, BRASS, segs=8)
-        L(P, [(0.014, ty + 0.2), (0.014, ty + 0.28)], u, 0.02, BRASS, segs=8)
-        L(P, [(0.02, ty + 0.3), (0.02, ty + 0.42)], u, 0.16, WOODDARK, segs=10)              # handle
-    R(P, 2.95, 3.35, -0.05, 0.3, ty, ty + 0.18, BRASS)                                       # register
-    R(P, 3.0, 3.3, 0.05, 0.3, ty + 0.18, ty + 0.3, BRASS)
-    for i, u in enumerate((-0.25, -0.12, 0.02, 0.4, 0.55)):
-        h = 0.24 + 0.05 * (i % 2)
-        L(P, [(0.032, ty), (0.032, ty + h), (0.011, ty + h + 0.06), (0.011, ty + h + 0.1)], u, 0.3, GLASS, segs=12)
-    for (u, w) in ((2.1, -0.02), (2.3, -0.06), (2.45, 0.02), (-0.15, -0.8), (-0.02, -1.1)):
+        R(P, u - 0.03, u + 0.03, back - 0.12, back - 0.04, ty, ty + 0.03, BRASS)
+        L(P, [(0.018, ty + 0.03), (0.018, ty + 0.3)], u, back - 0.08, BRASS, segs=10)
+        tube_w(P, back - 0.08, back + 0.06, u, ty + 0.28, 0.012, BRASS, segs=8)
+        L(P, [(0.014, ty + 0.2), (0.014, ty + 0.28)], u, back + 0.06, BRASS, segs=8)
+        L(P, [(0.02, ty + 0.3), (0.02, ty + 0.42)], u, back - 0.08, WOODDARK, segs=10)          # handle
+    R(P, 2.95, 3.35, -0.02, 0.28, ty, ty + 0.18, BRASS)                                       # register, keys to the back
+    R(P, 3.0, 3.3, -0.02, 0.18, ty + 0.18, ty + 0.3, BRASS)
+    for (u, w) in ((2.1, -0.12), (2.3, -0.16), (2.45, -0.1), (0.3, -0.14), (-0.2, 0.7), (-0.05, 1.0)):
         L(P, [(0.03, ty), (0.035, ty + 0.11)], u, w, GLASS, segs=12, cap_top=False)
+    for u in (0.55, 0.68):
+        L(P, [(0.032, ty), (0.032, ty + 0.26), (0.011, ty + 0.32), (0.011, ty + 0.36)], u, 0.1, GLASS, segs=12)
     return a.finish()
 
 

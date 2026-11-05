@@ -744,7 +744,8 @@ namespace RailTracer
                     }
                     else if ((ch == 'T' && group.Count == 3) || (ch == 'B' && group.Count == 5))
                     {
-                        // An L: the corner has neighbours both ways; local +X runs along the long arm, local -Z the other.
+                        // An L: the corner has neighbours both ways; local +X runs along the long arm, local -Z the other
+                        // (the bar's short leg: local +Z, back to the wall).
                         var dirs = new[] { new Cell(1, 0), new Cell(-1, 0), new Cell(0, 1), new Cell(0, -1) };
                         int Arm(Cell from, Cell d) { int n = 0; while (group.Contains(new Cell(from.x + d.x * (n + 1), from.y + d.y * (n + 1)))) n++; return n; }
                         foreach (var corner in group)
@@ -757,7 +758,7 @@ namespace RailTracer
                             pos = World(corner);
                             Vector3 Dir(Cell d) => new Vector3(d.x, 0f, -d.y);
                             Vector3 d1 = Dir(arms[0]), d2 = Dir(arms[1]);
-                            rot = Quaternion.LookRotation(-d2);
+                            rot = Quaternion.LookRotation(ch == 'B' ? d2 : -d2);
                             if (Vector3.Dot(rot * Vector3.right, d1) < 0.5f)
                             {
                                 if (ch == 'B') mirror = true; // the bar isn't symmetric: its mirror image

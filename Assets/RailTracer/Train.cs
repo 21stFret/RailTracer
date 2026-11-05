@@ -36,10 +36,11 @@ namespace RailTracer
         // Dining car: tables by the windows and a few out in the room, straight, L-shaped ('T') and round ('O',
         // 2x2), each a tile clear of the next; a dining cart ('D') in the aisle; an L-shaped bar at the far end.
         // Long sightlines, half cover only. Plain wall ('_') between some of the window tables and behind the bar.
+        // The bar stands in the room (row 1), its short leg back to the wall, the bartender behind it.
         static readonly string[] DiningMap =
         {
-            "..TT...OO___TT...____BBBB.",
-            ".......OO...T...T....B....",
+            "..TT...OO___TT...____B___.",
+            ".......OO...T...T....BBBB.",
             "P.........D...............",
             "...T..T.......OO......T...",
             "..TT_____TT...OO..TT..____",
@@ -82,7 +83,7 @@ namespace RailTracer
             spawns = new[]
             {
                 new[] { 5, 1, 0, 1, 0, 0 }, new[] { 8, 3, 1, 0, 0, 0 }, new[] { 12, 2, 1, 0, 0, 0 }, new[] { 14, 0, 0, 1, 0, 0 },
-                new[] { 17, 4, 0, -1, 0, 0 }, new[] { 20, 2, -1, 0, 0, 1 }, new[] { 23, 1, -1, 0, 0, 0 },
+                new[] { 17, 4, 0, -1, 0, 0 }, new[] { 20, 2, -1, 0, 0, 1 }, new[] { 23, 0, 0, 1, 0, 0 },
             },
             patrols = new Dictionary<int, Cell[]> { [2] = new[] { new Cell(12, 2), new Cell(17, 2) } },
         };
