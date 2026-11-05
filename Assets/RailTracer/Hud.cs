@@ -124,6 +124,11 @@ namespace RailTracer
         int maxLegend;
         int[] notchAt;
         Image legendFill, hpFill;
+        RectTransform hatchMask, hatch;
+        TMP_Text crossLine;
+        // The legend the targeted kill would give (0 = no kill targeted): shown hatched on the bar, beside the big
+        // number, and as the notches it crosses. Game sets it each frame before Refresh.
+        public int legendGain;
         Image[] notches, movePips;
         TMP_Text[] notchLabels;
         TMP_Text legendNum, hpNum, hpWord, log;
@@ -162,7 +167,7 @@ namespace RailTracer
         {
             public RectTransform rt;
             public GameObject label;
-            public TMP_Text name, role, words, intent, glyph;
+            public TMP_Text name, role, words, intent, gain, glyph;
             public Image chipBg, chipBorder, icon, eye, labelBorder, plate;
             public Image[] segs, segEdges;
             public GameObject notYet;
@@ -247,6 +252,15 @@ namespace RailTracer
             legendFill = Img(bar, Blood, 0f);
             Filled(legendFill, Image.FillMethod.Horizontal, (int)Image.OriginHorizontal.Left);
             legendFill.gameObject.AddComponent<UITaper>().start = Taper;
+            // A targeted kill's legend, not happened yet: hatched from your legend to where the kill lands.
+            hatchMask = Rect("Gain", bar, Vector2.zero, Vector2.zero, new Vector2(0f, BarHeight));
+            hatchMask.gameObject.AddComponent<RectMask2D>();
+            hatch = Rect("Hatch", hatchMask, Vector2.zero, Vector2.zero, new Vector2(BarWidth, BarHeight));
+            var hatchImg = hatch.gameObject.AddComponent<RawImage>();
+            hatchImg.texture = Stripes();
+            hatchImg.uvRect = new Rect(0f, 0f, BarWidth / 12f, BarHeight / 12f);
+            hatchImg.raycastTarget = false;
+            hatch.gameObject.AddComponent<UITaper>().start = Taper;
             notchAt = skills.SelectMany(s => new[] { s.unlock, s.bloodied }).Where(v => v > 0).Distinct().OrderBy(v => v).ToArray();
             notches = new Image[notchAt.Length];
             notchLabels = new TMP_Text[notchAt.Length];
@@ -266,6 +280,13 @@ namespace RailTracer
             Place(word.rectTransform, Vector2.zero, new Vector2(868, BarY - 4f));
             legendNum = Text(root, title, 32, TextAlignmentOptions.BottomLeft, Vector2.zero, new Vector2(160, 80));
             Place(legendNum.rectTransform, Vector2.zero, new Vector2(868, BarY + 20f));
+            legendNum.textWrappingMode = TextWrappingModes.NoWrap; // "42 +30" on one line
+            // Under the bar, beside health: the notches a targeted kill would cross.
+            crossLine = Text(root, body, 14, TextAlignmentOptions.MidlineLeft, Vector2.zero, new Vector2(560, 24));
+            Place(crossLine.rectTransform, Vector2.zero, new Vector2(Left + 440, HealthY));
+            crossLine.textWrappingMode = TextWrappingModes.NoWrap;
+            crossLine.fontStyle = FontStyles.Bold;
+            crossLine.color = Bright;
 
             // ---- Skill boxes ----
             for (int i = 0; i < boxes.Length; i++)
@@ -629,9 +650,19 @@ namespace RailTracer
             }
 
             legendFill.fillAmount = L / (float)maxLegend;
-            for (int i = 0; i < notchAt.Length; i++) notches[i].color = notchLabels[i].color = L >= notchAt[i] ? Bone : NotchOff;
+            int to = Mathf.Min(maxLegend, L + legendGain);
+            hatchMask.gameObject.SetActive(to > L);
+            hatchMask.anchoredPosition = new Vector2(L / (float)maxLegend * BarWidth, 0f);
+            hatchMask.sizeDelta = new Vector2((to - L) / (float)maxLegend * BarWidth, BarHeight);
+            hatch.anchoredPosition = -hatchMask.anchoredPosition; // the stripes and taper stay fixed to the bar
+            for (int i = 0; i < notchAt.Length; i++)
+                notches[i].color = notchLabels[i].color = L >= notchAt[i] ? Bone : notchAt[i] <= to ? Bright : NotchOff;
+            var crossed = notchAt.Where(v => v > L && v <= to).Select(v => $"{v}: {NotchName(v)}").ToList();
+            if (legendGain > 0 && L + legendGain > maxLegend) crossed.Add($"Capped at {maxLegend}");
+            crossLine.gameObject.SetActive(legendGain > 0 && crossed.Count > 0);
+            crossLine.text = string.Join(" · ", crossed);
             float k = L / (float)maxLegend;
-            legendNum.text = L.ToString();
+            legendNum.text = legendGain > 0 ? $"{L}<size=60%><color=#E0202F> +{legendGain}</color></size>" : L.ToString();
             legendNum.fontSize = Mathf.Round(32f + 40f * k);
             legendNum.color = k >= 1f ? Hex("7A0618") : k >= 0.75f ? Hex("9E0B22") : k >= 0.5f ? Blood : k >= 0.25f ? Bright : Bone;
 
@@ -699,9 +730,10 @@ namespace RailTracer
         // awareness: 0 Unaware, 1 Searching, 2 Startled, 3 Combat, 4 Broken.
         // threat: they'll fire on what you're aiming (a red border, the shot in red). icon: what they'll do if you end
         // your turn there ("crosshair", "charge", "wildfire" or null). plate: a tough's armour, 1 whole, 2 cracked
-        // (killable). notYet: "Not yet" over a tough you're targeting before it's Shaken.
+        // (killable). notYet: "Not yet" over a tough you're targeting before it's Shaken. gain: the targeted kill's
+        // line ("Brutal kill +30 legend", or "Locked"), or null.
         public RectTransform AddTag(Vector2 screen, float scale, int awareness, int terrorNow, bool seen, bool hovered, string name, string role, string words, string intent,
-            bool threat = false, string icon = null, int plate = 0, bool notYet = false)
+            bool threat = false, string icon = null, int plate = 0, bool notYet = false, string gain = null)
         {
             if (tagCount == tags.Count) tags.Add(MakeTag());
             var g = tags[tagCount++];
@@ -714,11 +746,11 @@ namespace RailTracer
             g.chipBg.color = combat ? Blood : white ? Bone : broken ? Alpha(Black, 0.7f) : Black;
             g.chipBorder.color = combat ? Blood : broken ? LockedBox : Bone;
             var ink = white ? Black : broken ? Grey : Bone;
-            // Startled, or a panicked freeze turn (it loses the turn the same way): the scared face. Searching: "?".
-            if (icon == "freeze" || (awareness == 2 && icon == null)) icon = "startled";
-            bool glyph = awareness == 1 && icon == null;
+            // Startled: "!". Searching: "?". A panicked freeze turn: the ghost, frozen with fear.
+            if (icon == "freeze") icon = "ghost";
+            bool glyph = (awareness == 1 || awareness == 2) && icon == null;
             g.glyph.gameObject.SetActive(glyph);
-            g.glyph.text = "?";
+            g.glyph.text = awareness == 2 ? "!" : "?";
             g.glyph.color = ink;
             g.icon.enabled = !glyph && (broken || icon != null || awareness == 0);
             if (g.icon.enabled) g.icon.sprite = IconSprite(broken ? "flag" : icon ?? "ring");
@@ -742,6 +774,9 @@ namespace RailTracer
                 g.intent.text = intent;
                 g.intent.gameObject.SetActive(!string.IsNullOrEmpty(intent));
                 g.intent.color = threat ? Bright : LockedText;
+                g.gain.gameObject.SetActive(gain != null);
+                g.gain.text = gain;
+                g.gain.color = gain == "Locked" ? LockedText : Bright;
                 g.labelBorder.color = threat ? Blood : Bone;
             }
             return g.chip;
@@ -774,6 +809,9 @@ namespace RailTracer
             g.words.alignment = TextAlignmentOptions.Center;
             g.intent = Label(label, "", 13, LockedText, 1f);
             g.intent.alignment = TextAlignmentOptions.Center;
+            g.gain = Label(label, "", 13, Bright, 1f);
+            g.gain.alignment = TextAlignmentOptions.Center;
+            g.gain.fontStyle = FontStyles.Bold;
             g.label = label.gameObject;
 
             // "Not yet": over a tough you're targeting before it's Shaken.
@@ -814,6 +852,23 @@ namespace RailTracer
         }
 
         // ---- Building blocks ----
+
+        // What a notch on the legend bar gives: "Rail unlocks", "Leap Bloodied".
+        string NotchName(int v) => string.Join(", ", skills
+            .Where(s => s.unlock == v || s.bloodied == v)
+            .Select(s => s.shortName + (s.unlock != v ? " Bloodied" : s.bloodied == v ? " unlocks Bloodied" : " unlocks")));
+
+        // Diagonal stripes, #E0202F on #4A0C15, tiling every 12 px.
+        static Texture2D Stripes()
+        {
+            var tex = new Texture2D(12, 12) { wrapMode = TextureWrapMode.Repeat, filterMode = FilterMode.Bilinear };
+            var dark = Hex("4A0C15");
+            for (int x = 0; x < 12; x++)
+                for (int y = 0; y < 12; y++)
+                    tex.SetPixel(x, y, (x + y) % 12 < 5 ? Bright : dark);
+            tex.Apply();
+            return tex;
+        }
 
         Sprite IconSprite(string name) => icons.TryGetValue(name, out var s) ? s : white;
 

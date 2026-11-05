@@ -37,7 +37,7 @@ namespace RailTracer
         public static readonly Dictionary<string, (string title, string text)> FirstTime = new Dictionary<string, (string, string)>
         {
             ["searching"] = ("Searching", "They've noticed something and they're looking for you. Searchers follow blood, spot you right beside them even crouched, and they will shoot."),
-            ["startled"] = ("Startled", "They freeze for a moment. Only someone who's never seen you can be startled, so make it count."),
+            ["startled"] = ("Startled", "The \"!\" on a white chip: they freeze for a moment. Only someone who's never seen you can be startled, so make it count. A ghost instead is a panicked guard frozen with fear: it loses the turn too."),
             ["combat"] = ("In combat", "A red chip means they can see you. A crosshair means they'll shoot if you end your turn there. Get out of sight."),
             ["seen"] = ("Seen", "The eye on their chip means they've seen you, and they won't forget. They can't be startled again."),
             ["reaction"] = ("Reaction fire", "Red on your path means a gun is covering that tile. Step onto it, or leap across it, and they fire."),

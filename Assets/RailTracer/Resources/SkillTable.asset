@@ -22,7 +22,7 @@ MonoBehaviour:
     cooldown: 0
   - name: 'Leap'
     shortName: 'Leap'
-    description: 'Leap over seats to close in. Startles anyone who has never seen you. 3-turn cooldown.'
+    description: 'Leap 3 tiles over anything but walls. Startles anyone who has never seen you. 3-turn cooldown.'
     upgrade: 'Double leap range.'
     unlock: 0
     bloodied: 70

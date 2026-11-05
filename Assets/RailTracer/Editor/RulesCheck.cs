@@ -387,10 +387,10 @@ namespace RailTracer
             c = new Carriage(new[] { "P._.", "....", "...." }, t, 1);
             Check(c.IsWindow(new Cell(1, 0)) && !c.IsWindow(new Cell(2, 0)) && c.BlankWall(new Cell(2, 0)), "a blank wall has no window");
 
-            // The leap can't pass through or clip the corner of luggage or an internal wall; over seats is fine.
-            c = new Carriage(new[] { "PL...", ".....", "....." }, t, 1);
+            // The leap flies over luggage and crates (Update 18), but can't land on them; walls still stop it.
+            c = new Carriage(new[] { "PLX..", ".....", "....." }, t, 1);
             c.Spawn(4, 2, 1, 0, 0); // bystander looking away (an empty carriage counts as won)
-            Check(!c.CanLeapTo(new Cell(2, 1)) && !c.CanLeapTo(new Cell(1, 1)), "no leap past a luggage stack's corner");
+            Check(c.CanLeapTo(new Cell(3, 0)) && c.CanLeapTo(new Cell(2, 1)) && !c.CanLeapTo(new Cell(1, 0)), "leap over luggage and a crate, not onto them");
             Check(c.CanLeapTo(new Cell(0, 2)) && c.CanLeapTo(new Cell(1, 2)), "a clear flight is fine");
             c = new Carriage(new[] { ".W..", "P.W.", "...." }, t, 1);
             c.Spawn(3, 2, 1, 0, 0);
@@ -579,6 +579,62 @@ namespace RailTracer
                 c = new Carriage(new[] { "P.C...", "......" }, t, 1);
                 var g = c.Spawn(4, 0, -1, 0, 0);
                 Check(c.Blocked(new Cell(2, 0)) && c.CanSee(g, c.player) && !c.CanLeapTo(new Cell(3, 0)), "the cage: seen through, not walked or leapt through");
+            }
+
+            // Round tables and the dining cart: seat rules.
+            {
+                var c = new Carriage(new[] { ".POD..", "..OO..", "......" }, t, 1);
+                c.Spawn(5, 2, 1, 0, 0); // bystander looking away
+                Check(c.IsSeat(new Cell(2, 0)) && c.IsSeat(new Cell(3, 0)) && c.Blocked(new Cell(3, 0)) && c.CanLeapTo(new Cell(4, 0)), "round table and cart: seat rules, leapt over");
+            }
+
+            // Dining car: tables (a 'T' group or a round table) at least a tile apart, diagonals too; everyone on floor.
+            {
+                var car = Train.Demo(2);
+                var groups = new Dictionary<Cell, int>();
+                int id = 0;
+                for (int y = 0; y < car.map.Length; y++)
+                    for (int x = 0; x < car.map[0].Length; x++)
+                    {
+                        char ch = car.map[y][x];
+                        if ((ch != 'T' && ch != 'O') || groups.ContainsKey(new Cell(x, y))) continue;
+                        var q = new Queue<Cell>(new[] { new Cell(x, y) });
+                        groups[new Cell(x, y)] = ++id;
+                        while (q.Count > 0)
+                        {
+                            var p = q.Dequeue();
+                            foreach (var d in new[] { new Cell(1, 0), new Cell(-1, 0), new Cell(0, 1), new Cell(0, -1) })
+                            {
+                                var n = new Cell(p.x + d.x, p.y + d.y);
+                                if (n.x < 0 || n.y < 0 || n.y >= car.map.Length || n.x >= car.map[0].Length || car.map[n.y][n.x] != ch || groups.ContainsKey(n)) continue;
+                                groups[n] = id;
+                                q.Enqueue(n);
+                            }
+                        }
+                    }
+                bool spaced = groups.All(a => groups.All(b => a.Value == b.Value || Math.Max(Math.Abs(a.Key.x - b.Key.x), Math.Abs(a.Key.y - b.Key.y)) >= 2));
+                Check(spaced && id >= 8, "dining car: tables a tile apart");
+                var dc = Train.Make(car, t, 1, 30);
+                Check(dc.enemies.Count == 7 && dc.enemies.Count(e => e.tough) == 1 && dc.enemies.All(e => !dc.Blocked(e.pos)), "dining car: 7 on the floor, 1 heavy");
+            }
+
+            // A charging heavy that gets beside you within its 3 moves swings at once; one that needs 4 only closes in.
+            {
+                var ht = new Tuning { meleeHitChance = 1f };
+                var c = new Carriage(new[] { "P.....", "......" }, ht, 1);
+                var h = c.Spawn(4, 0, -1, 0, 0, tough: true);
+                h.awareness = Awareness.Combat;
+                h.lastKnown = c.player;
+                Check(c.Swings(h, c.player) && c.IntentText(h).Contains("Hit 100%"), "heavy 3 away: will swing");
+                c.Do("enemy 1");
+                Check(h.pos == new Cell(1, 0) && c.hp == ht.maxHp - ht.shotDamage, "heavy arrives and swings");
+                c = new Carriage(new[] { "P.....", "......" }, ht, 1);
+                h = c.Spawn(5, 0, -1, 0, 0, tough: true);
+                h.awareness = Awareness.Combat;
+                h.lastKnown = c.player;
+                Check(!c.Swings(h, c.player) && c.IntentText(h) == "Charge", "heavy 4 away: closes in only");
+                c.Do("enemy 1");
+                Check(h.pos == new Cell(2, 0) && c.hp == ht.maxHp, "heavy closes in, no swing");
             }
 
             // The walk-through car: nobody, never won, walk as far as you like.

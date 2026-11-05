@@ -616,7 +616,7 @@ namespace RailTracer
         void Greybox(Carriage car, string[] map, Transform parent)
         {
             Color cloth = new Color(0.86f, 0.83f, 0.76f), wood = new Color(0.3f, 0.19f, 0.11f), sack = new Color(0.55f, 0.48f, 0.34f),
-                crate = new Color(0.5f, 0.36f, 0.2f), beam = new Color(0.25f, 0.16f, 0.09f);
+                crate = new Color(0.5f, 0.36f, 0.2f), beam = new Color(0.25f, 0.16f, 0.09f), metal = new Color(0.62f, 0.6f, 0.56f);
             for (int x = 0; x < car.W; x++)
                 for (int y = 0; y < car.H; y++)
                 {
@@ -630,6 +630,25 @@ namespace RailTracer
                                 Box(at + new Vector3(side * 0.28f, 0.23f, 0f), new Vector3(0.32f, 0.46f, 0.4f), wood, parent: parent);
                                 Box(at + new Vector3(side * 0.47f, 0.62f, 0f), new Vector3(0.05f, 0.5f, 0.4f), wood, parent: parent);
                             }
+                            break;
+                        case 'O':
+                            // A round table across its 2x2 block (drawn once, from its top-left tile), chairs at four sides.
+                            if (x > 0 && map[y][x - 1] == 'O' || y > 0 && map[y - 1][x] == 'O') break;
+                            var mid = at + new Vector3(0.5f, 0f, -0.5f);
+                            Box(mid + Vector3.up * 0.37f, new Vector3(1.7f, 0.37f, 1.7f), cloth, PrimitiveType.Cylinder, solid: true, parent: parent);
+                            foreach (var d in new[] { Vector3.right, Vector3.left, Vector3.forward, Vector3.back })
+                            {
+                                Box(mid + d * 0.62f + Vector3.up * 0.23f, new Vector3(0.36f, 0.46f, 0.36f), wood, parent: parent);
+                                Box(mid + d * 0.84f + Vector3.up * 0.62f, d.x != 0 ? new Vector3(0.05f, 0.5f, 0.4f) : new Vector3(0.4f, 0.5f, 0.05f), wood, parent: parent);
+                            }
+                            break;
+                        case 'D': // the dining cart: a trolley with two trays
+                            Box(at + Vector3.up * 0.3f, new Vector3(0.8f, 0.05f, 0.5f), metal, solid: true, parent: parent);
+                            Box(at + Vector3.up * 0.8f, new Vector3(0.8f, 0.05f, 0.5f), metal, solid: true, parent: parent);
+                            foreach (float sx in new[] { -0.37f, 0.37f })
+                                foreach (float sz in new[] { -0.22f, 0.22f })
+                                    Box(at + new Vector3(sx, 0.45f, sz), new Vector3(0.04f, 0.9f, 0.04f), metal, parent: parent);
+                            Box(at + Vector3.up * 0.9f, new Vector3(0.5f, 0.15f, 0.3f), cloth, parent: parent);
                             break;
                         case 'B': Box(at + Vector3.up * 0.53f, new Vector3(0.96f, 1.06f, 0.7f), wood, solid: true, parent: parent); break;
                         case 'M': Box(at + Vector3.up * 0.3f, new Vector3(0.75f, 0.6f, 0.7f), sack, solid: true, parent: parent); break;

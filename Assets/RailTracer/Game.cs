@@ -148,7 +148,7 @@ namespace RailTracer
         public float snatchTime = 0.25f;         // the snatch: the victim is yanked onto your tile this fast, then the stealth kill plays
         TakedownLibrary takedowns;               // Resources/Takedowns: the finishers kills choose from (else the old pair)
         // Kill cam: brutal kills (as long as the finisher), rail grabs and throws cut in close (no skipping: it always plays out).
-        public float killCamDistance = 1.9f, killCamHeight = 0.55f, sceneCamTime = 1.2f;
+        public float killCamClose = 1.25f, killCamHeight = 0.45f, sceneCamTime = 1.2f; // renamed from killCamDistance (1.9) to override the scene: tight on the pair
         public float killCamFlyIn = 0.45f, killCamPause = 0.2f, killCamFlyOut = 0.35f; // seconds (real time)
         [Range(0.1f, 1f)] public float killCamSlowMo = 1f, throwCamSlowMo = 0.5f;       // game speed during the shot
         bool camming;
@@ -1264,6 +1264,7 @@ namespace RailTracer
         {
             float k = Mathf.Clamp(12f / camDistance, 0.85f, 1.4f);
             hud.BeginTags();
+            hud.legendGain = 0;
             chips.Clear();
             foreach (var e in c.enemies)
             {
@@ -1282,14 +1283,26 @@ namespace RailTracer
                 int shownAwareness = broken ? 4 : red ? (int)Awareness.Combat
                     : e.awareness == Awareness.Combat ? (int)Awareness.Searching : (int)e.awareness;
                 string icon = broken || e.awareness == Awareness.Startled ? null
-                    : c.PanicTurn(e) ? (e.panic == Panic.WildFire ? "wildfire" : "freeze") // a freeze shows "!", like startled
+                    : c.PanicTurn(e) ? (e.panic == Panic.WildFire ? "wildfire" : "freeze") // a freeze shows the ghost
                     : !red ? null // a white chip keeps its "?": icons are for red chips
-                    : c.Charges(e, at) ? "charge"
+                    : c.Swings(e, at) ? "charge" // a heavy that will reach you and swing (3 steps to arrive, 1 to swing)
                     : c.WillShoot(e, at) ? "crosshair" : null;
                 int plate = e.tough && !broken ? (c.StageOf(e) >= Stage.Shaken ? 2 : 1) : 0; // cracked once they can be killed
                 bool notYet = KillMode.HasValue && plate == 1;
+                // Targeting a kill on them: its name and the legend it gives (also shown on the legend bar).
+                string gain = null;
+                if (KillMode.HasValue && hover == e.pos && !busy)
+                {
+                    if (notYet) gain = "Locked";
+                    else if (c.KillOutcome(KillMode.Value, e).HasValue)
+                    {
+                        hud.legendGain = c.LegendGain(KillMode.Value);
+                        gain = $"{Mode()?.name} +{hud.legendGain} legend";
+                    }
+                }
+                string shot = threat ? $"Hit {pct}%" + (leaping && !e.tough ? $" · leap -{Mathf.RoundToInt(100 * c.t.leapHitPenalty)}" : "") : c.IntentText(e);
                 chips[e] = hud.AddTag(sp, k, shownAwareness, e.terror, e.hasSeen, hover == e.pos || threat, c.Name(e), role, c.StatusText(e),
-                    threat ? $"Hit {pct}%" : c.IntentText(e), threat, icon, plate, notYet);
+                    shot, threat, icon, plate, notYet, gain);
             }
             hud.EndTags();
         }
@@ -1562,8 +1575,11 @@ namespace RailTracer
             var side = pair * Vector3.right;
             if (Vector3.Dot(side, savedCamRot * Vector3.back) < 0f) side = -side;
             foreach (var yaw in new[] { 0f, 35f, -35f, 70f, -70f, 180f, 145f, -145f })
-                tries.Add(Quaternion.Euler(0f, yaw, 0f) * side * killCamDistance + Vector3.up * killCamHeight);
-            tries.Add(savedCamRot * Vector3.back * killCamDistance * 1.3f + Vector3.up * killCamHeight * 2f);
+                tries.Add(Quaternion.Euler(0f, yaw, 0f) * side * killCamClose + Vector3.up * killCamHeight);
+            // Only when every close angle is blocked: the same angles pulled back, then from above.
+            foreach (var yaw in new[] { 0f, 35f, -35f, 70f, -70f, 180f })
+                tries.Add(Quaternion.Euler(0f, yaw, 0f) * side * killCamClose * 1.6f + Vector3.up * killCamHeight * 1.5f);
+            tries.Add(savedCamRot * Vector3.back * killCamClose * 2f + Vector3.up * killCamHeight * 3f);
             foreach (var t in tries)
                 if (!CamBlocked(mid, mid + t)) return (mid + t, mid);
             return (mid + tries[tries.Count - 1], mid);
@@ -1858,6 +1874,11 @@ namespace RailTracer
                 foreach (var p in preview)
                     if (p.shooter != null) threats[p.shooter] = Mathf.RoundToInt(100 * c.HitChance(p.shooter, p.tile, leaping));
             previewLanding = preview != null && preview.Count > 1 ? preview[preview.Count - 1].tile : (Cell?)null;
+            // A heavy that will reach the landing and swing counts like a shot.
+            if (previewLanding.HasValue)
+                foreach (var e in c.enemies)
+                    if (c.Swings(e, previewLanding.Value)) threats[e] = Mathf.RoundToInt(100 * c.t.meleeHitChance);
+            SyncShotMarks(preview);
             SyncPath(preview);
             SyncPreviewGhost(preview);
             SyncClues();
@@ -2056,6 +2077,39 @@ namespace RailTracer
                 lr.SetPosition(1, b + Vector3.up * 0.08f);
                 lr.startColor = lr.endColor = preview[i].seen ? DangerRed : Bone;
             }
+        }
+
+        // The hit chance on each tile of the aimed move or leap that draws a shot (a leap's is lower, and says so).
+        readonly List<TMPro.TextMeshPro> shotMarks = new List<TMPro.TextMeshPro>();
+        void SyncShotMarks(List<(Cell tile, bool seen, Enemy shooter)> preview)
+        {
+            int n = 0;
+            if (preview != null && phase == Phase.Play)
+                foreach (var p in preview)
+                {
+                    if (p.shooter == null) continue;
+                    if (n == shotMarks.Count) shotMarks.Add(FloorText(Bone));
+                    var m = shotMarks[n++];
+                    m.transform.localPosition = World(p.tile) + Vector3.up * 0.1f;
+                    m.text = $"{threats[p.shooter]}%" + (leaping ? $"\n<size=55%>LEAP -{Mathf.RoundToInt(100 * c.t.leapHitPenalty)}</size>" : "");
+                }
+            for (int i = 0; i < shotMarks.Count; i++) shotMarks[i].gameObject.SetActive(i < n);
+        }
+
+        // Flat Anton text lying on the floor.
+        TMPro.TextMeshPro FloorText(Color col)
+        {
+            var q = new GameObject("Floor Text").AddComponent<TMPro.TextMeshPro>();
+            q.transform.SetParent(root, false);
+            q.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            q.rectTransform.sizeDelta = Vector2.one;
+            var font = Resources.Load<TMPro.TMP_FontAsset>("Fonts/Anton SDF");
+            if (font) q.font = font;
+            q.fontSize = 3.2f;
+            q.alignment = TMPro.TextAlignmentOptions.Center;
+            q.textWrappingMode = TMPro.TextWrappingModes.NoWrap;
+            q.color = col;
+            return q;
         }
 
         // A see-through you at the end of the aimed move or leap, in your pose, facing along the last step.
@@ -2536,7 +2590,7 @@ namespace RailTracer
         // Ragdoll bones (added to the character by Editor/RagdollSetup: kinematic, colliders off, on Ignore Raycast so
         // blood casts and clicks pass through). A body goes limp and falls; once it has settled (ragdollSettle) it
         // freezes in that pose and slides so its hips sit over the centre of its tile.
-        public float ragdollSettle = 1.6f;
+        public float ragdollSettle = 1.6f, ragdollSlide = 0.15f; // the quick slide over its tile before it falls
         internal static bool HasRagdoll(Animator a) => a && a.GetComponentInChildren<Rigidbody>(true);
 
         internal static void SetLimp(Animator a, bool limp)
@@ -2552,19 +2606,29 @@ namespace RailTracer
         IEnumerator Ragdoll(Enemy e, Animator a, Cell tile)
         {
             var hips = a.GetBoneTransform(HumanBodyBones.Hips);
-            a.enabled = false; // the pose is the physics' now
-            SetLimp(a, true);
+            a.enabled = false; // hold the clip's last pose
+            // First a quick slide so the hips are over the body's tile, then it falls there.
+            if (hips)
+            {
+                var d = World(tile) - root.InverseTransformPoint(hips.position);
+                d.y = 0f;
+                if (bodyOffset.ContainsKey(e)) bodyOffset[e] += d; // SyncBodies heads the same way
+                var start = a.transform.localPosition;
+                for (float time = 0f; time < ragdollSlide; time += Time.deltaTime)
+                {
+                    a.transform.localPosition = start + d * Mathf.SmoothStep(0f, 1f, time / ragdollSlide);
+                    yield return null;
+                    if (!a) yield break;
+                }
+                a.transform.localPosition = start + d;
+            }
+            SetLimp(a, true); // the pose is the physics' now
             for (float time = 0f; time < ragdollSettle; time += Time.deltaTime)
             {
                 yield return null;
                 if (!a) yield break; // restarted mid-fall
             }
             SetLimp(a, false); // frozen where it fell (the animator stays off)
-            if (!hips) yield break;
-            var d = World(tile) - root.InverseTransformPoint(hips.position);
-            d.y = 0f;
-            if (bodyOffset.ContainsKey(e)) bodyOffset[e] += d; // SyncBodies eases the corpse over
-            else a.transform.localPosition += d;
         }
 
         IEnumerator Topple(Transform t, Vector3 away)

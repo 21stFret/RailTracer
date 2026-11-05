@@ -33,15 +33,16 @@ namespace RailTracer
             "..S..S.LS..S.WS..S.LS..S..",
         };
 
-        // Dining car: open tables by the windows and a few out in the room, a bar counter at the far end. Long
-        // sightlines, half cover only.
+        // Dining car: tables by the windows and a few out in the room, straight, L-shaped ('T') and round ('O',
+        // 2x2), each a tile clear of the next; a dining cart ('D') in the aisle; an L-shaped bar at the far end.
+        // Long sightlines, half cover only.
         static readonly string[] DiningMap =
         {
-            "..TT...T..TT...T..TT......",
-            "....T.......T.......T.BBB.",
-            "P.........................",
-            ".....T.......T.......T....",
-            "..TT...T..TT...T..TT......",
+            "..TT...OO...TT.......BBBB.",
+            ".......OO...T...T....B....",
+            "P.........D...............",
+            "...T..T.......OO......T...",
+            "..TT.....TT...OO..TT......",
         };
 
         // Baggage hold: crates and luggage stacked into a maze of full cover, mail sacks for half cover, the safe's
@@ -80,10 +81,10 @@ namespace RailTracer
             name = "Dining car", blurb = "Open tables and long sightlines. Half cover only: made for loud kills and leaps.", kind = CarKind.Dining, map = DiningMap,
             spawns = new[]
             {
-                new[] { 6, 1, 0, 1, 0, 0 }, new[] { 9, 3, 1, 0, 0, 0 }, new[] { 12, 2, 1, 0, 0, 0 }, new[] { 14, 0, 0, 1, 0, 0 },
-                new[] { 17, 4, 0, -1, 0, 0 }, new[] { 19, 2, -1, 0, 0, 1 }, new[] { 23, 0, 0, 1, 0, 0 },
+                new[] { 5, 1, 0, 1, 0, 0 }, new[] { 8, 3, 1, 0, 0, 0 }, new[] { 12, 2, 1, 0, 0, 0 }, new[] { 14, 0, 0, 1, 0, 0 },
+                new[] { 17, 4, 0, -1, 0, 0 }, new[] { 20, 2, -1, 0, 0, 1 }, new[] { 23, 1, -1, 0, 0, 0 },
             },
-            patrols = new Dictionary<int, Cell[]> { [2] = new[] { new Cell(12, 2), new Cell(16, 2) } },
+            patrols = new Dictionary<int, Cell[]> { [2] = new[] { new Cell(12, 2), new Cell(17, 2) } },
         };
 
         static CarDef Baggage() => new CarDef

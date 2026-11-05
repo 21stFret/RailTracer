@@ -31,7 +31,7 @@ namespace RailTracer
         public static SkillDef[] Defaults() => new[]
         {
             new SkillDef { name = "Grab and drag", shortName = "Drag", description = "Grab a body for free. Drag it at half speed." },
-            new SkillDef { name = "Leap", shortName = "Leap", bloodied = 70, cooldown = 3, description = "Leap over seats to close in. Startles anyone who has never seen you. 3-turn cooldown.", upgrade = "Double leap range." },
+            new SkillDef { name = "Leap", shortName = "Leap", bloodied = 70, cooldown = 3, description = "Leap 3 tiles over anything but walls. Startles anyone who has never seen you. 3-turn cooldown.", upgrade = "Double leap range." },
             new SkillDef { name = "Window hop", shortName = "Hop", bloodied = 20, description = "Out one window, in through the next. Unseen outside.", upgrade = "Hop without using your move." },
             new SkillDef { name = "Stealth kill", shortName = "Stealth", bloodied = 40, description = "Kill anyone who can't see you: pulled onto your tile, you stay in cover.", upgrade = "Snatch: yank an enemy 2 tiles away onto your tile, over seats." },
             new SkillDef { name = "Brutal kill", shortName = "Brutal", unlock = 10, bloodied = 50, cooldown = 2, description = "Butcher them where everyone can see. Uses up your moves.", upgrade = "A brutal kill refreshes your leap." },
@@ -135,7 +135,7 @@ namespace RailTracer
 
         public readonly Tuning t;
         public readonly int W, H;
-        readonly bool[,] seat, solid, blankWall, cage; // blankWall: a window-row tile with plain wall behind it, no window
+        readonly bool[,] seat, solid, blankWall, cage, wall; // blankWall: a window-row tile with plain wall behind it, no window
         // The walk-through car: no enemies, no turns, no move costs (it's never won or lost).
         public bool freeWalk;
         readonly Random rng;
@@ -162,8 +162,8 @@ namespace RailTracer
 
         // Map: '.' floor, 'S' seat (half cover), 'L' luggage / 'W' wall (full cover), 'P' player start.
         // Edge rows are windows, middle-row ends are doors; on the edge rows '_' (floor) and 'l' (luggage) have a
-        // plain wall behind them instead of a window. Dining car and baggage hold: 'T' table, 'B' bar, 'M' mail
-        // sack (seat rules); 'X' crate ('x' with plain wall behind; luggage rules); 'C' the safe's cage (blocks
+        // plain wall behind them instead of a window. Dining car and baggage hold: 'T' table, 'O' round table,
+        // 'D' dining cart, 'B' bar, 'M' mail sack (seat rules); 'X' crate ('x' with plain wall behind; luggage rules); 'C' the safe's cage (blocks
         // walking and leaps like a wall, but you can see through it).
         public Carriage(string[] map, Tuning t, int seed)
         {
@@ -174,14 +174,16 @@ namespace RailTracer
             solid = new bool[W, H];
             blankWall = new bool[W, H];
             cage = new bool[W, H];
+            wall = new bool[W, H];
             for (int y = 0; y < H; y++)
                 for (int x = 0; x < W; x++)
                 {
                     char ch = map[y][x];
-                    seat[x, y] = "STBM".IndexOf(ch) >= 0;
+                    seat[x, y] = "STBMOD".IndexOf(ch) >= 0;
                     solid[x, y] = "LlWXx".IndexOf(ch) >= 0;
                     blankWall[x, y] = "_lx".IndexOf(ch) >= 0;
                     cage[x, y] = ch == 'C';
+                    wall[x, y] = ch == 'W';
                     if (ch == 'P') player = new Cell(x, y);
                 }
             hp = t.maxHp;
@@ -240,7 +242,8 @@ namespace RailTracer
         public bool IsSeat(Cell c) => InBounds(c) && seat[c.x, c.y];
         public bool IsSolid(Cell c) => InBounds(c) && solid[c.x, c.y];
         public bool IsCage(Cell c) => InBounds(c) && cage[c.x, c.y];
-        bool Tall(Cell c) => IsSolid(c) || IsCage(c); // stops leaps and snatches (the cage you can still see through)
+        bool Tall(Cell c) => IsSolid(c) || IsCage(c); // stops snatches (the cage you can still see through)
+        bool StopsLeap(Cell c) => InBounds(c) && (wall[c.x, c.y] || cage[c.x, c.y]); // a leap flies over everything else
         public bool Blocked(Cell c) => !InBounds(c) || seat[c.x, c.y] || solid[c.x, c.y] || cage[c.x, c.y];
         public bool IsWindow(Cell c) => !Blocked(c) && (c.y == 0 || c.y == H - 1) && !blankWall[c.x, c.y];
         public bool BlankWall(Cell c) => InBounds(c) && blankWall[c.x, c.y];
@@ -640,6 +643,9 @@ namespace RailTracer
             }
         }
 
+        // The legend a kill gives (before the cap).
+        public int LegendGain(Act a) => a == Act.QuietKill ? t.quietLegend : a == Act.RailGrab ? t.railLegend : t.brutalLegend;
+
         void GainLegend(int n)
         {
             int before = legend;
@@ -809,17 +815,17 @@ namespace RailTracer
                 if (e.InPlay && e.lastKnown == player) Face(e, player);
         }
 
-        // Leap: traversal or closing in, over seats. Costs your whole move; travels at head height, so every tile
+        // Leap: traversal or closing in, over anything but walls and the cage. Costs your whole move; travels at head height, so every tile
         // of the arc is seen as if you were standing, whatever your stance.
         public bool CanLeapTo(Cell c) =>
             CanMove && leapWait == 0 && held == null && movesLeft == t.moveRange && !Blocked(c) && !Occupied(c)
-            && Dist2(player, c) <= LeapRange * LeapRange && LineOfSight(player, c, false) && ClearFlight(player, c);
+            && Dist2(player, c) <= LeapRange * LeapRange && Line(player, c).TrueForAll(n => n == c || !StopsLeap(n)) && ClearFlight(player, c);
 
         // Bloodied (70): twice as far.
         public int LeapRange => Bloodied(SkillId.Leap) ? t.leapRange * 2 : t.leapRange;
 
-        // The leap flies straight from tile centre to tile centre, a body's width wide: it may pass over seats but
-        // not through or across the corner of anything tall (luggage stacks, internal walls).
+        // The leap flies straight from tile centre to tile centre, a body's width wide: over seats, luggage and
+        // crates, but not through or across the corner of a wall or the cage.
         bool ClearFlight(Cell a, Cell b)
         {
             const double r = 0.12; // half the body width, in tiles
@@ -829,7 +835,7 @@ namespace RailTracer
                 double k = (double)i / n, x = a.x + (b.x - a.x) * k, y = a.y + (b.y - a.y) * k;
                 foreach (var dx in new[] { -r, r })
                     foreach (var dy in new[] { -r, r })
-                        if (Tall(new Cell((int)Math.Floor(x + dx + 0.5), (int)Math.Floor(y + dy + 0.5)))) return false;
+                        if (StopsLeap(new Cell((int)Math.Floor(x + dx + 0.5), (int)Math.Floor(y + dy + 0.5)))) return false;
             }
             return true;
         }
@@ -1299,6 +1305,23 @@ namespace RailTracer
         public bool Charges(Enemy e, Cell at) =>
             e.InPlay && e.tough && e.awareness != Awareness.Startled && (e.berserk || Sees(e, at, crouched));
 
+        // A charging heavy that gets beside `at` within its move swings the same turn: 3 walkable steps to
+        // arrive, 1 to swing (a heavy that would need all 4 to get there only closes in).
+        public bool Swings(Enemy e, Cell at)
+        {
+            if (!Charges(e, at)) return false;
+            if (Adjacent(e.pos, at)) return true;
+            var reach = Bfs(e.pos, t.enemyMoveRange, n => n != at && !Blocked(n) && (n == player || EnemyAt(n) == null));
+            return reach.Keys.Any(n => Adjacent(n, at));
+        }
+
+        void Swing(Enemy e)
+        {
+            Face(e, player);
+            if (rng.NextDouble() < t.meleeHitChance) { Log($"{Name(e)} lunges: hit!"); Damage(t.shotDamage); }
+            else Log($"{Name(e)} lunges: miss.");
+        }
+
         public Intent Decide(Enemy e)
         {
             if (e.state == EnemyState.Broken) return e.fleeing ? Intent.Flee : Intent.None;
@@ -1344,7 +1367,7 @@ namespace RailTracer
             {
                 case Intent.Shoot: return $"Hit {Math.Round(100 * HitChance(e, player))}%";
                 case Intent.Hesitate: return "Hesitates";
-                case Intent.Charge: return e.berserk ? "Charge!" : "Charge";
+                case Intent.Charge: return (e.berserk ? "Charge!" : "Charge") + (Swings(e, player) ? $" · Hit {Math.Round(100 * t.meleeHitChance)}%" : "");
                 case Intent.Melee: return $"Melee: hit {Math.Round(100 * t.meleeHitChance)}%";
                 case Intent.Investigate: case Intent.Follow: case Intent.Search:
                     return $"Investigate: {(e.awareness == Awareness.Combat ? Clue.Movement : e.clue)}";
@@ -1352,7 +1375,7 @@ namespace RailTracer
                 case Intent.Patrol: return "Patrol";
                 case Intent.Hold: return "Hold";
                 case Intent.Return: return "Back to post";
-                case Intent.Freeze: return "Loses the turn";
+                case Intent.Freeze: return "Frozen with fear: loses the turn";
                 case Intent.WildFire: return "Fires at anything in front";
                 case Intent.Flee: return "Runs for the door";
                 default: return e.state == EnemyState.Broken ? "Begging" : "";
@@ -1541,13 +1564,13 @@ namespace RailTracer
                     Shoot(e, "fires");
                     break;
                 case Intent.Melee:
-                    Face(e, player);
-                    if (rng.NextDouble() < t.meleeHitChance) { Log($"{Name(e)} lunges: hit!"); Damage(t.shotDamage); }
-                    else Log($"{Name(e)} lunges: miss.");
+                    Swing(e);
                     break;
                 case Intent.Charge:
-                    // Berserk: straight for your real tile. Otherwise for where it saw you.
+                    // Berserk: straight for your real tile. Otherwise for where it saw you. Arriving beside you
+                    // (still seeing you), it swings at once; that ends its turn.
                     Walk(e, t.enemyMoveRange, () => StepToward(e, e.berserk ? player : e.lastKnown ?? player));
+                    if (!Over && e.InPlay && Adjacent(e.pos, player) && (e.berserk || CanSee(e, player))) Swing(e);
                     break;
                 case Intent.Investigate:
                 {
