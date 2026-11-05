@@ -170,7 +170,18 @@ namespace RailTracer
         // Kill cam: brutal kills (as long as the finisher), rail grabs and throws cut in close (no skipping: it always plays out).
         public float killCamClose = 1.25f, killCamHeight = 0.45f, sceneCamTime = 1.2f; // renamed from killCamDistance (1.9) to override the scene: tight on the pair
         public float killCamFlyIn = 0.45f, killCamPause = 0.2f, killCamFlyOut = 0.35f; // seconds (real time)
-        [Range(0.1f, 1f)] public float killCamSlowMo = 1f, throwCamSlowMo = 0.5f;       // game speed during the shot
+        // Kill cam slow motion (the Options setting): the game slows to this for Hit Slow Time (real seconds) on each hit
+        // the kill cam shows (a takedown's Blood At and extra blood points, a rail grab's impact, a thrown body landing).
+        [Range(0.1f, 1f)] public float killCamSlowMo = 1f;
+        public float hitSlowTime = 0.5f;
+        float slowUntil = -1f;
+
+        void HitSlowMo()
+        {
+            if (!camming || killCamSlowMo >= 1f) return;
+            Time.timeScale = killCamSlowMo;
+            slowUntil = Time.unscaledTime + hitSlowTime;
+        }
         bool camming;
         Vector3 savedFocus; float savedDistance; Quaternion savedCamRot;
 
@@ -1002,6 +1013,7 @@ namespace RailTracer
 
         void Update()
         {
+            if (slowUntil >= 0f && Time.unscaledTime >= slowUntil) { slowUntil = -1f; if (camming) Time.timeScale = 1f; } // a hit's slow motion ends
             var kb = Keyboard.current;
             var mouse = Mouse.current;
             // The menus own the camera and the input; the live car carries on behind them (paused: nobody acts).
@@ -1117,7 +1129,7 @@ namespace RailTracer
                     {
                         var flat = cam.transform.forward;
                         flat.y = 0f;
-                        StartCoroutine(SceneKillCam(() => ta.transform.localPosition, World(hover.Value), flat.normalized, throwCamSlowMo));
+                        StartCoroutine(SceneKillCam(() => ta.transform.localPosition, World(hover.Value), flat.normalized, false)); // slows as it lands
                     }
                 }
                 else if (target != null)
@@ -1132,7 +1144,7 @@ namespace RailTracer
                             var hungAt = c.bodies[c.bodies.Count - 1].pos;
                             var w = World(hungAt);
                             var outward = hungAt.y == 0 ? Vector3.forward : Vector3.back;
-                            StartCoroutine(SceneKillCam(() => w + outward * 0.3f, w, outward, killCamSlowMo));
+                            StartCoroutine(SceneKillCam(() => w + outward * 0.3f, w, outward, true)); // the impact: as the shot starts
                         }
                     }
                 }
@@ -1546,9 +1558,6 @@ namespace RailTracer
                     BeginKillCam();
                     playerShown = to;
                     yield return FlyIn(KillCamPose(to, at, entry != null ? entry.camOffset : Vector3.zero, entry != null ? entry.camLook : Vector3.zero));
-                    Time.timeScale = killCamSlowMo;
-                    // Slow motion overrides the takedown's own speed: 0.5x is half speed, whatever the clip plays at.
-                    if (killCamSlowMo < 1f) playerAnim.speed = va.speed = 1f;
                 }
                 playerAnim.Play(hash, 0, 0f);
                 va.Play(hash, 0, 0f);
@@ -1583,6 +1592,7 @@ namespace RailTracer
                         KillBlood(victim, act, playerFacing, Chest(va));
                         Soak(va, brutal);
                         if (entry != null && entry.headOff) HeadOff(va);
+                        HitSlowMo();
                         bled = true;
                     }
                     if (entry != null && blood)
@@ -1595,6 +1605,7 @@ namespace RailTracer
                                 struck.Add(s);
                                 var chestNow = Chest(va) ?? va.transform.localPosition + Vector3.up * FigureHeight * 0.6f;
                                 blood.Splash(root, chestNow, playerFacing, brutal);
+                                HitSlowMo();
                             }
                     }
                     if (entry != null && playerHips && (anchor.HasValue || ((!chained || second) && t > 0.3f && playerAnim.IsInTransition(0))))
@@ -1766,6 +1777,7 @@ namespace RailTracer
         {
             if (!camming) return;
             camming = false;
+            slowUntil = -1f;
             Time.timeScale = 1f;
             focus = savedFocus;
             camDistance = savedDistance;
@@ -1776,18 +1788,19 @@ namespace RailTracer
 
         // Rail grab and throw (placeholder animations for now): fly in on the spot (the pair lined up `along`), watch
         // `target` for sceneCamTime at `slowMo`, fly back.
-        IEnumerator SceneKillCam(System.Func<Vector3> target, Vector3 spot, Vector3 along, float slowMo)
+        IEnumerator SceneKillCam(System.Func<Vector3> target, Vector3 spot, Vector3 along, bool hitAtStart)
         {
             busy = true;
             BeginKillCam();
             var pose = KillCamPose(spot - along * 0.5f, spot + along * 0.5f, Vector3.zero);
             yield return FlyIn(pose);
-            Time.timeScale = slowMo;
+            if (hitAtStart) HitSlowMo();
             for (float time = 0f; time < sceneCamTime; time += Time.unscaledDeltaTime)
             {
                 SetCam((pose.pos, target() + Vector3.up * FigureHeight * 0.4f));
                 yield return null;
             }
+            slowUntil = -1f;
             Time.timeScale = 1f;
             yield return FlyOut();
             busy = false;
@@ -2458,6 +2471,7 @@ namespace RailTracer
                     dir.y = 0f;
                     dir = dir.sqrMagnitude > 1e-6f ? dir.normalized : Vector3.forward;
                     blood.Splash(root, land + Vector3.up * 0.4f, dir, true);
+                    HitSlowMo(); // a thrown body's landing is its hit
                     Stains(b.pos, bloodCastCrouched, blood.poolScale);
                 }
             }
