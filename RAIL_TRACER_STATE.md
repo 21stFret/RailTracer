@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 17 (4 Nov 2026).
+Last updated: Update 17.1 (4 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -119,7 +119,7 @@ Hover label: name, role, one state line ("Searching · Shaken", "Panicked · Fre
   1. **Go to the spot** (a noise, a body, where it saw you).
   2. **Follow a blood trail** to the newest part it can see right now (the "?" marker moves with it).
   - A "?" on the floor marks where a searcher will go and look; none for looking around in place (shout or gunfire) and none on the last-seen ghost.
-  3. **Look around** for 3 turns: at the spot (moving within 2 tiles of it), or where it stands if it heard a shout or gunfire. A floor arrow shows the tile it will stand on and the way it will face next turn.
+  3. **Look around** for 3 turns: at the spot (moving within 2 tiles of it), or where it stands if it heard a shout or gunfire. A floor line runs from the enemy along the route it will walk next turn, ending in an arrow for the way it will face (looking around where it stands: just the arrow at its feet).
   Then it gives up and walks back.
 - **Shouting:** the first enemy to see you shouts and comes looking itself (it's in combat). Unaware listeners within 6 tiles turn white, face the shout and look around where they stand.
 - **Gunfire:** everyone not in combat turns to face it and looks around where they stand (the carriage doesn't pile in).

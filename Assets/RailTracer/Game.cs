@@ -2101,14 +2101,15 @@ namespace RailTracer
                 var f = plan.Value;
                 var dir = new Vector3(f.x, 0f, -f.y);
                 var side = new Vector3(dir.z, 0f, -dir.x);
-                var from = World(c.PlannedTile(e) ?? e.pos) + Vector3.up * 0.07f + dir * 0.3f; // a look-around: where it'll stand
+                // A look-around that moves: the route from the enemy to where it'll stand, then the arrow for its facing.
+                var lift = Vector3.up * 0.07f;
+                var pts = new List<Vector3> { World(e.pos) + lift };
+                foreach (var tile in c.PlannedRoute(e)) pts.Add(World(tile) + lift);
+                var from = pts[pts.Count - 1] + dir * 0.3f;
                 var tip = from + dir * 0.45f;
-                arrow.positionCount = 5;
-                arrow.SetPosition(0, from);
-                arrow.SetPosition(1, tip);
-                arrow.SetPosition(2, tip - dir * 0.18f + side * 0.14f);
-                arrow.SetPosition(3, tip);
-                arrow.SetPosition(4, tip - dir * 0.18f - side * 0.14f);
+                pts.AddRange(new[] { from, tip, tip - dir * 0.18f + side * 0.14f, tip, tip - dir * 0.18f - side * 0.14f });
+                arrow.positionCount = pts.Count;
+                arrow.SetPositions(pts.ToArray());
                 arrow.startColor = arrow.endColor = Fill(DangerRed, 0.95f);
             }
         }

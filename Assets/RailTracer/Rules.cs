@@ -1380,6 +1380,13 @@ namespace RailTracer
             return e.hunt == Hunt.Look ? e.pos : SweepTarget(e) ?? e.pos;
         }
 
+        // The tiles a looking-around searcher will walk next turn to reach PlannedTile, in order (empty if it stays put).
+        public List<Cell> PlannedRoute(Enemy e)
+        {
+            if (Decide(e) != Intent.Search || e.hunt != Hunt.Sweep || !(SweepTarget(e) is Cell to)) return new List<Cell>();
+            return (PathTo(e.pos, to) ?? new List<Cell>()).Take(t.enemyMoveRange).ToList();
+        }
+
         // The tile a sweep walks to: one within searchRadius of the spot, picked by the roll made at your turn's start.
         Cell? SweepTarget(Enemy e)
         {
