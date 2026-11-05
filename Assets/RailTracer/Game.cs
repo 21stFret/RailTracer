@@ -203,7 +203,7 @@ namespace RailTracer
         public float barShoveLift = 0.3f;     // Shove to Table over the bar: the victim this much higher than over a table
         // The hung body's final pose on the top side's window (row 0), from the tile: position and rotation (the other
         // side: the same turned half round). Set by hand in Play mode.
-        public Vector3 railHangOffset = new Vector3(0.185f, 1.234f, -0.691f), railHangEuler = new Vector3(77.2229f, 180f, 189.13f);
+        public Vector3 railHangPos = new Vector3(0.335f, 1.334f, -0.691f), railHangRot = new Vector3(77.2229f, 180f, 189.13f);
         public float railLean = 80f;          // how far the body tips out (degrees from upright)
         [Header("Shots")]
         public float freeShotPause = 0.55f;   // the camera holds on each free-shooter this long before and after the shot
@@ -1579,6 +1579,7 @@ namespace RailTracer
                     if ((!chained || second) && !bled && t >= bloodAt)
                     {
                         KillBlood(victim, act, playerFacing, Chest(va));
+                        Soak(va, brutal);
                         if (entry != null && entry.headOff) HeadOff(va);
                         bled = true;
                     }
@@ -1606,6 +1607,7 @@ namespace RailTracer
                 if (!bled)
                 {
                     KillBlood(victim, act, playerFacing, Chest(va));
+                    Soak(va, brutal);
                     if (entry != null && entry.headOff) HeadOff(va);
                 }
                 if (!anchor.HasValue) playerShown = to;
@@ -1616,9 +1618,9 @@ namespace RailTracer
                 // A cover finisher (Shove to Table) leaves the pair where the clip ends: the victim bent over the seat,
                 // you beside it in your stance (the rules restore it). For the rules the body is on its tile as ever.
                 bool stayPut = useCover;
-                if (stayPut) { end = slideFrom; parkedOn = c.player; posedBodies.Add(victim); Soak(va); } // over the table, and the table
+                if (stayPut) { end = slideFrom; parkedOn = c.player; posedBodies.Add(victim); }
                 bool limp = !stayPut && HasRagdoll(va);
-                if (limp) StartCoroutine(Ragdoll(victim, va, bodyTile, takedownHold, true)); // slides with you, falls, soaked
+                if (limp) StartCoroutine(Ragdoll(victim, va, bodyTile, takedownHold)); // slides with you, then falls
                 else if (!stayPut && entry != null && entry.victimFallsAfter) StartCoroutine(Topple(va.transform, playerFacing)); // still on their feet
                 var flyOut = cam ? StartCoroutine(FlyOut()) : null; // the camera flies back while you both slide
                 // Hold on the body, easing onto where the rules have you, still facing it. Without the ragdoll the corpse
@@ -1865,9 +1867,7 @@ namespace RailTracer
             blood.Splash(root, chest, dir, how == Act.BrutalKill);
             // The stains that stay: straight casts from every tile the kill bloodied (a crouched stealth kill casts lower).
             bool low = how == Act.QuietKill && c.crouched;
-            // A takedown's tile always gets a pool (the body lies in it); a shot body spatter.
-            bool takedown = how == Act.BrutalKill || how == Act.QuietKill;
-            Stains(e.pos, low ? bloodCastCrouched : bloodCastStanding, takedown ? blood.poolScale : blood.spatterScale);
+            Stains(e.pos, low ? bloodCastCrouched : bloodCastStanding, how == Act.BrutalKill ? blood.poolScale : blood.spatterScale);
         }
 
         // Straight-cast stains (BloodKit.TileSplat) on each tile of the newest stain on `tile`; `centre` sizes the
@@ -1882,15 +1882,15 @@ namespace RailTracer
             }
         }
 
-        // A takedown's body, once it lies still (or is left bent over a table): a big stain projected down through it,
-        // so the corpse, the floor round it and any table it's over are covered in blood.
-        public float soakScale = 1.4f, soakDepth = 1.2f; // x the pool size; how deep the projection reaches (m)
-        void Soak(Animator a)
+        // A takedown's big stain, as its blood flies: projected down over the victim from soakHeight, deep enough to
+        // cover the floor, the body once it has fallen into it, and a table it's over. Sizes x the pool: brutal, stealth.
+        public float soakBrutal = 0.7f, soakStealth = 0.35f, soakHeight = 0.3f, soakDepth = 1.2f;
+        void Soak(Animator a, bool brutal)
         {
             if (!blood || !a) return;
             var hips = a.GetBoneTransform(HumanBodyBones.Hips);
             var at = hips ? root.InverseTransformPoint(hips.position) : a.transform.localPosition;
-            blood.Decal(root, at, Vector3.down, blood.poolScale * soakScale, soakDepth);
+            blood.Decal(root, new Vector3(at.x, soakHeight, at.z), Vector3.down, blood.poolScale * (brutal ? soakBrutal : soakStealth), soakDepth);
         }
 
         // The head comes off (a stomp): the head bone shrunk to nothing, a gore burst where it was.
@@ -2826,8 +2826,8 @@ namespace RailTracer
             else t.localRotation = Quaternion.AngleAxis(railLean, axis) * t.localRotation;
             // Then the root where it was set by hand (the limbs keep the pose above).
             var half = body.pos.y == 0 ? Quaternion.identity : Quaternion.Euler(0f, 180f, 0f);
-            t.localPosition = World(body.pos) + half * railHangOffset;
-            t.localRotation = half * Quaternion.Euler(railHangEuler);
+            t.localPosition = World(body.pos) + half * railHangPos;
+            t.localRotation = half * Quaternion.Euler(railHangRot);
             bodyCell[body] = body.pos; // stays put (SyncBodies)
             bodyOffset[e] = t.localPosition - World(body.pos);
         }
@@ -2850,7 +2850,7 @@ namespace RailTracer
 
         // slide: how long the slide over its tile takes (a takedown: the same as yours onto your tile, so you move
         // together); else Ragdoll Slide.
-        IEnumerator Ragdoll(Enemy e, Animator a, Cell tile, float slide = -1f, bool soak = false)
+        IEnumerator Ragdoll(Enemy e, Animator a, Cell tile, float slide = -1f)
         {
             if (slide <= 0f) slide = ragdollSlide;
             var hips = a.GetBoneTransform(HumanBodyBones.Hips);
@@ -2879,7 +2879,6 @@ namespace RailTracer
                 if (!a) yield break; // restarted mid-fall
             }
             SetLimp(a, false); // frozen where it fell (the animator stays off)
-            if (soak) Soak(a);
         }
 
         IEnumerator Topple(Transform t, Vector3 away)

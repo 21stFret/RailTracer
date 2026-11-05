@@ -9,7 +9,9 @@ namespace RailTracer
     // so edits to the asset show on the next loop). For tuning each takedown's timing:
     //   Left / Right: previous / next     R: replay     Space: pause     Up / Down: playback speed (1, 0.5, 0.25, 0.1)
     //   . / , : one frame forward / back (pauses)     click the timeline: jump there
-    //   B: Blood At = now     N / X: add / remove an extra blood point here (all saved to the asset)     K: kill cam view (the entry's Cam Offset) / orbit     Right-drag: orbit, scroll: zoom
+    //   B: Blood At = now     N / X: add / remove an extra blood point here (all saved to the asset)
+    //   K: kill cam view; in it right-drag sets the angle, scroll the distance, C saves it as the entry's Cam Offset,
+    //   Backspace clears it (the game's default angle)     K: kill cam view (the entry's Cam Offset) / orbit     Right-drag: orbit, scroll: zoom
     // The clips are stepped by hand (the animators are evaluated by this script), so pausing, slow motion and seeking
     // are exact. As in the game: the blood fires at Blood At of the last clip, the victim slides over its tile and goes
     // limp after the last clip, and a cover finisher (Shove to Table) leaves the pair as the clip ends, at a stand-in table.
@@ -19,6 +21,10 @@ namespace RailTracer
         public float resetPause = 0.4f; // back to idle this long before the next one
         public float bloodCastStanding = 1.8f, bloodCastCrouched = 1f, bloodCastReach = 1.5f; // as on the Game component
         public float killCamClose = 1.25f, killCamHeight = 0.55f, takedownHold = 0.5f;        // as on the Game component (the body's slide takes Takedown Hold)
+        public float soakBrutal = 0.7f, soakStealth = 0.35f, soakHeight = 0.3f, soakDepth = 1.2f; // as on the Game component
+        // The kill cam being set (K): its direction from the middle of the pair, in the pair's space, and distance.
+        float camYaw, camPitch, camDist = 1.3f;
+        int camFor = -1; // the takedown the kill cam values were read from
         const float Frame = 1f / 30f;
         static readonly float[] Rates = { 1f, 0.5f, 0.25f, 0.1f };
 
@@ -275,6 +281,9 @@ namespace RailTracer
                 }
             }
             // As in the game: the victim's tile (1 m grid), and for a brutal kill the four next to it, cast from stance height.
+            var hips = victim.GetBoneTransform(HumanBodyBones.Hips);
+            var under = hips ? hips.position : floor;
+            blood.Decal(bloodRoot, new Vector3(under.x, soakHeight, under.z), Vector3.down, blood.poolScale * (brutal ? soakBrutal : soakStealth), soakDepth);
             var tile = new Vector3(Mathf.Round(floor.x), 0f, Mathf.Round(floor.z));
             float height = t.stance == TakedownStance.Crouched ? bloodCastCrouched : bloodCastStanding;
             blood.TileSplat(bloodRoot, tile, height, bloodCastReach, brutal ? blood.poolScale : blood.spatterScale, blood.smearScale);
@@ -363,7 +372,9 @@ namespace RailTracer
                 if (kb.bKey.wasPressedThisFrame) SetBloodHere();
                 if (kb.nKey.wasPressedThisFrame) EditStrikes(true);
                 if (kb.xKey.wasPressedThisFrame) EditStrikes(false);
-                if (kb.kKey.wasPressedThisFrame) killCam = !killCam;
+                if (kb.kKey.wasPressedThisFrame) { killCam = !killCam; camFor = -1; }
+                if (killCam && kb.cKey.wasPressedThisFrame) SaveKillCam();
+                if (killCam && kb.backspaceKey.wasPressedThisFrame) ResetKillCam();
             }
             if (mouse != null)
             {
@@ -376,11 +387,16 @@ namespace RailTracer
                 if (mouse.rightButton.isPressed)
                 {
                     var d = mouse.delta.ReadValue();
-                    yaw += d.x * 0.3f;
-                    pitch = Mathf.Clamp(pitch - d.y * 0.3f, -10f, 80f);
-                    killCam = false;
+                    if (killCam) { camYaw += d.x * 0.3f; camPitch = Mathf.Clamp(camPitch - d.y * 0.3f, -20f, 85f); }
+                    else
+                    {
+                        yaw += d.x * 0.3f;
+                        pitch = Mathf.Clamp(pitch - d.y * 0.3f, -10f, 80f);
+                    }
                 }
-                distance = Mathf.Clamp(distance - mouse.scroll.ReadValue().y * 0.002f * distance, 1.5f, 12f);
+                float wheel = mouse.scroll.ReadValue().y * 0.002f;
+                if (killCam) camDist = Mathf.Clamp(camDist - wheel * camDist, 0.4f, 8f);
+                else distance = Mathf.Clamp(distance - wheel * distance, 1.5f, 12f);
             }
             if (!cam || library == null) return;
             var t = Current;
@@ -394,8 +410,8 @@ namespace RailTracer
                 var along = b - a;
                 along.y = 0f;
                 var pair = Quaternion.LookRotation(along.sqrMagnitude > 1e-6f ? along : Vector3.forward);
-                var off = t.camOffset != Vector3.zero ? pair * t.camOffset : pair * Vector3.right * killCamClose + Vector3.up * killCamHeight;
-                cam.transform.position = mid + off;
+                if (camFor != index) ReadKillCam(t);
+                cam.transform.position = mid + pair * KillCamOffset();
                 cam.transform.LookAt(mid);
                 return;
             }
@@ -403,6 +419,42 @@ namespace RailTracer
             var pivot = (t != null ? t.victimOffset / 2f : Vector3.zero) + Vector3.up * 1f;
             cam.transform.position = pivot + Quaternion.Euler(pitch, yaw, 0f) * Vector3.back * distance;
             cam.transform.LookAt(pivot);
+        }
+
+        // The kill cam's offset in the pair's space from the angles and distance being set.
+        Vector3 KillCamOffset()
+        {
+            float y = camYaw * Mathf.Deg2Rad, p = camPitch * Mathf.Deg2Rad;
+            return new Vector3(Mathf.Sin(y) * Mathf.Cos(p), Mathf.Sin(p), Mathf.Cos(y) * Mathf.Cos(p)) * camDist;
+        }
+
+        // Start from the entry's Cam Offset, or the game's default (side-on, Kill Cam Close out, Kill Cam Height up).
+        void ReadKillCam(Takedown t)
+        {
+            camFor = index;
+            var off = t.camOffset != Vector3.zero ? t.camOffset : Vector3.right * killCamClose + Vector3.up * killCamHeight;
+            camDist = Mathf.Max(0.4f, off.magnitude);
+            camPitch = Mathf.Asin(Mathf.Clamp(off.y / camDist, -1f, 1f)) * Mathf.Rad2Deg;
+            camYaw = Mathf.Atan2(off.x, off.z) * Mathf.Rad2Deg;
+        }
+
+        void SaveKillCam()
+        {
+            var t = Current;
+            if (t == null) return;
+            t.camOffset = KillCamOffset();
+            Save();
+            note = $"{t.name}: Cam Offset = {t.camOffset}, saved to Resources/Takedowns.";
+        }
+
+        void ResetKillCam()
+        {
+            var t = Current;
+            if (t == null) return;
+            t.camOffset = Vector3.zero;
+            Save();
+            camFor = -1;
+            note = $"{t.name}: Cam Offset cleared (the game's default angle), saved.";
         }
 
         void OnGUI()
@@ -414,7 +466,7 @@ namespace RailTracer
             GUI.Label(new Rect(16, 56, 1600, 24),
                 $"{(paused ? "PAUSED" : "playing")} at {Rates[rate]:0.##}x   {clock:0.000} / {total:0.000} s" +
                 (total > lastFrom && clock >= lastFrom ? $"   last clip {(clock - lastFrom) / (total - lastFrom):0.000}" : "") +
-                (killCam ? "   kill cam view" : "") + "   (other values: select Resources/Takedowns; edits show on the next loop)");
+                (killCam ? $"   KILL CAM: right-drag angle, scroll distance ({camDist:0.00} m), C save as Cam Offset, Backspace clear" : "") + "   (other values: select Resources/Takedowns; edits show on the next loop)");
             if (!string.IsNullOrEmpty(note)) GUI.Label(new Rect(16, 78, 1600, 24), note);
             if (Time.time - bloodFlash < 0.6f) GUI.Label(new Rect(16, 100, 300, 24), "BLOOD");
 
