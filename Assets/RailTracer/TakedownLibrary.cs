@@ -61,6 +61,7 @@ namespace RailTracer
     public class TakedownLibrary : ScriptableObject
     {
         public List<Takedown> takedowns = new List<Takedown>();
+        [Range(0f, 1f)] public float coverChance = 0.5f; // how often a kill beside half cover uses a cover finisher
         [NonSerialized] readonly Dictionary<KillKind, Takedown> last = new Dictionary<KillKind, Takedown>();
 
         // A takedown of this kind for a guard or a heavy (entries tagged Any suit both) and your stance. With half cover
@@ -74,7 +75,12 @@ namespace RailTracer
                 && (anyStance || t.stance == stance || t.stance == TakedownStance.Any) && (!t.needsCover || cover);
             var set = takedowns.FindAll(t => Fits(t, false));
             if (set.Count == 0) set = takedowns.FindAll(t => Fits(t, true)); // nothing for this stance: any of its kind
-            if (set.Exists(t => t.needsCover)) set.RemoveAll(t => !t.needsCover);
+            // Beside half cover: a cover finisher (Shove to Table) half the time, the others the rest.
+            if (set.Exists(t => t.needsCover) && set.Exists(t => !t.needsCover))
+            {
+                bool useCover = UnityEngine.Random.value < coverChance;
+                set.RemoveAll(t => t.needsCover != useCover);
+            }
             if (set.Count == 0) return null;
             last.TryGetValue(kind, out var prev);
             if (set.Count > 1) set.Remove(prev);

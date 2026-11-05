@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 18.34 (5 Nov 2026).
+Last updated: Update 18.35 (5 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -53,6 +53,7 @@ Inspector; the saved scene matches these.
 | 18.32 (sight through partition doorways) | Done, not yet seen in Play mode |
 | 18.33 (a resumed save keeps its legend) | Done, not yet seen in Play mode: the Inspector's debug sliders overwrote the replayed legend and cooldowns as Play mode started |
 | 18.34 (walking out of a cleared car) | Done, not yet seen in Play mode |
+| 18.35 (legend gain in the tooltip, zone outline per tile, shove half the time) | Done, not yet seen in Play mode |
 | Still needed (art) | Rail grab, demon throw and crouched drag-down animations; unarmed finishers (skipped for now); a searching animation; more idles |
 | Next | Full audio pass |
 
@@ -190,7 +191,7 @@ Hover label: name, role, one state line ("Searching · Shaken", "Panicked · Fre
 - From searching and combat enemies with their shot unspent this turn (not on a panicked guard's freeze turn).
 - Triggers on stepping onto a tile they see you on (not the tile you start on), every tile of a leap's arc and its landing, a hop's landing tile, and standing up. Once per enemy per turn; a shot ends a walk there.
 - Shots at a leaping player are 25 points lower (85% becomes 60%).
-- Shown on the floor as a faint red tint on every watched tile (Game "Zone Tint", 0.12) and one red dashed line round the outer edge only: seats and the tiles they hide, up to 2 tiles between watched ones in a row or column, count as inside the line but stay untinted. The move preview marks the tile in red and highlights the shooter with its hit chance.
+- Shown on the floor as a faint red tint on every watched tile (Game "Zone Tint", 0.12) and a fine red dashed line (8 dashes a tile) round exactly the red tiles: every edge between a watched tile and one that isn't. The move preview marks the tile in red and highlights the shooter with its hit chance.
 
 ## Hits
 
@@ -230,10 +231,10 @@ In the game too, finisher blood now comes from the victim's chest bone (where th
 - Finishers: Brutal Finishers knife clips (Humanoid on the mannequin avatar) in `Resources/Takedowns`, Alex's picks:
   - Stealth, crouched (random): Heart Stab, Grab Flip Stab, Thigh and Neck Stab. Stealth, standing: Karate Chop KO, Neck Break, Spin Stab, Neck Stab (from behind). (Stealth Finishers pack ones start 1 m apart, victim facing away; still to tune.) Shove Neck Slice removed (it travelled too far). A stance with nothing in it would use any of its kind.
   - Brutal, at random: Duck and Back Stab, Grab Flip Head Stomp, or the Slash Combo (mid-section slash, then face slash cross-faded in on the "Finisher2" states: Combo From / Combo Start / Combo Blend on the entry; the victim topples after).
-  - Brutal with half cover (a seat) straight out from the victim's tile: always Shove to Table, the pair turned to face that seat.
+  - Brutal with half cover (a seat) straight out from the victim's tile: Shove to Table half the time (Takedown Library "Cover Chance", 0.5), the pair turned to face that seat; the other brutal finishers the rest.
   - The clips keep their own travel in the pose (imported with root XZ baked from the original position), so a pair lines up through the whole clip once its start offset is right. The exported clips start with both characters on the same spot; each pair has its own starting distance (as set up in Unreal), facing you: Victim Offset Z 1.5 (Shove Neck Slice 1.3), Victim Yaw 180.
   - Each entry can be tagged Guard / Heavy / Any (all Any for now).
-- **Legend readout** (only while a kill is targeted; gone when you cancel or pick another skill): the hover label adds the kill's name and "+30 legend" in #E0202F ("Locked" on a heavy that isn't Shaken yet); the big number reads "42 +30"; the legend bar shows the gain hatched (#E0202F stripes on #4A0C15) from your legend to where the kill lands; notches it crosses turn red and are named beside the health bar ("50: Brutal Bloodied · 60: Rail Bloodied"), plus "Capped at 100" past 100. Gains: stealth +10, brutal +30, rail grab +25. Skill boxes unchanged.
+- **Legend readout** (only while a kill is targeted; gone when you cancel or pick another skill): the hover label says "Locked" on a heavy that isn't Shaken yet; the gain itself is in the skill's tooltip, small and red beside its name ("Brutal kill +30 legend", always shown for the three kills); the big number reads "42 +30"; the legend bar shows the gain hatched (#E0202F stripes on #4A0C15) from your legend to where the kill lands; notches it crosses turn red and are named beside the health bar ("50: Brutal Bloodied · 60: Rail Bloodied"), plus "Capped at 100" past 100. Gains: stealth +10, brutal +30, rail grab +25. Skill boxes unchanged.
 - Move and leap previews: each tile that draws a shot shows its hit chance on the floor; a leap's says "LEAP -25", and the shooter's label "Hit 60% · leap -25".
 - The walk-through car has every legend effect off (demon aura, blood overlay); an aura starting at nothing clears what its systems played on awake.
 - **The knife:** `Assets/KitScripts/railtracer_knife.py` exports Prop_Knife to `Train Assets/Knife`: a 34 cm vintage hunting knife (from Alex's reference photo): a mirror-polished single-edged steel blade (Trn_Steel, roughness 0.06) with a full flat grind, a choil by the guard and an upswept curved tip; a thin brass guard; stacked black, brass and red spacers at both ends of the handle (Trn_SpacerBlack, Trn_SpacerRed); jigged stag scales (Trn_Stag) with two brass pins; an aluminium bird's-head pommel (Trn_Aluminium). Always in your right hand: the grip is worked out from the hand's bones (across the knuckles, blade out of the thumb side, edges along the fingers, in the palm); Game "Knife Offset" (m, in the knife's space) and "Knife Twist" (degrees) nudge it, live in Play mode. A takedown with Reverse Grip ticked (Heart Stab) holds it the other way round while it plays: the blade out of the little-finger side. The animation test's attacker holds it too, with its own Knife Offset / Twist to try values.

@@ -1408,7 +1408,7 @@ namespace RailTracer
                     else if (c.KillOutcome(KillMode.Value, e).HasValue)
                     {
                         hud.legendGain = c.LegendGain(KillMode.Value);
-                        gain = $"{Mode()?.name} +{hud.legendGain} legend";
+                        // (its "+30 legend" is in the skill's tooltip and on the legend bar)
                     }
                 }
                 string shot = threat ? $"Hit {pct}%" + (leaping && !e.tough ? $" · leap -{Mathf.RoundToInt(100 * c.t.leapHitPenalty)}" : "") : c.IntentText(e);
@@ -2397,11 +2397,9 @@ namespace RailTracer
         }
 
         // Reaction fire zone: every tile a ready gun (searching or fighting) would see you on as you stand or crouch,
-        // tinted faint red, with one red dashed line round the whole area: overlaps merged, and the small gaps seats
-        // leave (the seat and the tile it hides, up to zoneGap tiles between watched ones in a row or column) count as
-        // inside, so only the outer edge is drawn. The gaps themselves stay untinted: you're hidden there.
+        // tinted faint red, with a fine red dashed line round exactly those tiles (overlaps merged: only the edges between
+        // a watched tile and one that isn't).
         public float zoneTint = 0.12f;
-        const int zoneGap = 2; // ponytail: gap fill by straight runs; a flood fill if bigger shadows leave stray lines
         void SyncZone()
         {
             var watched = new HashSet<Cell>();
@@ -2421,32 +2419,22 @@ namespace RailTracer
                 var tex = new Texture2D(4, 1) { wrapMode = TextureWrapMode.Repeat, filterMode = FilterMode.Point };
                 tex.SetPixels(new[] { Color.white, Color.white, Color.clear, Color.clear });
                 tex.Apply();
-                dashMat = new Material(Shader.Find("Sprites/Default")) { mainTexture = tex, mainTextureScale = new Vector2(4f, 1f) }; // 4 dashes a tile
+                dashMat = new Material(Shader.Find("Sprites/Default")) { mainTexture = tex, mainTextureScale = new Vector2(8f, 1f) }; // 8 dashes a tile
             }
             var tint = Fill(DangerRed, zoneTint);
             for (int x = 0; x < c.W; x++)
                 for (int y = 0; y < c.H; y++)
                     tiles[x, y].material.SetColor("_FillColor", watched.Contains(new Cell(x, y)) ? tint : Color.clear);
-            var inside = new HashSet<Cell>(watched);
-            foreach (var cell in watched)
-                foreach (var d in new[] { new Cell(1, 0), new Cell(0, 1) })
-                    for (int k = 1; k <= zoneGap + 1; k++)
-                    {
-                        var far = new Cell(cell.x + d.x * k, cell.y + d.y * k);
-                        if (!c.InBounds(far)) break;
-                        if (!watched.Contains(far)) continue;
-                        for (int j = 1; j < k; j++) inside.Add(new Cell(cell.x + d.x * j, cell.y + d.y * j));
-                        break;
-                    }
             int n = 0;
             var sides = new[] { new Cell(1, 0), new Cell(-1, 0), new Cell(0, 1), new Cell(0, -1) };
-            foreach (var cell in inside)
+            // The outline follows the red tiles exactly: every edge of a watched tile that isn't shared with another.
+            foreach (var cell in watched)
                 foreach (var d in sides)
                 {
-                    if (inside.Contains(new Cell(cell.x + d.x, cell.y + d.y))) continue;
+                    if (watched.Contains(new Cell(cell.x + d.x, cell.y + d.y))) continue;
                     if (n == zoneLines.Count)
                     {
-                        var lr = Line(DangerRed, 0.045f);
+                        var lr = Line(DangerRed, 0.035f);
                         lr.sharedMaterial = dashMat;
                         lr.textureMode = LineTextureMode.Tile;
                         lr.positionCount = 2;

@@ -691,7 +691,9 @@ namespace RailTracer
                 bool locked = !c.Has(id), bloodied = c.Bloodied(id), usable = c.Usable(id);
                 var state = locked ? Grey : bloodied ? Bright : Bone;
                 tipBorder.color = tipName.color = tipStatus.color = state;
-                tipName.text = d.name;
+                // A kill's legend, small and red beside its name.
+                Act? kill = id == SkillId.Stealth ? Act.QuietKill : id == SkillId.Rail ? Act.RailGrab : id == SkillId.Brutal ? Act.BrutalKill : (Act?)null;
+                tipName.text = kill.HasValue ? $"{d.name} <size=55%><color=#E0202F>+{c.LegendGain(kill.Value)} legend</color></size>" : d.name;
                 int cool = c.Wait(id);
                 tipStatus.text = locked ? $"Unlocks at {d.unlock}" : cool > 0 ? $"Ready in {cool}" : !usable ? (c.WhyNot(id) ?? "No target") : bloodied ? "Bloodied" : "Ready";
                 tipDesc.text = d.description;
