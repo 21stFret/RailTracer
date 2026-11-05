@@ -21,7 +21,9 @@ namespace RailTracer
         public float lampHeight = 2.1f;   // just above head height
         public float lampInset = 0.3f;    // in from the wall, so the light isn't inside it
         public float lampSpread = 3.5f;   // dining car and baggage hold: lit lamps at least this far apart (m)
-        public float tableLampIntensity = 0.6f, tableLampRange = 3f; // a lit table lamp (x lampIntensity)
+        // A lit table lamp: a spot pointing straight down from the bulb, a soft-edged pool on the table.
+        public float tableLampIntensity = 0.2f, tableLampRange = 1.5f, tableLampAngle = 179f, tableLampInnerAngle = 80f;
+        readonly HashSet<Light> tableLamps = new HashSet<Light>(); // lit at their own level (LegendLighting)
         public float sunDim = 0.02f;      // the directional light over the kit carriage: on, no shadows, very dim
         public Color lampColor = new Color(1f, 0.78f, 0.5f);
         public float lampIntensity = 3f, lampRange = 4.5f, lampAngle = 80f;
@@ -249,6 +251,7 @@ namespace RailTracer
             EndKillCam(); // restarted mid-cam
             if (root) Destroy(root.gameObject);
             lamps.Clear();
+            tableLamps.Clear();
             shownLampLevel = -1f; // snap to the new legend
             root = new GameObject("Carriage").transform;
             views.Clear();
@@ -581,10 +584,14 @@ namespace RailTracer
                 var light = new GameObject("Table Lamp").AddComponent<Light>();
                 lamps.Add(light);
                 light.transform.SetParent(bulb, false);
-                light.type = LightType.Point;
+                tableLamps.Add(light);
+                light.transform.localRotation = Quaternion.Euler(90f, 0f, 0f); // straight down
+                light.type = LightType.Spot;
                 light.color = lampColor;
-                light.intensity = lampIntensity * tableLampIntensity;
+                light.intensity = tableLampIntensity;
                 light.range = tableLampRange;
+                light.spotAngle = tableLampAngle;
+                light.innerSpotAngle = tableLampInnerAngle;
                 light.shadows = LightShadows.None;
             }
 
@@ -1760,7 +1767,7 @@ namespace RailTracer
             {
                 if (!l) continue;
                 l.color = shownLampColor;
-                l.intensity = lampIntensity * shownLampLevel;
+                l.intensity = (tableLamps.Contains(l) ? tableLampIntensity : lampIntensity) * shownLampLevel;
             }
             var tint = Color.Lerp(Color.white, shownLampColor, 0.5f);
             RenderSettings.ambientLight = baseAmbient * tint;

@@ -1,7 +1,8 @@
 """
 RAILTRACER - DINING CAR FURNITURE   (Blender 3.x-5.x -> Unity FBX)
 Run in Blender (Scripting tab), or headless:  blender -b --python railtracer_dining.py -- --out <folder>
-Same palette as the train kit (Trn_*), plus Trn_Linen (tablecloths) and Trn_Porcelain (plates, cups).
+Same palette as the train kit (Trn_*), plus Trn_Linen (tablecloths), Trn_Porcelain (plates, cups),
+Trn_Silver (cutlery) and Trn_Shade (lamp shades: smooth and matt, no texture).
 
 Sized to the game's 1 m tile grid and the Update 18 greybox. Pivot = floor level at the CENTRE of the
 asset's first tile (the round table: the centre of its 2x2 block). Directions below are UNITY local axes
@@ -936,7 +937,7 @@ def make_texture_set(entry, style, n=512, seed=1):
 
 
 
-(WOOD, WOODDARK, BRASS, CREAM, VELVET, LEATHER, IRON, GLASS, LINEN, PORCELAIN) = set_palette([
+(WOOD, WOODDARK, BRASS, CREAM, VELVET, LEATHER, IRON, GLASS, LINEN, PORCELAIN, SILVER, SHADE) = set_palette([
     ("Trn_Wood",       (0.45, 0.24, 0.12), 0.0, 0.6, {"tex": "wood", "tile": 2.0, "planks": 1, "rings": 14, "seams": False}),
     ("Trn_WoodDark",   (0.20, 0.10, 0.05), 0.0, 0.6, {"tex": "wood", "tile": 1.0, "planks": 2}),
     ("Trn_Brass",      (0.95, 0.70, 0.25), 1.0, 0.3, {"tex": "brushed", "tile": 0.5}),
@@ -947,7 +948,9 @@ def make_texture_set(entry, style, n=512, seed=1):
     ("Trn_Glass",      (0.05, 0.08, 0.07), 0.0, 0.1),
     # new for the dining car
     ("Trn_Linen",      (0.88, 0.86, 0.80), 0.0, 0.9, {"tex": "fabric", "tile": 0.5}),
-    ("Trn_Porcelain",  (0.93, 0.92, 0.88), 0.0, 0.25, {"tex": "plain", "tile": 0.5})])
+    ("Trn_Porcelain",  (0.93, 0.92, 0.88), 0.0, 0.25, {"tex": "plain", "tile": 0.5}),
+    ("Trn_Silver",     (0.80, 0.80, 0.82), 1.0, 0.3),                                   # cutlery
+    ("Trn_Shade",      (0.92, 0.85, 0.68), 0.0, 0.6)])                                  # lamp shades: smooth, matt, untextured
 
 
 # ---------------------------------------------------------------- Unity-axis helpers
@@ -998,19 +1001,58 @@ def lamp(mb, u, w, y):
     L(mb, [(0.06, y), (0.06, y + 0.015), (0.02, y + 0.03)], u, w, BRASS, segs=16, cap_top=False)
     L(mb, [(0.008, y + 0.03), (0.008, y + 0.26)], u, w, BRASS, segs=8)
     # the shade: a solid ring (6 mm wall), so it reads from inside and out, from any side
-    L(mb, [(0.10, y + 0.2), (0.05, y + 0.34), (0.044, y + 0.34), (0.094, y + 0.2)], u, w, CREAM, segs=20, closed=True)
-    L(mb, [(0.02, y + 0.235), (0.02, y + 0.255)], u, w, CREAM, segs=8)                 # bulb hidden inside
+    L(mb, [(0.10, y + 0.2), (0.05, y + 0.34), (0.044, y + 0.34), (0.094, y + 0.2)], u, w, SHADE, segs=24, closed=True)
+    L(mb, [(0.02, y + 0.235), (0.02, y + 0.255)], u, w, SHADE, segs=8)                 # bulb hidden inside
+
+
+def flat(mb, ou, ow, fu, fw, pts, y0, y1, slot):
+    """A flat piece lying on the table: polygon `pts` in the setting's frame (f along the facing, s to the sitter's
+    right), from height y0 to y1. Convex outlines only (fan-triangulated)."""
+    su, sw = fw, -fu
+    ring = [(-(ou + fu * f + su * s), -(ow + fw * f + sw * s)) for f, s in pts]   # Blender (x, y)
+    n = len(ring)
+    verts = [(x, y, y0) for x, y in ring] + [(x, y, y1) for x, y in ring]
+    faces = [list(reversed(range(n))), list(range(n, 2 * n))]
+    faces += [[i, (i + 1) % n, n + (i + 1) % n, n + i] for i in range(n)]
+    mb.add(verts, faces, slot)
+
+
+def knife(mb, ou, ow, fu, fw, y):
+    """Table knife, blade away from the sitter: a rounded handle and a blade with a curved spine and round tip."""
+    flat(mb, ou, ow, fu, fw, [(-0.1, -0.008), (-0.1, 0.008), (-0.098, 0.0095), (-0.03, 0.0085), (-0.027, 0.0),
+                              (-0.03, -0.0085), (-0.098, -0.0095)], y, y + 0.007, SILVER)
+    flat(mb, ou, ow, fu, fw, [(-0.027, -0.006), (-0.027, 0.0075), (0.04, 0.008), (0.065, 0.006), (0.075, 0.002),
+                              (0.077, -0.002), (0.07, -0.006)], y, y + 0.0025, SILVER)
+
+
+def fork(mb, ou, ow, fu, fw, y):
+    """Table fork, tines away from the sitter: handle, a neck widening into the head, four tines."""
+    flat(mb, ou, ow, fu, fw, [(-0.1, -0.008), (-0.1, 0.008), (-0.098, 0.0095), (-0.025, 0.0065), (-0.02, 0.004),
+                              (-0.02, -0.004), (-0.025, -0.0065), (-0.098, -0.0095)], y, y + 0.006, SILVER)
+    flat(mb, ou, ow, fu, fw, [(-0.02, -0.004), (-0.02, 0.004), (0.015, 0.012), (0.03, 0.012), (0.03, -0.012),
+                              (0.015, -0.012)], y, y + 0.003, SILVER)
+    for k in range(4):
+        s = -0.0105 + k * 0.007
+        flat(mb, ou, ow, fu, fw, [(0.03, s - 0.0018), (0.03, s + 0.0018), (0.068, s + 0.0014), (0.07, s),
+                                  (0.068, s - 0.0014)], y, y + 0.003, SILVER)
 
 
 def setting(mb, u, w, fu, fw, y):
-    """A place setting in front of a chair facing (fu, fw): plate, cup and saucer, a brass knife."""
+    """A place setting in front of a chair facing (fu, fw): a rimmed dinner plate, the fork to its left and the
+    knife to its right, the cup and saucer above the knife, clear of the plate (cup centre 21 cm from the plate's)."""
     pu, pw = u + fu * 0.2, w + fw * 0.2
-    L(mb, [(0.11, y), (0.12, y + 0.012)], pu, pw, PORCELAIN, segs=20)
-    cu, cw = pu + fw * 0.15, pw - fu * 0.15
-    L(mb, [(0.05, y), (0.05, y + 0.006)], cu, cw, PORCELAIN, segs=14)
-    L(mb, [(0.028, y + 0.006), (0.036, y + 0.06)], cu, cw, PORCELAIN, segs=14)
-    ku, kw = pu - fw * 0.15, pw + fu * 0.15
-    box_f(mb, ku, kw, fu, fw, -0.09, 0.09, -0.008, 0.008, y, y + 0.004, BRASS)
+    su, sw = fw, -fu                                                   # to the sitter's right
+    L(mb, [(0.07, y), (0.075, y + 0.006), (0.115, y + 0.012), (0.12, y + 0.02), (0.112, y + 0.02),
+           (0.07, y + 0.012), (0.0, y + 0.012)], pu, pw, PORCELAIN, segs=28)
+    fork(mb, pu - su * 0.155, pw - sw * 0.155, fu, fw, y)
+    knife(mb, pu + su * 0.155, pw + sw * 0.155, fu, fw, y)
+    cu, cw = pu + fu * 0.15 + su * 0.15, pw + fw * 0.15 + sw * 0.15
+    L(mb, [(0.03, y), (0.048, y + 0.004), (0.055, y + 0.01), (0.05, y + 0.01), (0.0, y + 0.006)],
+      cu, cw, PORCELAIN, segs=20)                                      # saucer
+    L(mb, [(0.022, y + 0.008), (0.03, y + 0.016), (0.036, y + 0.06), (0.032, y + 0.06), (0.0, y + 0.018)],
+      cu, cw, PORCELAIN, segs=20)                                      # cup
+    hu, hw = cu + su * 0.042, cw + sw * 0.042                          # its handle, on the right
+    box_f(mb, hu, hw, fu, fw, -0.004, 0.004, -0.008, 0.008, y + 0.025, y + 0.05, PORCELAIN)
 
 
 def pedestal(mb, u, w, top):
