@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 18.13 (5 Nov 2026).
+Last updated: Update 18.14 (5 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -32,6 +32,7 @@ Inspector; the saved scene matches these.
 | 18.11 (chairs in closer) | Done, not yet seen in Play mode |
 | 18.12 (animation test: timing tools) | Done, not yet tried in Unity |
 | 18.13 (extra blood per strike, the body slides with you) | Done, not yet tried in Unity |
+| 18.14 (Alex's takedown tuning) | Done: Blood At set per takedown in the animation test, Shove to Table's Cover Shift 0.2 (Resources/Takedowns) |
 | Still needed (art) | Rail grab, demon throw and crouched drag-down animations; knife mesh (on hold); unarmed finishers (skipped for now); a searching animation; more idles |
 | Next | Full audio pass |
 
