@@ -13,6 +13,12 @@ MonoBehaviour:
   m_Name: TrainKit
   m_EditorClassIdentifier: Assembly-CSharp::RailTracer.TrainKit
   modules:
+  - {fileID: 919132149155446097, guid: 2a30deca577cfc640a3fab3b31a1ea72, type: 3}
+  - {fileID: 919132149155446097, guid: 782aa82fc8901264d944a1fbe6553130, type: 3}
+  - {fileID: 919132149155446097, guid: 21bbb4f7bfdd5cc4b97079b4519dcde6, type: 3}
+  - {fileID: 919132149155446097, guid: 795e050c8f7dbc349a602cece9ff82d7, type: 3}
+  - {fileID: 919132149155446097, guid: ec096f835e7286f4b9b416d9bea6e1f9, type: 3}
+  - {fileID: 919132149155446097, guid: 4595b96e6c0844c4081cb4ab99bcb6cc, type: 3}
   - {fileID: 919132149155446097, guid: c9178c4bb18ec3046ac223352ca11eff, type: 3}
   - {fileID: 919132149155446097, guid: 98c66d897b1875b48b9b43c68b657881, type: 3}
   - {fileID: 919132149155446097, guid: c03466b5015b9ab4c9ed2fad3d965fc4, type: 3}

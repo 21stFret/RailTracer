@@ -117,8 +117,8 @@ BlendTree:
     m_DirectBlendParameter: Blend
     m_Mirror: 0
   - serializedVersion: 2
-    m_Motion: {fileID: 1827226128182048838, guid: 6c670ea8c84cf324980a21b4b9b927a0, type: 3}
-    m_Threshold: 2.5950913
+    m_Motion: {fileID: 1827226128182048838, guid: d2995d8a62be0ce42a4e73698b62b275, type: 3}
+    m_Threshold: 7.270601
     m_Position: {x: 0, y: 0}
     m_TimeScale: 1
     m_CycleOffset: 0
@@ -519,7 +519,7 @@ AnimatorController:
     m_Controller: {fileID: 9100000}
   - m_Name: RunSpeed
     m_Type: 1
-    m_DefaultFloat: 2.5950913
+    m_DefaultFloat: 7.270601
     m_DefaultInt: 0
     m_DefaultBool: 0
     m_Controller: {fileID: 9100000}
