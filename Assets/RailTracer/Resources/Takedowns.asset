@@ -59,30 +59,6 @@ MonoBehaviour:
     reverseGrip: 0
     camOffset: {x: -1.2001121, y: -0.011917396, z: 0.6516048}
     camLook: {x: -0.045894057, y: 0.17472748, z: 0.7907599}
-  - name: Slash Combo
-    kind: 1
-    target: 0
-    stance: 0
-    attacker: {fileID: 8993902097722301239, guid: 151865b5ac20d064bb6a14f0e57c5e62, type: 3}
-    victim: {fileID: 8993902097722301239, guid: 41ac199bfa6357f4a9a4ab75d2f59b82, type: 3}
-    attacker2: {fileID: 8993902097722301239, guid: 86f94bb5d1e0fe3408cdae9746334dcc, type: 3}
-    victim2: {fileID: 8993902097722301239, guid: a499aff48b631d44194e72e8383764b4, type: 3}
-    comboFrom: 0.339
-    comboStart: 0.166
-    comboBlend: 0.25
-    victimFallsAfter: 1
-    needsCover: 0
-    coverShift: 0.45
-    victimOffset: {x: 0, y: 0, z: 1.8}
-    victimYaw: 180
-    speed: 1
-    bloodAt: 0.3
-    extraBlood:
-    - 0.25
-    headOff: 0
-    reverseGrip: 0
-    camOffset: {x: -1.1100142, y: -0.2658369, z: -1.4310235}
-    camLook: {x: 0, y: 0, z: 0}
   - name: Shove to Table (half cover)
     kind: 1
     target: 0

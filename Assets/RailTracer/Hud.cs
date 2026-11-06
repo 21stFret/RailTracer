@@ -125,10 +125,10 @@ namespace RailTracer
         int[] notchAt;
         Image legendFill, hpFill;
         RectTransform hatchMask, hatch;
-        TMP_Text crossLine;
         // The legend the targeted kill would give (0 = no kill targeted): shown hatched on the bar, beside the big
         // number, and as the notches it crosses. Game sets it each frame before Refresh.
         public int legendGain;
+        public int shownHp = -1; // health to show instead of the rules' (-1: the rules')
         Image[] notches, movePips;
         TMP_Text[] notchLabels;
         TMP_Text legendNum, hpNum, hpWord, log;
@@ -283,12 +283,6 @@ namespace RailTracer
             legendNum = Text(root, title, 32, TextAlignmentOptions.BottomLeft, Vector2.zero, new Vector2(160, 80));
             Place(legendNum.rectTransform, Vector2.zero, new Vector2(868, BarY + 20f));
             legendNum.textWrappingMode = TextWrappingModes.NoWrap; // "42 +30" on one line
-            // Under the bar, beside health: the notches a targeted kill would cross.
-            crossLine = Text(root, body, 14, TextAlignmentOptions.MidlineLeft, Vector2.zero, new Vector2(560, 24));
-            Place(crossLine.rectTransform, Vector2.zero, new Vector2(Left + 440, HealthY));
-            crossLine.textWrappingMode = TextWrappingModes.NoWrap;
-            crossLine.fontStyle = FontStyles.Bold;
-            crossLine.color = Bright;
 
             // ---- Skill boxes ----
             for (int i = 0; i < boxes.Length; i++)
@@ -674,10 +668,6 @@ namespace RailTracer
             hatch.anchoredPosition = -hatchMask.anchoredPosition; // the stripes and taper stay fixed to the bar
             for (int i = 0; i < notchAt.Length; i++)
                 notches[i].color = notchLabels[i].color = L >= notchAt[i] ? Bone : notchAt[i] <= to ? Bright : NotchOff;
-            var crossed = notchAt.Where(v => v > L && v <= to).Select(v => $"{v}: {NotchName(v)}").ToList();
-            if (legendGain > 0 && L + legendGain > maxLegend) crossed.Add($"Capped at {maxLegend}");
-            crossLine.gameObject.SetActive(legendGain > 0 && crossed.Count > 0);
-            crossLine.text = string.Join(" · ", crossed);
             float k = L / (float)maxLegend;
             legendNum.text = legendGain > 0 ? $"{L}<size=60%><color=#E0202F> +{legendGain}</color></size>" : L.ToString();
             legendNum.fontSize = Mathf.Round(32f + 40f * k);
@@ -704,8 +694,9 @@ namespace RailTracer
                 tipUp.color = bloodied ? Bright : Burgundy;
             }
 
-            hpFill.fillAmount = c.hp / (float)c.t.maxHp;
-            hpNum.text = c.hp.ToString();
+            int hp = shownHp >= 0 ? shownHp : c.hp; // held back while a heavy's swing is still on its way
+            hpFill.fillAmount = hp / (float)c.t.maxHp;
+            hpNum.text = hp.ToString();
             hpWord.rectTransform.anchoredPosition = new Vector2(Left + 310 + hpNum.preferredWidth + 10, HealthY);
 
             for (int i = 0; i < movePips.Length; i++) movePips[i].color = i < c.movesLeft ? Bone : LockedBox;
@@ -871,11 +862,6 @@ namespace RailTracer
         }
 
         // ---- Building blocks ----
-
-        // What a notch on the legend bar gives: "Rail unlocks", "Leap Bloodied".
-        string NotchName(int v) => string.Join(", ", skills
-            .Where(s => s.unlock == v || s.bloodied == v)
-            .Select(s => s.shortName + (s.unlock != v ? " Bloodied" : s.bloodied == v ? " unlocks Bloodied" : " unlocks")));
 
         // Diagonal stripes, #E0202F on #4A0C15, tiling every 12 px.
         static Texture2D Stripes()

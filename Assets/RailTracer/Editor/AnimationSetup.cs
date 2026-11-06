@@ -90,6 +90,15 @@ namespace RailTracer
                 AssetDatabase.SaveAssets();
                 Debug.Log("Rail Tracer: enemy \"Shoot\" state added.");
             }
+            // The heavies' melee: "Swing" on the enemy controller. A Mixamo "Punching.fbx" dropped into RailTracer/Mixamo is
+            // used when there is one; until then the takedown pack's mid-section slash (a big forward swing).
+            var punch = File.Exists(Mixamo + "Punching.fbx") ? MixamoClip(Mixamo + "Punching.fbx", false) : null;
+            var swing = punch ? punch : Clip("Assets/Animations/Game/Brutal_Finishers_Hand_and_Knife/Animations/Paired_Knife/AnimSeq_Paired_Knife_Slash_MidSection_Att.FBX");
+            if (swing && AddSwing(Dir + "Enemy.controller", swing))
+            {
+                AssetDatabase.SaveAssets();
+                Debug.Log($"Rail Tracer: enemy \"Swing\" state set to {swing.name}.");
+            }
             if (UpgradeLocomotion(Dir + "Player.controller", "Walk") | UpgradeLocomotion(Dir + "Enemy.controller", "Move"))
             {
                 AssetDatabase.SaveAssets();
@@ -389,6 +398,26 @@ namespace RailTracer
             var idle = sm.states.Select(s => s.state).FirstOrDefault(s => s.name == "Idle");
             if (!idle || sm.states.Any(s => s.state.name == "Shoot")) return false;
             Finish(State(sm, "Shoot", clip), idle);
+            EditorUtility.SetDirty(ac);
+            return true;
+        }
+
+        // The "Swing" state (played by Game on a heavy's melee), back to Idle at its end; its clip swapped when a better
+        // one arrives.
+        static bool AddSwing(string path, AnimationClip clip)
+        {
+            var ac = AssetDatabase.LoadAssetAtPath<AnimatorController>(path);
+            if (!ac) return false;
+            var sm = ac.layers[0].stateMachine;
+            var idle = sm.states.Select(s => s.state).FirstOrDefault(s => s.name == "Idle");
+            var have = sm.states.Select(s => s.state).FirstOrDefault(s => s.name == "Swing");
+            if (!idle) return false;
+            if (have)
+            {
+                if (have.motion == clip) return false;
+                have.motion = clip;
+            }
+            else Finish(State(sm, "Swing", clip), idle);
             EditorUtility.SetDirty(ac);
             return true;
         }

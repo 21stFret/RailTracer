@@ -174,6 +174,10 @@ namespace RailTracer
         // the kill cam shows (a takedown's Blood At and extra blood points, a rail grab's impact, a thrown body landing).
         [Range(0.1f, 1f)] public float killCamSlowMo = 1f;
         public float hitSlowTime = 0.5f;
+        // A heavy's melee: the hit (blood, the red screen, your health going down) waits until it has walked up and its
+        // "Swing" clip is this far in (seconds), so it lands with the blow.
+        public float swingHitAt = 0.35f;
+        bool holdHit;
         // Walking out of a cleared car: the walk clip (not the sprint), a little brisker than its own pace.
         public float walkOutPace = 1.25f;
         bool exiting;
@@ -325,8 +329,8 @@ namespace RailTracer
             replay = null;
             if (phase == Phase.Play && !resumed)
             {
-                if (car.kind == CarKind.WalkThrough) hud.ShowCard("Between cars", "A quiet carriage.", "Walk on to the far door.", null, 2.5f, true);
-                else hud.ShowCard(CarLabel(), car.name, "Break their nerve.", null, 3f, true);
+                if (car.kind == CarKind.WalkThrough) { if (!demoOver) hud.ShowCard("Between cars", "A quiet carriage.", "Walk on to the far door.", null, 2.5f, true); }
+                else hud.ShowCard(CarLabel(), car.name, "Time to collect.", null, 3f, true);
             }
             endShown = false;
             walkQueued = false;
@@ -426,12 +430,14 @@ namespace RailTracer
             var knifeKit = Resources.Load<TrainKit>("Kit/TrainKit");
             knife = HoldKnife(playerAnim, knifeKit ? knifeKit.Get("Prop_Knife") : null, characterScale);
             AddAura(playerAnim.transform);
+            playerEyes = AddEyes(playerAnim, tracerEyeColor, true);
             shownBlood = 0f;
             foreach (var e in c.enemies)
             {
                 views[e].body.enabled = views[e].nose.enabled = false;
                 var a = anims[e] = Character(characterModel, new AnimatorOverrideController(enemyController));
                 a.Play(0, 0, Random.value); // out of sync so they don't bob together
+                AddEyes(a, e.id % 2 == 0 ? enemyEyeBlue : enemyEyeGreen, false);
                 if (a.parameters.Any(p => p.name == "Armed")) armed.Add(a);
             }
         }
@@ -446,6 +452,7 @@ namespace RailTracer
             Colour(a, new[] { "Shoes" }, shoesColor);
             Colour(a, new[] { "Hair" }, hairColor);
             Colour(a, skinParts, skinColor);
+            Lashes(a);
             if (fabric)
                 foreach (var r in a.GetComponentsInChildren<Renderer>())
                     if (System.Array.Exists(tintedParts, p => r.name.IndexOf(p, System.StringComparison.OrdinalIgnoreCase) >= 0))
@@ -1043,6 +1050,7 @@ namespace RailTracer
                 kb = null;
                 mouse = null;
             }
+            if (phase == Phase.Play && ThanksStep(kb, mouse)) return; // the end-of-demo card
             // Debug: F9 forgets all tutorial progress and restarts the carriage, as on a new save.
             if (kb != null && kb.f9Key.wasPressedThisFrame) { Tutorial.ResetAll(); RestartCar(); }
             // The intro / end card swallows input: any key or click fades a dismissable one; R always restarts. The
@@ -1919,7 +1927,7 @@ namespace RailTracer
                 lastState[e] = e.state;
             }
             pendingAct = null;
-            if (c.hitsTaken > lastHits) HitBlood();
+            if (c.hitsTaken > lastHits && !holdHit) HitBlood(); // a heavy's hit waits for its swing
             lastHits = c.hitsTaken;
         }
 
@@ -1997,6 +2005,10 @@ namespace RailTracer
                 if (followCamera) camTarget = shown[e];
                 yield return new WaitForSeconds(enemyStepDelay / EnemyPace);
                 bool fleeing = c.Decide(e) == Intent.Flee;
+                int logBefore = c.log.Count, hpBefore = c.hp;
+                bool melee = e.tough && (c.Decide(e) == Intent.Melee || c.Decide(e) == Intent.Charge);
+                holdHit = melee;
+                if (melee) hud.shownHp = hpBefore;
                 c.Do($"enemy {e.id}");
                 if (!routes.TryGetValue(e, out var route)) routes[e] = route = new Queue<Vector3>();
                 if (e.walked != null)
@@ -2011,6 +2023,20 @@ namespace RailTracer
                     if (followCamera) camTarget = shown[e];
                     yield return null;
                 }
+                // Its swing, if it made one: the clip, then the hit as it lands.
+                if (melee && c.log.Skip(logBefore).Any(line => line.Contains("lunges")))
+                {
+                    if (anims.TryGetValue(e, out var ea) && ea.HasState(0, Animator.StringToHash("Swing")))
+                    {
+                        var face = World(c.player) - shown[e];
+                        face.y = 0f;
+                        if (face.sqrMagnitude > 1e-4f) ea.transform.localRotation = Quaternion.LookRotation(face);
+                        ea.CrossFadeInFixedTime("Swing", 0.1f);
+                    }
+                    for (float time = 0f; time < swingHitAt; time += Time.deltaTime) yield return null;
+                }
+                holdHit = false;
+                hud.shownHp = -1;
                 if (fleeing && e.state == EnemyState.Fled) { yield return new WaitForSeconds(0.3f / EnemyPace); gone.Add(e); }
                 else if (walked) yield return new WaitForSeconds(0.15f / EnemyPace);
                 Poll(); // a card pauses the turn before the next enemy acts
@@ -2567,6 +2593,7 @@ namespace RailTracer
                 auraHolder.rotation = t.rotation;
             }
             SyncAura(Mathf.InverseLerp(auraFrom, auraFull, shownBlood));
+            SyncEyes(playerEyes, Mathf.InverseLerp(auraFrom, auraFull, shownBlood));
         }
 
         // ---- The knife (Train Assets/Knife, from railtracer_knife.py) in your right hand ----
@@ -2620,6 +2647,109 @@ namespace RailTracer
             var rot = k.rot * (reverse ? Quaternion.Euler(0f, 0f, 180f) : Quaternion.identity) * Quaternion.Euler(twist);
             k.t.localRotation = rot;
             k.t.localPosition = k.pos + rot * (offset * k.unit);
+        }
+
+        // ---- Eyes ----
+
+        // The Mixamo character's eyes are painted on its skin; its lash and brow cards (Ch33_Eyelashes) use the hair
+        // texture and showed as white strips. They're drawn cut out (the texture's alpha) and brown. Each eye gets a
+        // small iris disc where the lashes sit, coloured; yours glow red as the legend (the demon) takes form, with a
+        // red trail behind them as you move.
+        public Color browColor = new Color(0.2f, 0.12f, 0.06f);
+        public Color tracerEyeColor = new Color(0.2f, 0.45f, 0.95f), enemyEyeBlue = new Color(0.25f, 0.45f, 0.8f), enemyEyeGreen = new Color(0.25f, 0.55f, 0.3f);
+        public Color eyeGlow = new Color(1f, 0.08f, 0.04f);
+        public float irisSize = 0.011f, irisDepth = 0.003f, eyeGlowStrength = 4f, eyeTrailTime = 0.35f, eyeTrailWidth = 0.012f;
+        public Vector3 irisNudge; // metres: (right, up, forward) from where the lashes put each eye; applied as characters are made
+        internal class Eyes { public Material mat; public TrailRenderer[] trails; }
+        Eyes playerEyes;
+
+        static void Lashes(Animator a, Color brows)
+        {
+            foreach (var r in a.GetComponentsInChildren<Renderer>())
+            {
+                if (r.name.IndexOf("Eyelash", System.StringComparison.OrdinalIgnoreCase) < 0) continue;
+                var mats = r.materials;
+                foreach (var m in mats)
+                {
+                    m.color = brows;
+                    if (m.HasProperty("_Surface")) m.SetFloat("_Surface", 0f);   // opaque, cut out
+                    if (m.HasProperty("_AlphaClip")) m.SetFloat("_AlphaClip", 1f);
+                    if (m.HasProperty("_Cutoff")) m.SetFloat("_Cutoff", 0.5f);
+                    m.EnableKeyword("_ALPHATEST_ON");
+                    m.renderQueue = (int)RenderQueue.AlphaTest;
+                }
+                r.materials = mats;
+            }
+        }
+
+        void Lashes(Animator a) => Lashes(a, browColor);
+
+        // Iris discs on the head bone, one per eye, found from the lash mesh (split left and right).
+        Eyes AddEyes(Animator a, Color iris, bool tracer)
+        {
+            var head = a.GetBoneTransform(HumanBodyBones.Head);
+            var lash = a.GetComponentsInChildren<SkinnedMeshRenderer>().FirstOrDefault(r => r.name.IndexOf("Eyelash", System.StringComparison.OrdinalIgnoreCase) >= 0);
+            if (!head || !lash) return null;
+            var mesh = new Mesh();
+            lash.BakeMesh(mesh, true);
+            var lt = lash.transform;
+            var pts = mesh.vertices.Select(v => head.InverseTransformPoint(lt.position + lt.rotation * v)).ToList();
+            Destroy(mesh);
+            if (pts.Count < 4) return null;
+            var right = head.InverseTransformDirection(a.transform.right).normalized;
+            var up = head.InverseTransformDirection(a.transform.up).normalized;
+            var fwd = head.InverseTransformDirection(a.transform.forward).normalized;
+            var mid = pts.Aggregate(Vector3.zero, (s, p) => s + p) / pts.Count;
+            float unit = 1f / Mathf.Max(1e-4f, head.lossyScale.x);
+            var shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+            var mat = new Material(shader) { color = iris };
+            if (mat.HasProperty("_Smoothness")) mat.SetFloat("_Smoothness", 0.85f);
+            mat.EnableKeyword("_EMISSION");
+            mat.SetColor("_EmissionColor", Color.black);
+            var eyes = new Eyes { mat = mat, trails = new TrailRenderer[2] };
+            for (int side = 0; side < 2; side++)
+            {
+                var half = pts.Where(p => (Vector3.Dot(p - mid, right) > 0f) == (side == 1)).ToList();
+                if (half.Count == 0) continue;
+                var at = half.Aggregate(Vector3.zero, (s, p) => s + p) / half.Count;
+                at += (right * irisNudge.x * (side == 1 ? 1f : -1f) + up * irisNudge.y + fwd * irisNudge.z) * unit;
+                var disc = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                Destroy(disc.GetComponent<Collider>());
+                disc.name = side == 1 ? "Iris R" : "Iris L";
+                disc.transform.SetParent(head, false);
+                disc.transform.localPosition = at;
+                disc.transform.localRotation = Quaternion.LookRotation(fwd, up);
+                disc.transform.localScale = new Vector3(irisSize, irisSize, irisDepth) * unit;
+                var dr = disc.GetComponent<Renderer>();
+                dr.sharedMaterial = mat;
+                dr.shadowCastingMode = ShadowCastingMode.Off;
+                if (!tracer) continue;
+                var trail = disc.AddComponent<TrailRenderer>();
+                trail.time = eyeTrailTime;
+                trail.minVertexDistance = 0.01f;
+                trail.widthMultiplier = eyeTrailWidth;
+                trail.widthCurve = AnimationCurve.Linear(0f, 1f, 1f, 0f);
+                trail.material = new Material(Shader.Find("Sprites/Default"));
+                trail.shadowCastingMode = ShadowCastingMode.Off;
+                trail.emitting = false;
+                eyes.trails[side] = trail;
+            }
+            return eyes;
+        }
+
+        // k: how far the demon has taken form (the aura's 0-1). Blue at none, glowing red at full, trails as they come.
+        void SyncEyes(Eyes eyes, float k)
+        {
+            if (eyes == null || !eyes.mat) return;
+            eyes.mat.color = Color.Lerp(tracerEyeColor, eyeGlow, k);
+            eyes.mat.SetColor("_EmissionColor", eyeGlow * (k * eyeGlowStrength));
+            foreach (var trail in eyes.trails)
+            {
+                if (!trail) continue;
+                trail.emitting = k > 0.05f;
+                trail.startColor = new Color(eyeGlow.r, eyeGlow.g, eyeGlow.b, Mathf.Clamp01(k));
+                trail.endColor = new Color(eyeGlow.r, eyeGlow.g, eyeGlow.b, 0f);
+            }
         }
 
         void AddAura(Transform player)

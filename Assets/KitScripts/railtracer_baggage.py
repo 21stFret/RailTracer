@@ -10,8 +10,8 @@ block). Directions are UNITY local axes (the FBX maps Blender (x, y, z) to Unity
                       iron corner plates, shipping labels. A: a 0.94 m crate with a 0.72 m one on top (1.68 m);
                       B: two 0.86 m crates, the top one turned (1.74 m); C: a 0.94 m crate, a parcel bundle and a
                       small box on top (1.5 m). Square-ish, so the game may turn them in 90 degree steps.
-  Mail_Sacks_A / _B   1 tile, half cover (under 0.65 m): canvas mail sacks tied at the neck, A two standing and one
-                      lying, B a heap of three lying.
+  Mail_Sacks_A / _B   1 tile, half cover: canvas mail sacks tied at the neck, five to a pile, four at the base and
+                      one on top. A: four lying, one across them (0.56 m); B: four standing, one lying over them (0.77 m).
   Safe_Cage           3 x 2 tiles, pivot at the block's centre, its back to the wall at +Z: heavy iron bars on the
                       three room sides (front at -Z, both ends), a beam frame on top, a barred door with a brass
                       padlock in the front, and the safe inside against the wall. See-through, like the rules say.
@@ -1028,18 +1028,20 @@ def sack_lying(mb, u, w, y, yaw, length=0.72, r=0.2):
 
 
 def sacks_a():
+    """Four sacks lying in a 2 x 2 at the base, a fifth across the top (about 0.63 m)."""
     a = Asset("Mail_Sacks_A", seed=SEED + 3)
-    sack_standing(a.S, -0.2, 0.16, 0.6, 0.22)
-    sack_standing(a.S, 0.2, 0.22, 0.52, 0.2)
-    sack_lying(a.S, 0.02, -0.24, 0.0, 10, 0.78, 0.19)
+    for (u, w, yaw) in ((-0.24, -0.2, 184), (0.24, -0.2, -3), (-0.24, 0.2, 176), (0.24, 0.2, 2)):   # necks outward
+        sack_lying(a.S, u, w, 0.0, yaw, 0.48, 0.14)
+    sack_lying(a.S, 0.02, 0.0, 0.25, 88, 0.64, 0.15)
     return a.finish()
 
 
 def sacks_b():
+    """Four sacks standing in a 2 x 2 at the base, a fifth lying over them (about 0.77 m)."""
     a = Asset("Mail_Sacks_B", seed=SEED + 4)
-    sack_lying(a.S, 0.0, -0.22, 0.0, 0, 0.8, 0.2)
-    sack_lying(a.S, -0.04, 0.2, 0.0, -8, 0.76, 0.19)
-    sack_lying(a.S, 0.05, 0.0, 0.3, 82, 0.7, 0.17)
+    for (u, w, h) in ((-0.22, -0.22, 0.46), (0.22, -0.22, 0.44), (-0.22, 0.22, 0.43), (0.22, 0.22, 0.46)):
+        sack_standing(a.S, u, w, h, 0.18)
+    sack_lying(a.S, 0.0, 0.0, 0.42, 6, 0.62, 0.17)
     return a.finish()
 
 

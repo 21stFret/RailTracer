@@ -138,6 +138,7 @@ namespace RailTracer
         {
             endless = endlessRun;
             walking = false;
+            demoOver = thanksUp = false;
             carIndex = index;
             if (endless && newLayout) carSeed = Random.Range(1, int.MaxValue);
             car = CurrentDef();
@@ -231,12 +232,13 @@ namespace RailTracer
             hopMoving = false;
             hopRunning = exiting = false;
             busy = false;
-            if (!endless && carIndex == Train.DemoCars - 1)
+            // After the last car: on into the quiet carriage all the same (no next car to board), then the thank-you card.
+            bool last = !endless && carIndex == Train.DemoCars - 1;
+            if (last)
             {
                 save.run = null; // the demo is done: nothing to continue
                 WriteSave();
-                OpenChoice("done");
-                yield break;
+                demoOver = true;
             }
             int hp = c.hp;
             walking = true;
@@ -245,7 +247,35 @@ namespace RailTracer
             rulesSeed = Random.Range(1, int.MaxValue);
             startHp = hp;
             Build();
+            if (demoOver) { StartCoroutine(ThanksCard()); yield break; }
             AutoSave();
+        }
+
+        // The end of the demo, in the quiet carriage: a card like the tutorial's; any key or click, then the choices.
+        bool demoOver, thanksUp;
+        public float thanksDelay = 1.2f;
+        IEnumerator ThanksCard()
+        {
+            for (float time = 0f; time < thanksDelay; time += Time.deltaTime) yield return null;
+            hud.ShowTutorial("Thanks for playing", null,
+                "Thanks for playing the demo! If you enjoyed it, please leave a review and join our Discord.\n\nTry the Endless mode for more fun!",
+                "Click or press any key");
+            hud.SetTutorialTargets(new List<Rect>());
+            thanksUp = true;
+        }
+
+        // True while the thank-you card is up (it takes the input).
+        bool ThanksStep(Keyboard kb, Mouse mouse)
+        {
+            if (!thanksUp) return false;
+            bool any = (kb != null && kb.anyKey.wasPressedThisFrame) || (mouse != null && (mouse.leftButton.wasPressedThisFrame || mouse.rightButton.wasPressedThisFrame));
+            if (any)
+            {
+                thanksUp = false;
+                hud.HideTutorial();
+                OpenChoice("done");
+            }
+            return true;
         }
 
         // The shortest walk from `a` to `b` round seats, luggage and anyone still standing (bodies are stepped over).
@@ -300,7 +330,8 @@ namespace RailTracer
 
         void WalkStep()
         {
-            if (!walking || glow == null) return;
+            if (demoOver && glow) glow.SetActive(false); // nothing left to board
+            if (!walking || glow == null || demoOver) return;
             float pulse = 0.35f + 0.25f * Mathf.Sin(Time.unscaledTime * 3f);
             glow.GetComponent<Renderer>().sharedMaterial.color = Fill(Bone, pulse);
             bool on = c.player == GlowTile && playerRoute.Count == 0 && (playerShown - World(GlowTile)).sqrMagnitude < 0.01f;
@@ -518,8 +549,8 @@ namespace RailTracer
             hud.SetVisible(true);
             if (c.Round <= 1 && c.history.Count == 0)
             {
-                if (walking) hud.ShowCard("Between cars", "A quiet carriage.", "Walk on to the far door.", null, 2.5f, true);
-                else hud.ShowCard(CarLabel(), car.name, "Break their nerve.", null, 3f, true);
+                if (walking && !demoOver) hud.ShowCard("Between cars", "A quiet carriage.", "Walk on to the far door.", null, 2.5f, true);
+                else hud.ShowCard(CarLabel(), car.name, "Time to collect.", null, 3f, true);
             }
         }
 

@@ -63,7 +63,9 @@ namespace RailTracer
         public float halfCoverHitMult = 0.75f;
         public float leapHitPenalty = 0.25f; // off the hit chance of shots at a leaping player
         public int shotDamage = 15, maxHp = 30, maxLegend = 100;
-        public int quietLegend = 10, brutalLegend = 30, railLegend = 25; // the legend grows from kills only
+        // The legend grows from kills only. (brutalGain / railGain were brutalLegend 30 / railLegend 25: renamed so the
+        // scene's saved values don't override the new ones.)
+        public int quietLegend = 10, brutalGain = 20, railGain = 30;
         // Skill unlocks, Bloodied points and cooldowns: the SkillTable asset (Game copies it in at Build).
         [NonSerialized] public SkillDef[] skills = SkillDef.Defaults();
         public int leapRange = 3, throwDistance = 5;
@@ -663,7 +665,7 @@ namespace RailTracer
         }
 
         // The legend a kill gives (before the cap).
-        public int LegendGain(Act a) => a == Act.QuietKill ? t.quietLegend : a == Act.RailGrab ? t.railLegend : t.brutalLegend;
+        public int LegendGain(Act a) => a == Act.QuietKill ? t.quietLegend : a == Act.RailGrab ? t.railGain : t.brutalGain;
 
         void GainLegend(int n)
         {
@@ -1181,7 +1183,7 @@ namespace RailTracer
                         }
                     stains.Add(s);
                     Witness(at, body, boost ? (int)(t.largeTerror * t.railBoost) : t.largeTerror, boost ? t.mediumTerror : t.smallTerror, t.railHeard, false);
-                    GainLegend(t.railLegend);
+                    GainLegend(t.railGain);
                     break;
                 }
                 case Act.BrutalKill:
@@ -1194,7 +1196,7 @@ namespace RailTracer
                     Bleed(at, true);
                     Witness(at, body, t.largeTerror, t.smallTerror, t.brutalHeard, true);
                     if (Bloodied(SkillId.Brutal)) leapWait = 0; // judged at the legend you did it with
-                    GainLegend(t.brutalLegend);
+                    GainLegend(t.brutalGain);
                     movesLeft = 0; // you still end the turn yourself
                     brutalWait = Def(SkillId.Brutal).cooldown;
                     crouched = wasCrouched;

@@ -249,7 +249,7 @@ namespace RailTracer
             Check(witness.awareness == Awareness.Combat && witness.terror == t.largeTerror, "witness: large terror, combat");
             Check(listener.awareness == Awareness.Searching && listener.terror == t.smallTerror, "heard across the carriage");
             Check(c.stains[0].tiles.Count == 4, "brutal bloodies the tile and its open neighbours");
-            Check(c.hp == t.maxHp && c.legend == Unlock(t, SkillId.Brutal) + t.brutalLegend && c.shotsFired.Count == 0, "no free shots");
+            Check(c.hp == t.maxHp && c.legend == Unlock(t, SkillId.Brutal) + t.brutalGain && c.shotsFired.Count == 0, "no free shots");
             Check(c.brutalWait == Cool(t, SkillId.Brutal) && Cool(t, SkillId.Brutal) == 2, "cooldown 2");
             c.EndPlayerTurn();
             c.StartPlayerTurn();

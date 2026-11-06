@@ -98,7 +98,7 @@ namespace RailTracer
             }
             Add("Heart Stab (crouched)", KillKind.Stealth, "Stab_Heart", TakedownStance.Crouched);
             Add("Duck and Back Stab", KillKind.Brutal, "DuckNBackStab");
-            Add("Slash Combo", KillKind.Brutal, "Slash_MidSection", combo: "Slash_Face");
+            // (Slash Combo, the double slash, was dropped in Update 18.36: it didn't look good.)
             Add("Shove to Table (half cover)", KillKind.Brutal, "Shove_toTable_Stab_Quick", cover: true);
             if (lib.takedowns.Count == 0) return; // clips not imported yet: try again next run
             AssetDatabase.CreateAsset(lib, Library);
