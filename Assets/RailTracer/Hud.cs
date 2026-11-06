@@ -641,6 +641,14 @@ namespace RailTracer
                 var own = bloodied ? Bright : Bone;
                 b.bg.color = locked ? Alpha(LockedBox, 0.92f) : noTarget ? Black : bloodied ? Blood : Bone;
                 b.key.color = b.name.color = locked ? LockedText : noTarget ? own : bloodied ? Bone : Black;
+                // Holding a body: the drag box goes red and reads "Drop" in white.
+                bool holding = id == SkillId.Drag && c.held != null;
+                b.name.text = holding ? "Drop" : d.shortName;
+                if (holding)
+                {
+                    b.bg.color = Blood;
+                    b.key.color = b.name.color = Bone;
+                }
                 bool white = i == hovered || lifted;
                 b.border.enabled = white || !noTarget;
                 b.border.color = white ? Bone : Black;

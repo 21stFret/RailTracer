@@ -589,6 +589,24 @@ namespace RailTracer
                 Check(!c.LineOfSight(new Cell(2, 1), new Cell(4, 3), false) && !c.LineOfSight(new Cell(1, 2), new Cell(6, 3), false), "a partition: not at a slant past its frame");
             }
 
+            // Wild fire only finds you if the guard can see you: crouched behind a seat, never a target.
+            {
+                var wt = new Tuning { wildHitChance = 1f };
+                for (int s = 1; s <= 20; s++)
+                {
+                    var c = new Carriage(new[] { ".PS....", "......." }, wt, s);
+                    var g = c.Spawn(5, 0, -1, 0, 0);
+                    c.crouched = true;
+                    g.awareness = Awareness.Combat;
+                    g.terror = wt.panickedAt;
+                    g.panicNext = true;
+                    g.panic = Panic.WildFire;
+                    Check(!c.CanSee(g, c.player), "wild fire set-up: hidden behind the seat");
+                    c.Do("enemy 1");
+                    Check(c.hp == wt.maxHp, "wild fire never hits you when they can't see you");
+                }
+            }
+
             // Round tables and the dining cart: seat rules.
             {
                 var c = new Carriage(new[] { ".POD..", "..OO..", "......" }, t, 1);

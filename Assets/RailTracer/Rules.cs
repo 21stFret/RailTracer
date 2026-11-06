@@ -1669,9 +1669,12 @@ namespace RailTracer
                     break;
                 case Intent.WildFire:
                 {
-                    var targets = new List<Cell> { player };
+                    // Anyone in front of them: you only if they can see you (crouched behind a seat, say, you're not a
+                    // target), the others by line of sight within range.
+                    var targets = new List<Cell>();
+                    if (CanSee(e, player)) targets.Add(player);
                     foreach (var o in enemies) if (o != e && o.InPlay) targets.Add(o.pos);
-                    targets.RemoveAll(c => !InCone(e, c) || Dist2(e.pos, c) > Sight(e) * Sight(e) || !LineOfSight(e.pos, c, false)); // only what's in front of them
+                    targets.RemoveAll(c => !InCone(e, c) || Dist2(e.pos, c) > Sight(e) * Sight(e) || !LineOfSight(e.pos, c, false));
                     if (targets.Count == 0) { Log($"{Name(e)} fires wildly at nothing."); AlertAll(); break; }
                     shotsFired.Add(e);
                     var hit = targets[rng.Next(targets.Count)];
