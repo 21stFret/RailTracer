@@ -18,6 +18,7 @@ namespace RailTracer
         readonly List<Image> journeyLinks = new List<Image>();
         RectTransform menuClose;
         TMP_Text menuCloseX;
+        TMP_Text menuCorner; // a line on its own in the bottom-right corner (Options: Reset data)
 
         public void BuildMenu()
         {
@@ -56,6 +57,13 @@ namespace RailTracer
             Glow(menuInfo);
             menuInfo.gameObject.AddComponent<LayoutElement>().preferredWidth = 460f;
 
+            menuCorner = Label(Rect("Corner", root, Vector2.right, new Vector2(-64f, 44f), Vector2.zero), "", 22, Blood, 1.5f);
+            var crt = menuCorner.rectTransform;
+            crt.anchorMin = crt.anchorMax = crt.pivot = Vector2.right; // its bottom-right on the corner point
+            crt.anchoredPosition = Vector2.zero;
+            crt.sizeDelta = new Vector2(240f, 30f); // a real box, for the mouse
+            menuCorner.alignment = TextAlignmentOptions.BottomRight;
+            Glow(menuCorner);
             var screenRect = Rect("Screen", root, Vector2.zero, Vector2.zero, Vector2.zero);
             Stretch(screenRect, 0f);
             (menuClose, menuCloseX) = CloseX(screenRect, 32f); // a submenu's way back
@@ -79,8 +87,9 @@ namespace RailTracer
 
         // One frame of a menu screen. title: the "Red Line" title (else `heading`, with the close X top right);
         // enabled: per item (null = all); info: a block of text beside the lines (or null). Returns the enabled line
-        // under the mouse, -2 for the close X, or -1. danger: the line drawn in red (Reset data), or -1.
-        public int RefreshMenu(bool showTitle, string heading, string[] items, bool[] enabled, string info, Vector2 screen, bool held = false, int danger = -1)
+        // under the mouse, -2 for the close X, -3 for the corner line, or -1. danger: a line drawn in red, or -1.
+        // corner: a red line on its own in the bottom-right corner (null: none).
+        public int RefreshMenu(bool showTitle, string heading, string[] items, bool[] enabled, string info, Vector2 screen, bool held = false, int danger = -1, string corner = null)
         {
             menuClose.gameObject.SetActive(!showTitle);
             bool onX = !showTitle && RectTransformUtility.RectangleContainsScreenPoint(menuClose, screen, null);
@@ -91,6 +100,13 @@ namespace RailTracer
             menuInfo.gameObject.SetActive(!string.IsNullOrEmpty(info));
             menuInfo.text = info;
             if (heading != "Journey") HideJourney();
+            menuCorner.gameObject.SetActive(corner != null);
+            bool onCorner = corner != null && RectTransformUtility.RectangleContainsScreenPoint(menuCorner.rectTransform, screen, null);
+            if (corner != null)
+            {
+                menuCorner.text = corner;
+                menuCorner.color = onCorner ? Bright : Blood;
+            }
             int hit = -1;
             for (int i = 0; i < menuItems.Count; i++)
             {
@@ -103,7 +119,7 @@ namespace RailTracer
                 if (over) hit = i;
                 t.color = !on ? LockedBox : i == danger ? (over ? Bright : Blood) : over ? Bone : Grey;
             }
-            return onX ? -2 : hit;
+            return onX ? -2 : onCorner ? -3 : hit;
         }
 
         // Journey: each car's name under it on screen (`at`, screen pixels), red cleared (2), white next (1), grey

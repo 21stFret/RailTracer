@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 18.45 (6 Nov 2026).
+Last updated: Update 18.46 (6 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -64,6 +64,7 @@ Inspector; the saved scene matches these.
 | 18.43 (gore on Heart Stab, no X on the board pop-up) | Done, not yet seen in Play mode |
 | 18.44 (no eye trail on the walk out) | Done, not yet seen in Play mode |
 | 18.45 (Reset data in Options) | Done, not yet seen in Play mode |
+| 18.46 (Reset data in the corner) | Done, not yet seen in Play mode |
 | Still needed (art) | Rail grab, demon throw and crouched drag-down animations; unarmed finishers (skipped for now); a searching animation; more idles |
 | Next | Full audio pass |
 
@@ -109,7 +110,7 @@ Every menu is over the real carriages: the live (saved) car plus the other demo 
 - **Camera:** each screen is a zoomed-out view of a real car (Start over your car, Options over the next one along); it glides sideways between them. Journey pulls out side-on to the whole train. Continue (or boarding) dives straight down into the car and play resumes, no loading screen.
 - **Journey:** the five cars side-on, names under them (red cleared, white next, grey ahead) with short links between; click one for its name, description and best ticket, and Replay (cleared), Continue or Board (next); clicking the picked car again plays it, like a double click. No confirm: progress (cleared cars, best tickets) is kept whatever you replay, and play goes on in order from the car you jump into. The camera closes in side-on on the picked car (Game "Journey Zoom", 55 m), its neighbours still in view. Playing a car from Journey dives straight down into that car (the menu train is laid out again round it as it is built). Cars ahead can't be played. Replaying a car carries on through the rest of the train.
 - **Options:** Kill cam On/Off, kill cam chance (100, 75, 50, 25%: how often a kill gets it, takedowns, rail grabs and throws alike), kill cam slow motion (1, 0.75, 0.5, 0.25x: the one slow motion for every kill cam, only on its hits, see Camera), enemy turn speed (Slow, Normal, Fast: 0.6, 1, 1.8x; the pauses between enemies shorter and their walks quicker), window mode (Borderless, Fullscreen, Windowed), resolution, Controls (view only). No audio yet. The car behind has a lamp per setting, in menu order: off when the setting is off, a slider's value as its brightness (slow motion now, the volumes later); its progress lamps go out while you're there.
-- **Reset data** (Options, last line, in red): a warning screen ("Reset data?": the saved run, cleared cars, best tickets, settings and tutorial tips all go, for good), then "Reset everything" (red) or Cancel / Esc. Reset: a fresh save, the tutorial forgotten, back to the start screen over an empty car 1.
+- **Reset data** (Options, on its own in the bottom-right corner, in red): a warning screen ("Reset data?": the saved run, cleared cars, best tickets, settings and tutorial tips all go, for good), then "Reset everything" (red) or Cancel / Esc. Reset: a fresh save, the tutorial forgotten, back to the start screen over an empty car 1.
 - **Pause (Esc):** Resume, Tutorial tips, Kill cam, Restart car, Main menu. Esc backs out of every submenu.
 
 ## Turn

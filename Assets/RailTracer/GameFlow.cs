@@ -649,10 +649,10 @@ namespace RailTracer
                     {
                         $"Kill cam: {(s.killCam ? "On" : "Off")}", $"Kill cam chance: {Mathf.RoundToInt(100 * s.killCamChance)}%",
                         $"Kill cam slow motion: {s.killCamSlowMo:0.##}x", $"Enemy turn speed: {EnemySpeeds[Mathf.Clamp(s.enemySpeed, 0, 2)]}",
-                        $"Window: {modeName}", $"Resolution: {w} x {h}", "Controls", "Back", "Reset data",
+                        $"Window: {modeName}", $"Resolution: {w} x {h}", "Controls", "Back",
                     };
-                    int hit = hud.RefreshMenu(false, "Options", items, null, "Audio comes with the sound pass.", at, held, 8);
-                    if (click && hit == 8) { screen = MenuScreen.ResetData; break; }
+                    int hit = hud.RefreshMenu(false, "Options", items, null, "Audio comes with the sound pass.", at, held, -1, "Reset data");
+                    if (click && hit == -3) { screen = MenuScreen.ResetData; break; }
                     if (back || (click && (hit == 7 || hit == -2))) { screen = MenuScreen.Start; break; }
                     if (!click) break;
                     if (hit == 0) s.killCam = !s.killCam;
