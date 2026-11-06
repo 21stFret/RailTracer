@@ -67,8 +67,9 @@ namespace RailTracer
             {
                 new[] { 3, 0, 0, 1, 0, 0 }, new[] { 6, 2, 1, 0, 0, 0 }, new[] { 9, 3, 0, -1, 1, 0 },
                 new[] { 10, 2, -1, 0, 1, 0 }, new[] { 12, 0, 0, 1, 0, 0 }, new[] { 15, 4, 0, -1, 1, 0 },
+                new[] { 18, 2, -1, 0, 0, 1 }, new[] { 21, 1, 0, 1, 1, 0 }, new[] { 24, 3, 0, -1, 0, 1 },
             },
-            patrols = new Dictionary<int, Cell[]> { [3] = new[] { new Cell(10, 2), new Cell(12, 2) } },
+            patrols = new Dictionary<int, Cell[]> { [3] = new[] { new Cell(10, 2), new Cell(12, 2) }, [6] = new[] { new Cell(18, 2), new Cell(23, 2) } },
         };
 
         static CarDef Generated(string name, string blurb, int seed, int enemies, int toughs, double banks = 0.85, int luggageMin = 3, int luggageMax = 6)
@@ -84,6 +85,7 @@ namespace RailTracer
             {
                 new[] { 5, 1, 0, 1, 0, 0 }, new[] { 8, 3, 1, 0, 0, 0 }, new[] { 12, 2, 1, 0, 0, 0 }, new[] { 14, 0, 0, 1, 0, 0 },
                 new[] { 17, 4, 0, -1, 0, 0 }, new[] { 20, 2, -1, 0, 0, 1 }, new[] { 23, 0, 0, 1, 0, 0 },
+                new[] { 16, 3, -1, 0, 0, 1 }, new[] { 11, 4, 0, -1, 0, 0 },
             },
             patrols = new Dictionary<int, Cell[]> { [2] = new[] { new Cell(12, 2), new Cell(17, 2) } },
         };
@@ -95,6 +97,7 @@ namespace RailTracer
             {
                 new[] { 5, 1, 0, 1, 0, 0 }, new[] { 8, 2, 1, 0, 0, 0 }, new[] { 9, 4, 0, -1, 0, 0 }, new[] { 14, 3, 0, -1, 0, 1 },
                 new[] { 16, 2, 1, 0, 0, 0 }, new[] { 19, 0, 0, 1, 0, 0 }, new[] { 22, 3, -1, 0, 0, 1 }, new[] { 24, 2, -1, 0, 0, 0 },
+                new[] { 11, 3, -1, 0, 0, 0 },
             },
             patrols = new Dictionary<int, Cell[]> { [4] = new[] { new Cell(16, 2), new Cell(21, 2) } },
         };
@@ -108,16 +111,16 @@ namespace RailTracer
             switch (i)
             {
                 case 0: return First();
-                case 1: return Generated("Second class", "The same booths, a little more room between them.", 2002, 7, 1, banks: 0.6, luggageMin: 1, luggageMax: 3);
+                case 1: return Generated("Second class", "The same booths, a little more room between them.", 2002, 0, 2, banks: 0.6, luggageMin: 1, luggageMax: 3);
                 case 2: return Dining();
                 case 3: return Baggage();
-                default: return Generated("First class", "The last car. Whoever's left is waiting here.", 5005, 9, 2);
+                default: return Generated("First class", "The last car. Whoever's left is waiting here.", 5005, 0, 2);
             }
         }
 
-        // Endless car `n` (1-based) from `seed`: a car more than the last, up to 11; a heavy more every other car, up to 3.
+        // Endless car `n` (1-based) from `seed`: like every car, 8 to 10 enemies (the generator's own pick), 2 heavies.
         public static CarDef Endless(int n, int seed) =>
-            Generated($"Endless car {n}", "Another car, another crowd.", seed, Math.Min(5 + n, 11), Math.Min(1 + n / 2, 3));
+            Generated($"Endless car {n}", "Another car, another crowd.", seed, 0, 2);
 
         public static CarDef WalkThrough() => new CarDef
         {

@@ -543,13 +543,13 @@ namespace RailTracer
         // The demo train, the safe's cage, free walking, and a save replayed from its command history.
         static void Update17(Tuning t)
         {
-            int[] counts = { 6, 7, 7, 8, 9 };
+            // Every car as before Update 17 (from 18.38): about nine, two heavies (generated cars: 8 to 10).
             for (int i = 0; i < Train.DemoCars; i++)
             {
                 var car = Train.Demo(i);
                 var c = Train.Make(car, t, 1, t.maxHp);
                 Check(c.W == 26 && c.H == 5 && c.player == new Cell(0, 2), $"car {i + 1}: 26 x 5, you start at the door");
-                Check(c.enemies.Count == counts[i] && c.enemies.Count(e => e.tough) == (i == 0 ? 0 : i < 3 ? 1 : 2), $"car {i + 1}: {counts[i]} enemies, heavies from car 2");
+                Check(c.enemies.Count >= 8 && c.enemies.Count <= 10 && c.enemies.Count(e => e.tough) == 2, $"car {i + 1}: 8 to 10 enemies, 2 heavies");
                 Check(c.enemies.All(e => !c.Blocked(e.pos)) && c.enemies.Select(e => e.pos).Distinct().Count() == c.enemies.Count, $"car {i + 1}: everyone on free floor, one each");
                 // Every free tile reachable from the start (the far door too).
                 var seen = new HashSet<Cell> { c.player };
@@ -622,7 +622,10 @@ namespace RailTracer
                 bool spaced = groups.All(a => groups.All(b => a.Value == b.Value || Math.Max(Math.Abs(a.Key.x - b.Key.x), Math.Abs(a.Key.y - b.Key.y)) >= 2));
                 Check(spaced && id >= 8, "dining car: tables a tile apart");
                 var dc = Train.Make(car, t, 1, 30);
-                Check(dc.enemies.Count == 7 && dc.enemies.Count(e => e.tough) == 1 && dc.enemies.All(e => !dc.Blocked(e.pos)), "dining car: 7 on the floor, 1 heavy");
+                Check(dc.enemies.Count == 9 && dc.enemies.Count(e => e.tough) == 2 && dc.enemies.All(e => !dc.Blocked(e.pos)), "dining car: 9 on the floor, 2 heavies");
+                var bc = Train.Make(Train.Demo(3), t, 1, 30);
+                var fc = Train.Make(Train.Demo(0), t, 1, 30);
+                Check(bc.enemies.Count == 9 && bc.enemies.All(e => !bc.Blocked(e.pos)) && fc.enemies.Count == 9 && fc.enemies.Count(e => e.tough) == 2, "baggage hold and third class: 9 each");
             }
 
             // A charging heavy that gets beside you within its 3 moves swings at once; one that needs 4 only closes in.
