@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 18.38 (5 Nov 2026).
+Last updated: Update 18.39 (5 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -57,6 +57,7 @@ Inspector; the saved scene matches these.
 | 18.36 (playtest batch: text, legend gains, Slash Combo gone, sack piles, heavy swing, eyes, demo ending) | Done, not yet seen in Play mode |
 | 18.37 (eye trails drawn on top) | Done, not yet seen in Play mode |
 | 18.38 (enemy counts as before Update 17) | Done, not yet seen in Play mode: no more climb from car to car |
+| 18.39 (level solver) | Done: every demo car cleared at full health on seed 1 (car 1 in 11 turns, 2 in 13, 3 in 10, 4 in 9, 5 in 12) |
 | Still needed (art) | Rail grab, demon throw and crouched drag-down animations; unarmed finishers (skipped for now); a searching animation; more idles |
 | Next | Full audio pass |
 
@@ -200,6 +201,10 @@ Hover label: name, role, one state line ("Searching · Shaken", "Panicked · Fre
 ## Hits
 
 - Hit 85% (Shaken 35%), half cover ×0.75, melee 90%, wild fire 30%.
+
+## Level solver
+
+`Assets/RailTracer/Editor/LevelSolver.cs`, menu **Rail Tracer > Solve Demo Cars** (results in the Console; about 20 s). For each demo car it searches for a win with the real rules: each turn every plan (stand or crouch; walk to any reachable tile or leap anywhere legal; then any kill on someone within 2 tiles), the enemy turn played as the game does, the 10 most promising lines kept (enemies still fighting, health, legend, closeness). It prints whether the car was cleared, in how many turns, with how much health, killed / broken, and the winning line turn by turn. The dice are the car's seed (1), so a result is for that seed; the count is an upper bound (a cleverer line can only be quicker). It doesn't try throws, drags, window hops or windows. First run (18.39): car 1 in 11 turns, 2 in 13, 3 in 10, 4 in 9, 5 in 12, all at full health.
 
 ## Animation test
 
