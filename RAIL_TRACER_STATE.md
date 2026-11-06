@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 18.39 (5 Nov 2026).
+Last updated: Update 18.40 (5 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -58,6 +58,7 @@ Inspector; the saved scene matches these.
 | 18.37 (eye trails drawn on top) | Done, not yet seen in Play mode |
 | 18.38 (enemy counts as before Update 17) | Done, not yet seen in Play mode: no more climb from car to car |
 | 18.39 (level solver) | Done: every demo car cleared at full health on seed 1 (car 1 in 11 turns, 2 in 13, 3 in 10, 4 in 9, 5 in 12) |
+| 18.40 (enemies per car set by Alex) | Done: solver (seed 1) car 1 in 11 turns, 2 in 7, 3 in 11, 4 in 9 (all at full health), 5 in 24 with 10 health left |
 | Still needed (art) | Rail grab, demon throw and crouched drag-down animations; unarmed finishers (skipped for now); a searching animation; more idles |
 | Next | Full audio pass |
 
@@ -69,11 +70,11 @@ Inspector; the saved scene matches these.
 
 | Car | Name | Layout | Enemies |
 | --- | --- | --- | --- |
-| 1 | Third class | The hand-made carriage | 9, 2 heavies (its pre-Update 17 spawns again) |
-| 2 | Second class | Generated (seed 2002), more open: 60% of seat banks, 1-2 luggage stacks | 8-10 (the generator's pick), 2 heavies |
-| 3 | Dining car | Hand-made: plain wall between some window tables and behind the bar (the bar's tiles count as plain wall); straight, L-shaped and round (2x2) tables by the windows and a few in the room, each at least a tile clear of the next (diagonals too); a dining cart in the aisle; an L-shaped bar at the far end: the counter stands in the room (row 1, 4 tiles) facing the aisle, its short leg back to the wall, the bartender behind it with a back shelf of bottles | 9, 2 heavies |
-| 4 | Baggage hold | Hand-made greybox: crate maze, mail sacks, the safe's cage, a few windows | 9, 2 heavies |
-| 5 | First class | Generated (seed 5005), the passenger layout | 8-10, 2 heavies |
+| 1 | Third class | The hand-made carriage | 8 guards, no heavies |
+| 2 | Second class | Generated (seed 2002), more open: 60% of seat banks, 1-2 luggage stacks | 7 guards, 1 heavy |
+| 3 | Dining car | Hand-made: plain wall between some window tables and behind the bar (the bar's tiles count as plain wall); straight, L-shaped and round (2x2) tables by the windows and a few in the room, each at least a tile clear of the next (diagonals too); a dining cart in the aisle; an L-shaped bar at the far end: the counter stands in the room (row 1, 4 tiles) facing the aisle, its short leg back to the wall, the bartender behind it with a back shelf of bottles | 8 guards, 1 heavy |
+| 4 | Baggage hold | Hand-made greybox: crate maze, mail sacks, the safe's cage, a few windows | 7 guards, 2 heavies |
+| 5 | First class | Generated (seed 5005), the passenger layout | 8 guards, 3 heavies |
 
 - **Sun:** the directional light stays on over the kit carriage, with no shadows and very dim (Game "Sun Dim", 0.01); the lamps light the car.
 - **Map tiles:** '.' floor, '_' floor with plain wall (plain wall also behind 'l', 'x' and 'B'), 'S' seat, 'L' / 'l' luggage, 'W' wall, 'P' start. New: 'T' dining table (straight or L groups), 'O' round table (2x2), 'D' dining cart, 'B' bar, 'M' mail sack (seat rules: no walking through, leap over, half cover crouched); 'X' / 'x' crate (luggage rules: blocks walking and sight; leapt over); 'C' the safe's cage (blocks walking, leaps and snatches like a wall, but you can see through it). Chairs sit tucked under the tables and block nothing.
@@ -85,7 +86,7 @@ Inspector; the saved scene matches these.
 - **Clearing a car:** the win card shows the tickets and "Hold Space / click to walk on" with a bar that fills over the hold (empties if you let go early), or R to ride again. Walking on: you stand up first if crouched (Game "Stand Up Time" 0.4 s), then walk out of the far door: the walk clip, at Game "Walk Out Pace" (1.25) x its own speed (a confident walk clip could replace it later). Then the **walk-through car**: the first carriage's seats, nobody in it, no turns, no move costs, no skills. A glowing tile by the far door asks "Board / Not yet" (Space or Enter boards).
 - **After car 5:** you walk out into the quiet carriage (no board tile), then a card like the tutorial's: "Thanks for playing the demo! If you enjoyed it, please leave a review and join our Discord. Try the Endless mode for more fun!"; any key or click, then "Demo complete": Restart from car 1, Try Endless mode, Main menu.
 - **Fleeing enemies** jump off the train: broken, gone, never in the next car.
-- **Endless mode:** generated cars without end (TrainGen), the same rules; every car like the demo's: 8 to 10 enemies, 2 heavies (no climb).
+- **Endless mode:** generated cars without end (TrainGen), the same rules; each car 7 to 9 guards and 0 to 2 heavies, rolled from its seed (no climb).
 - R restarts the current car from its start (the health you came in with; an endless car keeps its layout). N on a won car's card: straight out (debug).
 
 ## Saves

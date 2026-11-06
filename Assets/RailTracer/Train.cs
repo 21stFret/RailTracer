@@ -67,7 +67,7 @@ namespace RailTracer
             {
                 new[] { 3, 0, 0, 1, 0, 0 }, new[] { 6, 2, 1, 0, 0, 0 }, new[] { 9, 3, 0, -1, 1, 0 },
                 new[] { 10, 2, -1, 0, 1, 0 }, new[] { 12, 0, 0, 1, 0, 0 }, new[] { 15, 4, 0, -1, 1, 0 },
-                new[] { 18, 2, -1, 0, 0, 1 }, new[] { 21, 1, 0, 1, 1, 0 }, new[] { 24, 3, 0, -1, 0, 1 },
+                new[] { 18, 2, -1, 0, 0, 0 }, new[] { 21, 1, 0, 1, 1, 0 },
             },
             patrols = new Dictionary<int, Cell[]> { [3] = new[] { new Cell(10, 2), new Cell(12, 2) }, [6] = new[] { new Cell(18, 2), new Cell(23, 2) } },
         };
@@ -85,7 +85,7 @@ namespace RailTracer
             {
                 new[] { 5, 1, 0, 1, 0, 0 }, new[] { 8, 3, 1, 0, 0, 0 }, new[] { 12, 2, 1, 0, 0, 0 }, new[] { 14, 0, 0, 1, 0, 0 },
                 new[] { 17, 4, 0, -1, 0, 0 }, new[] { 20, 2, -1, 0, 0, 1 }, new[] { 23, 0, 0, 1, 0, 0 },
-                new[] { 16, 3, -1, 0, 0, 1 }, new[] { 11, 4, 0, -1, 0, 0 },
+                new[] { 16, 3, -1, 0, 0, 0 }, new[] { 11, 4, 0, -1, 0, 0 },
             },
             patrols = new Dictionary<int, Cell[]> { [2] = new[] { new Cell(12, 2), new Cell(17, 2) } },
         };
@@ -111,16 +111,20 @@ namespace RailTracer
             switch (i)
             {
                 case 0: return First();
-                case 1: return Generated("Second class", "The same booths, a little more room between them.", 2002, 0, 2, banks: 0.6, luggageMin: 1, luggageMax: 3);
+                case 1: return Generated("Second class", "The same booths, a little more room between them.", 2002, 8, 1, banks: 0.6, luggageMin: 1, luggageMax: 3); // 7 guards, 1 heavy
                 case 2: return Dining();
                 case 3: return Baggage();
-                default: return Generated("First class", "The last car. Whoever's left is waiting here.", 5005, 0, 2);
+                default: return Generated("First class", "The last car. Whoever's left is waiting here.", 5005, 11, 3); // 8 guards, 3 heavies
             }
         }
 
-        // Endless car `n` (1-based) from `seed`: like every car, 8 to 10 enemies (the generator's own pick), 2 heavies.
-        public static CarDef Endless(int n, int seed) =>
-            Generated($"Endless car {n}", "Another car, another crowd.", seed, 0, 2);
+        // Endless car `n` (1-based) from `seed`: 7 to 9 guards and 0 to 2 heavies, rolled from the seed (the same each replay).
+        public static CarDef Endless(int n, int seed)
+        {
+            var roll = new Random(seed ^ 0x5eed);
+            int heavies = roll.Next(0, 3), guards = roll.Next(7, 10);
+            return Generated($"Endless car {n}", "Another car, another crowd.", seed, guards + heavies, heavies);
+        }
 
         public static CarDef WalkThrough() => new CarDef
         {
