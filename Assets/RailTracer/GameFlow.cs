@@ -56,7 +56,7 @@ namespace RailTracer
     public partial class Game
     {
         enum Phase { Menu, Entering, Play }
-        enum MenuScreen { Start, Journey, Options, Controls }
+        enum MenuScreen { Start, Journey, Options, Controls, ResetData }
         Phase phase = Phase.Menu;
         MenuScreen screen = MenuScreen.Start;
         CarDef car = Train.Demo(0);
@@ -184,6 +184,18 @@ namespace RailTracer
         }
 
         bool BackdropIsEmpty => save.run == null;
+
+        // Options > Reset data, confirmed: a fresh save (no run, nothing cleared, no best tickets, default settings), the
+        // tutorial tips forgotten, and the start screen over an empty car 1 again.
+        void ResetData()
+        {
+            save = new SaveData();
+            WriteSave();
+            Tutorial.ResetAll();
+            ApplySettings();
+            BuildEmptyBackdrop();
+            BuildMenuTrain();
+        }
 
         // The win card is up: record the ticket, mark the car cleared.
         void RecordClear()
@@ -510,7 +522,7 @@ namespace RailTracer
             }
             int slot = LiveSlot >= 0 ? LiveSlot : -1;
             float x = slot >= 0 ? SlotX(slot) : 0f; // the live car (an endless or walk-through car sits at 0)
-            if (screen == MenuScreen.Options || screen == MenuScreen.Controls) x = OptionsX;
+            if (screen == MenuScreen.Options || screen == MenuScreen.Controls || screen == MenuScreen.ResetData) x = OptionsX;
             var focusAt = new Vector3(x + (Map[0].Length - 1) / 2f + drift, 0f, -2f);
             var rot = Quaternion.Euler(50f, 0f, 0f);
             return (focusAt - rot * Vector3.forward * 24f, rot);
@@ -581,7 +593,7 @@ namespace RailTracer
         void MenuStep(Keyboard kb, Mouse mouse)
         {
             MenuCamera();
-            SyncSettingLamps(screen == MenuScreen.Options || screen == MenuScreen.Controls);
+            SyncSettingLamps(screen == MenuScreen.Options || screen == MenuScreen.Controls || screen == MenuScreen.ResetData);
             var at = mouse != null ? mouse.position.ReadValue() : Vector2.zero;
             bool click = mouse != null && mouse.leftButton.wasPressedThisFrame;
             bool back = kb != null && kb.escapeKey.wasPressedThisFrame;
@@ -637,9 +649,10 @@ namespace RailTracer
                     {
                         $"Kill cam: {(s.killCam ? "On" : "Off")}", $"Kill cam chance: {Mathf.RoundToInt(100 * s.killCamChance)}%",
                         $"Kill cam slow motion: {s.killCamSlowMo:0.##}x", $"Enemy turn speed: {EnemySpeeds[Mathf.Clamp(s.enemySpeed, 0, 2)]}",
-                        $"Window: {modeName}", $"Resolution: {w} x {h}", "Controls", "Back",
+                        $"Window: {modeName}", $"Resolution: {w} x {h}", "Controls", "Back", "Reset data",
                     };
-                    int hit = hud.RefreshMenu(false, "Options", items, null, "Audio comes with the sound pass.", at, held);
+                    int hit = hud.RefreshMenu(false, "Options", items, null, "Audio comes with the sound pass.", at, held, 8);
+                    if (click && hit == 8) { screen = MenuScreen.ResetData; break; }
                     if (back || (click && (hit == 7 || hit == -2))) { screen = MenuScreen.Start; break; }
                     if (!click) break;
                     if (hit == 0) s.killCam = !s.killCam;
@@ -664,6 +677,16 @@ namespace RailTracer
                     else break;
                     ApplySettings();
                     WriteSave();
+                    break;
+                }
+                case MenuScreen.ResetData:
+                {
+                    // The warning: everything goes, for good.
+                    const string warning = "This deletes all your progress: the saved run, the cars you've cleared, your best tickets, " +
+                                           "your settings and the tutorial tips you've seen.\n\nIt can't be undone.";
+                    int hit = hud.RefreshMenu(false, "Reset data?", new[] { "Reset everything", "Cancel" }, null, warning, at, held, 0);
+                    if (back || (click && (hit == 1 || hit == -2))) { screen = MenuScreen.Options; break; }
+                    if (click && hit == 0) { ResetData(); screen = MenuScreen.Start; }
                     break;
                 }
                 case MenuScreen.Controls:

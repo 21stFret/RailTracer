@@ -49,7 +49,7 @@ namespace RailTracer
             Fit(bottom);
             var col = Rect("Lines", bottom, Vector2.zero, Vector2.zero, Vector2.zero);
             Column(col, new RectOffset(0, 0, 0, 0), 10f).childAlignment = TextAnchor.LowerLeft;
-            for (int i = 0; i < 8; i++) { var item = Label(col, "", 22, Grey, 1.5f); Glow(item); menuItems.Add(item); }
+            for (int i = 0; i < 9; i++) { var item = Label(col, "", 22, Grey, 1.5f); Glow(item); menuItems.Add(item); }
             menuInfo = Text(bottom, body, 17, TextAlignmentOptions.BottomLeft, Vector2.zero, Vector2.zero);
             menuInfo.textWrappingMode = TextWrappingModes.Normal;
             menuInfo.color = Bone;
@@ -79,8 +79,8 @@ namespace RailTracer
 
         // One frame of a menu screen. title: the "Red Line" title (else `heading`, with the close X top right);
         // enabled: per item (null = all); info: a block of text beside the lines (or null). Returns the enabled line
-        // under the mouse, -2 for the close X, or -1.
-        public int RefreshMenu(bool showTitle, string heading, string[] items, bool[] enabled, string info, Vector2 screen, bool held = false)
+        // under the mouse, -2 for the close X, or -1. danger: the line drawn in red (Reset data), or -1.
+        public int RefreshMenu(bool showTitle, string heading, string[] items, bool[] enabled, string info, Vector2 screen, bool held = false, int danger = -1)
         {
             menuClose.gameObject.SetActive(!showTitle);
             bool onX = !showTitle && RectTransformUtility.RectangleContainsScreenPoint(menuClose, screen, null);
@@ -101,7 +101,7 @@ namespace RailTracer
                 bool on = enabled == null || enabled[i];
                 bool over = on && RectTransformUtility.RectangleContainsScreenPoint(t.rectTransform, screen, null);
                 if (over) hit = i;
-                t.color = !on ? LockedBox : over ? Bone : Grey;
+                t.color = !on ? LockedBox : i == danger ? (over ? Bright : Blood) : over ? Bone : Grey;
             }
             return onX ? -2 : hit;
         }
