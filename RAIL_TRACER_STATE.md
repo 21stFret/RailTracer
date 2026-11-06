@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 18.46 (6 Nov 2026).
+Last updated: Update 18.47 (6 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -65,6 +65,7 @@ Inspector; the saved scene matches these.
 | 18.44 (no eye trail on the walk out) | Done, not yet seen in Play mode |
 | 18.45 (Reset data in Options) | Done, not yet seen in Play mode |
 | 18.46 (Reset data in the corner) | Done, not yet seen in Play mode |
+| 18.47 (no close X on the pause menu) | Done, not yet seen in Play mode |
 | Still needed (art) | Rail grab, demon throw and crouched drag-down animations; unarmed finishers (skipped for now); a searching animation; more idles |
 | Next | Full audio pass |
 
@@ -263,5 +264,5 @@ In the game too, finisher blood now comes from the victim's chest bone (where th
 - The stylish flip (a bloodied leap past 3 tiles) crosses the floor as its clip does (Game "Stylish Flip Travel", sampled from the clip's hips: across in 1.2 s, then the landing plays in place), so it lands on its tile without sliding.
 - Running moves play the Synty sprint in the walk/run blend (Editor/AnimationSetup swaps it into existing controllers), in place of the sped-up run.
 - Ghosts: the move-preview ghost and the last-seen ghost are see-through outlines (last-seen fainter). The last-seen ghost marks only where an enemy actually last saw you.
-- Mouse only works too: the skill boxes, and the HUD's key hints are buttons (white under the mouse, red while pressed): Space end turn (hold the mouse on it, like Space), C crouch, Z undo, Esc menu, H controls, L log, and Esc cancel on the targeting banner. The win card's walk on: hold Space or the mouse; the loss card: a click retries. Every closable panel has a close button in its top-right corner (a red X on black, white border; the X turns white under the mouse, red while pressed): the log, the controls panel, the pause panel (not Board or Demo complete: Board closes with Not yet or Esc), and the menu's Journey, Options and Controls screens (back).
+- Mouse only works too: the skill boxes, and the HUD's key hints are buttons (white under the mouse, red while pressed): Space end turn (hold the mouse on it, like Space), C crouch, Z undo, Esc menu, H controls, L log, and Esc cancel on the targeting banner. The win card's walk on: hold Space or the mouse; the loss card: a click retries. Every closable panel has a close button in its top-right corner (a red X on black, white border; the X turns white under the mouse, red while pressed): the log, the controls panel, not the centre panels (pause: Resume or Esc; Board: Not yet or Esc; Demo complete: its choices), and the menu's Journey, Options and Controls screens (back).
 - Keys: 1–8 skills, Shift leap, Ctrl hop, G grab, C crouch, Z undo, V all senses, B blood outlines, L log, H controls, R restart the car, Esc pause (Main menu is in there).

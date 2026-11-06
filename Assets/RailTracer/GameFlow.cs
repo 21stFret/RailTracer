@@ -362,7 +362,7 @@ namespace RailTracer
         void OpenChoice(string which)
         {
             choice = which;
-            hud.ShowPause(true, which == "board" ? NextName() : which == "done" ? "Demo complete" : "Paused", which == "pause"); // only the pause panel has a close X
+            hud.ShowPause(true, which == "board" ? NextName() : which == "done" ? "Demo complete" : "Paused", false); // no close X: each panel has its own way out (Resume, Not yet)
         }
 
         void CloseChoice()
