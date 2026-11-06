@@ -33,6 +33,8 @@ namespace RailTracer
         public List<float> extraBlood = new List<float>();
         [Tooltip("The head comes off at Blood At: a gore burst where it was (a stomp, say).")]
         public bool headOff;
+        [Tooltip("The brutal kills' gore at its blood (the big splash and the gut burst), whatever its kind.")]
+        public bool gore;
         [Tooltip("Hold the knife the other way round for this one: the blade out of the little-finger side.")]
         public bool reverseGrip;
         [Tooltip("Let the pair travel as the clips do. Off (the default): the game holds the middle of the pair where it " +

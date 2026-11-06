@@ -1632,7 +1632,7 @@ namespace RailTracer
                     float t = second ? time / length2 : time / length;
                     if ((!chained || second) && !bled && t >= bloodAt)
                     {
-                        KillBlood(victim, act, playerFacing, Chest(va));
+                        KillBlood(victim, act, playerFacing, Chest(va), entry != null && entry.gore);
                         Soak(va, brutal);
                         if (entry != null && entry.headOff) HeadOff(va);
                         HitSlowMo();
@@ -1647,7 +1647,7 @@ namespace RailTracer
                             {
                                 struck.Add(s);
                                 var chestNow = Chest(va) ?? va.transform.localPosition + Vector3.up * FigureHeight * 0.6f;
-                                blood.Splash(root, chestNow, playerFacing, brutal);
+                                blood.Splash(root, chestNow, playerFacing, brutal || entry.gore);
                                 HitSlowMo();
                             }
                     }
@@ -1669,7 +1669,7 @@ namespace RailTracer
                 }
                 if (!bled)
                 {
-                    KillBlood(victim, act, playerFacing, Chest(va));
+                    KillBlood(victim, act, playerFacing, Chest(va), entry != null && entry.gore);
                     Soak(va, brutal);
                     if (entry != null && entry.headOff) HeadOff(va);
                 }
@@ -1937,7 +1937,7 @@ namespace RailTracer
 
         // `how` null = shot by someone else's gun. `dir` points from the killer through the victim. `chestAt`: the victim's
         // chest where a finisher has carried it (root space); else above its tile.
-        void KillBlood(Enemy e, Act? how, Vector3 dir, Vector3? chestAt = null)
+        void KillBlood(Enemy e, Act? how, Vector3 dir, Vector3? chestAt = null, bool gore = false)
         {
             if (!blood) return;
             var at = chestAt.HasValue ? new Vector3(chestAt.Value.x, 0f, chestAt.Value.z) : World(e.pos);
@@ -1945,7 +1945,7 @@ namespace RailTracer
             // The splash effect (it fades), the big gore one for a brutal kill; blood on the glass for a rail grab.
             if (how == Act.RailGrab) dir = e.pos.y == 0 ? Vector3.forward : Vector3.back;
             else if (how == null) { var r = Random.insideUnitCircle.normalized; dir = new Vector3(r.x, 0f, r.y); }
-            blood.Splash(root, chest, dir, how == Act.BrutalKill);
+            blood.Splash(root, chest, dir, gore || how == Act.BrutalKill);
             // The stains that stay: straight casts from every tile the kill bloodied (a crouched stealth kill casts lower).
             bool low = how == Act.QuietKill && c.crouched;
             Stains(e.pos, low ? bloodCastCrouched : bloodCastStanding, how == Act.BrutalKill ? blood.poolScale : blood.spatterScale);

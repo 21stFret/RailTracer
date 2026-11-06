@@ -290,7 +290,7 @@ namespace RailTracer
             dir.y = 0f;
             dir = dir.sqrMagnitude > 1e-4f ? dir.normalized : Vector3.forward;
             bool brutal = t.kind == KillKind.Brutal;
-            blood.Splash(bloodRoot, chest, dir, brutal);
+            blood.Splash(bloodRoot, chest, dir, brutal || t.gore);
             if (t.headOff)
             {
                 var head = victim.GetBoneTransform(HumanBodyBones.Head);
@@ -322,7 +322,7 @@ namespace RailTracer
             var chest = bone ? bone.position : victim.transform.position + Vector3.up * 1.1f;
             var dir = victim.transform.position - attacker.transform.position;
             dir.y = 0f;
-            blood.Splash(bloodRoot, chest, dir.sqrMagnitude > 1e-4f ? dir.normalized : Vector3.forward, t.kind == KillKind.Brutal);
+            blood.Splash(bloodRoot, chest, dir.sqrMagnitude > 1e-4f ? dir.normalized : Vector3.forward, t.kind == KillKind.Brutal || t.gore);
         }
 
         // N: an extra blood point at the current frame; X: remove the one nearest it. Saved to the asset.

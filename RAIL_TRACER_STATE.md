@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 18.42 (6 Nov 2026).
+Last updated: Update 18.43 (6 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -61,6 +61,7 @@ Inspector; the saved scene matches these.
 | 18.40 (enemies per car set by Alex) | Done: solver (seed 1) car 1 in 11 turns, 2 in 7, 3 in 11, 4 in 9 (all at full health), 5 in 24 with 10 health left |
 | 18.41 (wild fire needs sight of you, the drag box while dragging) | Done, not yet seen in Play mode |
 | 18.42 (turn count and target) | Done, not yet seen in Play mode |
+| 18.43 (gore on Heart Stab, no X on the board pop-up) | Done, not yet seen in Play mode |
 | Still needed (art) | Rail grab, demon throw and crouched drag-down animations; unarmed finishers (skipped for now); a searching animation; more idles |
 | Next | Full audio pass |
 
@@ -222,6 +223,7 @@ In the game too, finisher blood now comes from the victim's chest bone (where th
 
 - Ragdolls: the character has ragdoll bones from Unity's Ragdoll Builder (Editor/RagdollSetup, kinematic and collider-off until needed, on Ignore Raycast). After the last clip of every takedown the victim goes limp and falls (during the kill cam's fly-out); other deaths too, except rail grabs (posed over the sill). First the body slides (Game "Ragdoll Slide", 0.15 s; after a takedown it slides with you instead, both over Takedown Hold, 0.5 s, starting as the clip ends while the kill cam flies back) so its hips are over its tile, then goes limp and falls there; after "Ragdoll Settle" (1.6 s) it freezes; drags and throws move the frozen pose. A takedown's big stain comes with its blood (Blood At): projected down over the victim from Game "Soak Height" (0.3 m) through "Soak Depth" (1.2 m), so it covers the floor, the body once it has fallen into it, and a table it's over; "Soak Brutal" 0.7 and "Soak Stealth" 0.35 x the pool size. The tile stains as before (a brutal kill's tile a pool, otherwise spatter). Shove to Table is the exception: the pair stays where the clip leaves them (the victim bent over the seat, you beside it in the stance you had, until you move); the body still counts as on its tile for drags, sight, blood and searchers, and goes limp once moved. The takedown viewer ragdolls its victim the same way.
 - A resumed save's bodies are stood on their own tiles first (they were never shown alive), then fall there like any other; a corpse's place for drags and throws is taken once its slide is done.
+- **Gore:** a takedown with Gore ticked (Heart Stab) uses the brutal kills' gore at its blood (the big splash and the gut burst), whatever its kind; its extra blood points too.
 - **Head off:** a takedown with Head Off ticked (Grab Flip Head Stomp) takes the head off at Blood At: the head bone shrinks to nothing, with two gore bursts where it was and a pool under it (the animation test shows it too). A resumed save's corpse has its head back.
 - **Rail grab hang:** the hung body's root is placed from the tile by Game "Rail Hang Pos" (0.335, 1.334, -0.691) and "Rail Hang Rot" (77.22, 180, 189.13) on the top side's windows, turned half round for the bottom side; the limbs keep the sill pose.
 - **Shove to Table over the bar** lifts the victim Game "Bar Shove Lift" (0.3 m), the bar being taller than a table.
@@ -257,5 +259,5 @@ In the game too, finisher blood now comes from the victim's chest bone (where th
 - The stylish flip (a bloodied leap past 3 tiles) crosses the floor as its clip does (Game "Stylish Flip Travel", sampled from the clip's hips: across in 1.2 s, then the landing plays in place), so it lands on its tile without sliding.
 - Running moves play the Synty sprint in the walk/run blend (Editor/AnimationSetup swaps it into existing controllers), in place of the sped-up run.
 - Ghosts: the move-preview ghost and the last-seen ghost are see-through outlines (last-seen fainter). The last-seen ghost marks only where an enemy actually last saw you.
-- Mouse only works too: the skill boxes, and the HUD's key hints are buttons (white under the mouse, red while pressed): Space end turn (hold the mouse on it, like Space), C crouch, Z undo, Esc menu, H controls, L log, and Esc cancel on the targeting banner. The win card's walk on: hold Space or the mouse; the loss card: a click retries. Every closable panel has a close button in its top-right corner (a red X on black, white border; the X turns white under the mouse, red while pressed): the log, the controls panel, the pause and Board panels (not Demo complete), and the menu's Journey, Options and Controls screens (back).
+- Mouse only works too: the skill boxes, and the HUD's key hints are buttons (white under the mouse, red while pressed): Space end turn (hold the mouse on it, like Space), C crouch, Z undo, Esc menu, H controls, L log, and Esc cancel on the targeting banner. The win card's walk on: hold Space or the mouse; the loss card: a click retries. Every closable panel has a close button in its top-right corner (a red X on black, white border; the X turns white under the mouse, red while pressed): the log, the controls panel, the pause panel (not Board or Demo complete: Board closes with Not yet or Esc), and the menu's Journey, Options and Controls screens (back).
 - Keys: 1–8 skills, Shift leap, Ctrl hop, G grab, C crouch, Z undo, V all senses, B blood outlines, L log, H controls, R restart the car, Esc pause (Main menu is in there).

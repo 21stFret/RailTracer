@@ -16,7 +16,7 @@ MonoBehaviour:
   - name: Heart Stab (crouched)
     kind: 0
     target: 0
-    stance: 1
+    stance: 0
     attacker: {fileID: 8993902097722301239, guid: 6440dfbf1af408640a3740e671b5e528, type: 3}
     victim: {fileID: 8993902097722301239, guid: c89388cae16cb174da4beff3a98478bc, type: 3}
     attacker2: {fileID: 0}
@@ -33,12 +33,14 @@ MonoBehaviour:
     bloodAt: 0.55
     extraBlood: []
     headOff: 0
+    gore: 1
     reverseGrip: 1
+    keepTravel: 0
     camOffset: {x: 0.7752993, y: 1.8676817, z: -1.4102607}
     camLook: {x: 0.3034169, y: -0.2875536, z: 0.6651601}
   - name: Duck and Back Stab
     kind: 1
-    target: 0
+    target: 1
     stance: 0
     attacker: {fileID: 8993902097722301239, guid: d87b0ae9e930fd943818ed1e8a4ddadf, type: 3}
     victim: {fileID: 8993902097722301239, guid: 0a4de35ed7f77ba4face489805193709, type: 3}
@@ -56,7 +58,9 @@ MonoBehaviour:
     bloodAt: 0.5
     extraBlood: []
     headOff: 0
+    gore: 0
     reverseGrip: 0
+    keepTravel: 0
     camOffset: {x: -1.2001121, y: -0.011917396, z: 0.6516048}
     camLook: {x: -0.045894057, y: 0.17472748, z: 0.7907599}
   - name: Shove to Table (half cover)
@@ -80,7 +84,9 @@ MonoBehaviour:
     extraBlood:
     - 0.35
     headOff: 0
-    reverseGrip: 0
+    gore: 0
+    reverseGrip: 1
+    keepTravel: 0
     camOffset: {x: 0.5744367, y: 1.13983, z: -0.0664637}
     camLook: {x: 0.30634022, y: 0.5113774, z: 1.1506566}
   - name: Grab Flip Head Stomp
@@ -103,7 +109,9 @@ MonoBehaviour:
     bloodAt: 0.77
     extraBlood: []
     headOff: 1
+    gore: 0
     reverseGrip: 0
+    keepTravel: 0
     camOffset: {x: -0.66559875, y: 1.8934764, z: 1.3063141}
     camLook: {x: -0.069034874, y: -0.31641206, z: 0.4342563}
   - name: Karate Chop KO
@@ -126,7 +134,9 @@ MonoBehaviour:
     bloodAt: 0.21
     extraBlood: []
     headOff: 0
+    gore: 0
     reverseGrip: 0
+    keepTravel: 0
     camOffset: {x: -1.3251281, y: -0.46971035, z: 1.3390793}
     camLook: {x: -0.2540365, y: 0.29604053, z: 0.23481794}
   - name: Neck Break
@@ -149,13 +159,15 @@ MonoBehaviour:
     bloodAt: 0.59
     extraBlood: []
     headOff: 0
+    gore: 0
     reverseGrip: 0
+    keepTravel: 0
     camOffset: {x: -0.8289606, y: 1.2233545, z: 1.002043}
     camLook: {x: -0.21561952, y: 0.21502683, z: 0.10923689}
   - name: Grab Flip Stab
-    kind: 0
+    kind: 1
     target: 0
-    stance: 1
+    stance: 0
     attacker: {fileID: 8993902097722301239, guid: 346bb399366246fba6c3f93067e6cf23, type: 3}
     victim: {fileID: 8993902097722301239, guid: b82737ddf6b34a4ba770c5119c893250, type: 3}
     attacker2: {fileID: 0}
@@ -172,7 +184,9 @@ MonoBehaviour:
     bloodAt: 0.79
     extraBlood: []
     headOff: 0
+    gore: 0
     reverseGrip: 0
+    keepTravel: 0
     camOffset: {x: -1.3378372, y: 1.2314416, z: 0.717341}
     camLook: {x: -0.07219231, y: -0.0038307433, z: 0.6920177}
   - name: Neck Stab (from behind)
@@ -196,13 +210,15 @@ MonoBehaviour:
     extraBlood:
     - 0.6
     headOff: 0
-    reverseGrip: 0
+    gore: 0
+    reverseGrip: 1
+    keepTravel: 0
     camOffset: {x: -0.2441204, y: 1.2936509, z: 1.0168352}
     camLook: {x: -0.14026704, y: 0.23787187, z: 0.25380334}
   - name: Spin Stab
     kind: 0
     target: 0
-    stance: 2
+    stance: 1
     attacker: {fileID: 8993902097722301239, guid: 5970b66641c1448d9d2d88e336c4962f, type: 3}
     victim: {fileID: 8993902097722301239, guid: b3c4feb60e6e4704af5a7b0555e7e749, type: 3}
     attacker2: {fileID: 0}
@@ -220,7 +236,9 @@ MonoBehaviour:
     extraBlood:
     - 0.15
     headOff: 0
+    gore: 0
     reverseGrip: 0
+    keepTravel: 0
     camOffset: {x: -0.8023282, y: 0.9568916, z: -1.0232475}
     camLook: {x: -0.16827412, y: 0.05304674, z: 0.19757238}
   - name: Thigh and Neck Stab
@@ -244,6 +262,9 @@ MonoBehaviour:
     extraBlood:
     - 0.1
     headOff: 0
+    gore: 0
     reverseGrip: 0
+    keepTravel: 0
     camOffset: {x: 0.5117213, y: -0.40498307, z: 1.6633775}
     camLook: {x: 0.04975728, y: 0.099454485, z: 0.31946307}
+  coverChance: 0.5
