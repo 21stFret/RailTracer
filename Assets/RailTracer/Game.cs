@@ -314,6 +314,7 @@ namespace RailTracer
             sashes.Clear();
             hopRunning = hopMoving = false;
             armed.Clear();
+            guns.Clear(); // they went with the old car
             idleLook.Clear();
             begging.Clear();
             bodyCell.Clear();
@@ -439,6 +440,7 @@ namespace RailTracer
                 a.Play(0, 0, Random.value); // out of sync so they don't bob together
                 AddEyes(a, e.id % 2 == 0 ? enemyEyeBlue : enemyEyeGreen, false);
                 if (a.parameters.Any(p => p.name == "Armed")) armed.Add(a);
+                if (!e.tough) { var gun = HoldGun(a); if (gun != null) guns[e] = gun; } // heavies don't shoot
             }
         }
 
@@ -1896,7 +1898,8 @@ namespace RailTracer
             var face = new Vector3(e.facing.x, 0f, -e.facing.y);
             if (anims.TryGetValue(e, out var a) && a.HasState(0, Animator.StringToHash("Shoot"))) a.Play("Shoot", 0, 0f);
             var hand = a ? a.GetBoneTransform(HumanBodyBones.RightHand) : null;
-            var muzzle = hand ? root.InverseTransformPoint(hand.position) + face * 0.15f : shown[e] + Vector3.up * FigureHeight * 0.7f + face * 0.4f;
+            var muzzle = guns.TryGetValue(e, out var g) && g.muzzle && g.t.gameObject.activeInHierarchy ? root.InverseTransformPoint(g.muzzle.position)
+                : hand ? root.InverseTransformPoint(hand.position) + face * 0.15f : shown[e] + Vector3.up * FigureHeight * 0.7f + face * 0.4f;
             var chest = playerShown + Vector3.up * FigureHeight * 0.6f;
             var end = c.CanSee(e, c.player) ? chest : muzzle + face * 4f;
             var tracer = Line(muzzleColor, 0.03f);
@@ -2762,6 +2765,82 @@ namespace RailTracer
             }
         }
 
+        // ---- The guards' revolver (Resources/Weapons/Revolver.fbx) in their right hand ----
+
+        // The model's barrel points along its +Z, its top up +Y, the grip hanging down at the back (checked in Blender).
+        // It's measured once as it's made (its bounds), so its own units don't matter: scaled to Gun Length, gripped in the
+        // fist like the knife (the grip across the knuckles, the barrel on past the fingers), finished in dark steel.
+        public float gunLength = 0.33f;                 // metres at full size
+        public Vector3 gunOffset, gunTwist;             // nudges, live in Play mode: metres in the gun's space, degrees
+        public Color gunSteel = new Color(0.11f, 0.11f, 0.12f), gunCylinder = new Color(0.2f, 0.2f, 0.21f);
+        internal class Gun { public Transform t, muzzle; public Vector3 pos, grip; public Quaternion rot; public float unit; }
+        readonly Dictionary<Enemy, Gun> guns = new Dictionary<Enemy, Gun>();
+
+        Gun HoldGun(Animator a)
+        {
+            var model = Resources.Load<GameObject>("Weapons/Revolver");
+            var hand = a.GetBoneTransform(HumanBodyBones.RightHand);
+            if (!model || !hand) return null;
+            // Measure it at the world origin, unturned: its bounds are then its own.
+            var go = Instantiate(model);
+            go.name = "Revolver";
+            go.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
+            go.transform.localScale = Vector3.one;
+            var rends = go.GetComponentsInChildren<Renderer>();
+            if (rends.Length == 0) { Destroy(go); return null; }
+            var b = rends[0].bounds;
+            foreach (var r in rends) b.Encapsulate(r.bounds);
+            if (b.size.z < Mathf.Max(b.size.x, b.size.y)) Debug.LogWarning("Rail Tracer: the revolver's longest side isn't its Z; its hold may be off (Gun Twist).");
+            foreach (var r in rends)
+            {
+                r.shadowCastingMode = ShadowCastingMode.On;
+                var m = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard"))
+                    { color = r.name.IndexOf("Cylinder", System.StringComparison.OrdinalIgnoreCase) >= 0 ? gunCylinder : gunSteel };
+                if (m.HasProperty("_Metallic")) m.SetFloat("_Metallic", 0.85f);
+                if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", 0.55f);
+                r.sharedMaterials = r.sharedMaterials.Select(_ => m).ToArray();
+            }
+            foreach (var col in go.GetComponentsInChildren<Collider>()) col.enabled = false;
+            var grip = new Vector3(b.center.x, b.min.y + 0.30f * b.size.y, b.min.z + 0.19f * b.size.z);   // where the fist closes
+            var muzzle = new GameObject("Muzzle").transform;
+            muzzle.SetParent(go.transform, false);
+            muzzle.localPosition = new Vector3(b.center.x, b.min.y + 0.85f * b.size.y, b.max.z);
+            // Into the hand, at Gun Length.
+            float hs = Mathf.Max(1e-4f, hand.lossyScale.x), s = gunLength * characterScale / Mathf.Max(1e-4f, b.size.z);
+            go.transform.SetParent(hand, false);
+            go.transform.localScale = Vector3.one * s / hs;
+            var g = new Gun { t = go.transform, muzzle = muzzle, grip = grip * (s / hs), unit = 1f / hs };
+            var index = a.GetBoneTransform(HumanBodyBones.RightIndexProximal);
+            var little = a.GetBoneTransform(HumanBodyBones.RightLittleProximal) ?? a.GetBoneTransform(HumanBodyBones.RightRingProximal);
+            var middle = a.GetBoneTransform(HumanBodyBones.RightMiddleProximal);
+            var thumb = a.GetBoneTransform(HumanBodyBones.RightThumbProximal);
+            if (index && little && middle)
+            {
+                Vector3 I = hand.InverseTransformPoint(index.position), Lt = hand.InverseTransformPoint(little.position);
+                Vector3 M = hand.InverseTransformPoint(middle.position);
+                var across = (I - Lt).normalized;                              // up the grip, towards the trigger
+                var fingers = Vector3.ProjectOnPlane(M, across).normalized;    // the barrel's way
+                var palm = Vector3.Cross(across, fingers).normalized;
+                if (thumb && Vector3.Dot(palm, hand.InverseTransformPoint(thumb.position) - M) < 0f) palm = -palm;
+                float d = M.magnitude;
+                var gripUp = new Vector3(0f, 0.08f, 0.065f).normalized;        // the grip's rake, bottom to top, in the gun's space
+                var barrel = Vector3.ProjectOnPlane(Vector3.forward, gripUp).normalized;
+                g.rot = Quaternion.LookRotation(fingers, across) * Quaternion.Inverse(Quaternion.LookRotation(barrel, gripUp));
+                g.pos = fingers * d * 0.95f + palm * d * 0.3f;
+            }
+            else { g.rot = Quaternion.identity; g.pos = new Vector3(0f, 0.08f, 0.02f) * g.unit; }
+            PoseGun(g);
+            return g;
+        }
+
+        void PoseGun(Gun g)
+        {
+            if (g == null || !g.t) return;
+            var rot = g.rot * Quaternion.Euler(gunTwist);
+            g.t.localRotation = rot;
+            g.t.localPosition = g.pos - rot * g.grip + rot * (gunOffset * g.unit);
+        }
+
         void AddAura(Transform player)
         {
             var prefab = Resources.Load<GameObject>("Effects/Demon Aura");
@@ -3011,6 +3090,11 @@ namespace RailTracer
             if (!a.HasState(0, Animator.StringToHash("BegStart"))) a.SetBool("Broken", broken);
             else if (broken && begging.Add(e)) a.CrossFade("BegStart", 0.25f, 0, 0f);
             if (armed.Contains(a)) a.SetBool("Armed", e.awareness != Awareness.Unaware); // holstered only while unaware
+            if (guns.TryGetValue(e, out var held))
+            {
+                held.t.gameObject.SetActive(e.state == EnemyState.Active && e.awareness != Awareness.Unaware); // holstered; dropped when broken
+                PoseGun(held);
+            }
             Stride(a, moving ? pace : 0f, false);
             var t = a.transform;
             t.localPosition = pos;

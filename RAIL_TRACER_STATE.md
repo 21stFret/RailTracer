@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 18.47 (6 Nov 2026).
+Last updated: Update 18.48 (6 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -66,6 +66,7 @@ Inspector; the saved scene matches these.
 | 18.45 (Reset data in Options) | Done, not yet seen in Play mode |
 | 18.46 (Reset data in the corner) | Done, not yet seen in Play mode |
 | 18.47 (no close X on the pause menu) | Done, not yet seen in Play mode |
+| 18.48 (the guards' revolver) | Done, not yet seen in Play mode: Alex's Revolver.fbx in Resources/Weapons; also Alex's Gore / Reverse Grip ticks on more takedowns |
 | Still needed (art) | Rail grab, demon throw and crouched drag-down animations; unarmed finishers (skipped for now); a searching animation; more idles |
 | Next | Full audio pass |
 
@@ -259,6 +260,7 @@ In the game too, finisher blood now comes from the victim's chest bone (where th
 - Move and leap previews: each tile that draws a shot shows its hit chance on the floor; a leap's says "LEAP -25", and the shooter's label "Hit 60% · leap -25".
 - The walk-through car has every legend effect off (demon aura, blood overlay); an aura starting at nothing clears what its systems played on awake.
 - **Eyes:** the character's lash and brow cards are drawn cut out and brown (Game "Brow Color"). Each eye gets a small iris disc where the lashes sit (Game "Iris Size", "Iris Nudge" to move them): enemies blue or green, yours blue ("Tracer Eye Color"), glowing red as the demon takes form (with the aura) and leaving a red trail as you move, drawn over everything so the head never hides it, and off on the walk out of a cleared car ("Eye Glow", "Eye Glow Strength", "Eye Trail Time / Width").
+- **The guards' revolver:** `Resources/Weapons/Revolver.fbx` (Alex's download: body and cylinder meshes, no textures; barrel along its +Z, the grip hanging at the back). Every guard (not heavies) holds one in the right hand: measured once as it's made, scaled to Game "Gun Length" (0.33 m), gripped like the knife (the grip across the knuckles, the barrel past the fingers), finished dark steel ("Gun Steel", "Gun Cylinder"). Holstered (hidden) while they're unaware, gone once they're broken (dropped). Shots flash and trace from its muzzle. "Gun Offset" / "Gun Twist" nudge it, live in Play mode.
 - **The knife:** `Assets/KitScripts/railtracer_knife.py` exports Prop_Knife to `Train Assets/Knife`: a 34 cm vintage hunting knife (from Alex's reference photo): a mirror-polished single-edged steel blade (Trn_Steel, roughness 0.06) with a full flat grind, a choil by the guard and an upswept curved tip; a thin brass guard; stacked black, brass and red spacers at both ends of the handle (Trn_SpacerBlack, Trn_SpacerRed); jigged stag scales (Trn_Stag) with two brass pins; an aluminium bird's-head pommel (Trn_Aluminium). Always in your right hand: the grip is worked out from the hand's bones (across the knuckles, blade out of the thumb side, edges along the fingers, in the palm); Game "Knife Offset" (m, in the knife's space) and "Knife Twist" (degrees) nudge it, live in Play mode. A takedown with Reverse Grip ticked (Heart Stab) holds it the other way round while it plays: the blade out of the little-finger side. The animation test's attacker holds it too, with its own Knife Offset / Twist to try values.
 - The demon aura sits under your hips, not on your tile, so it travels with you through a finisher's moves.
 - The stylish flip (a bloodied leap past 3 tiles) crosses the floor as its clip does (Game "Stylish Flip Travel", sampled from the clip's hips: across in 1.2 s, then the landing plays in place), so it lands on its tile without sliding.

@@ -58,7 +58,7 @@ MonoBehaviour:
     bloodAt: 0.5
     extraBlood: []
     headOff: 0
-    gore: 0
+    gore: 1
     reverseGrip: 0
     keepTravel: 0
     camOffset: {x: -1.2001121, y: -0.011917396, z: 0.6516048}
@@ -84,7 +84,7 @@ MonoBehaviour:
     extraBlood:
     - 0.35
     headOff: 0
-    gore: 0
+    gore: 1
     reverseGrip: 1
     keepTravel: 0
     camOffset: {x: 0.5744367, y: 1.13983, z: -0.0664637}
@@ -109,7 +109,7 @@ MonoBehaviour:
     bloodAt: 0.77
     extraBlood: []
     headOff: 1
-    gore: 0
+    gore: 1
     reverseGrip: 0
     keepTravel: 0
     camOffset: {x: -0.66559875, y: 1.8934764, z: 1.3063141}
@@ -184,8 +184,8 @@ MonoBehaviour:
     bloodAt: 0.79
     extraBlood: []
     headOff: 0
-    gore: 0
-    reverseGrip: 0
+    gore: 1
+    reverseGrip: 1
     keepTravel: 0
     camOffset: {x: -1.3378372, y: 1.2314416, z: 0.717341}
     camLook: {x: -0.07219231, y: -0.0038307433, z: 0.6920177}
@@ -236,8 +236,8 @@ MonoBehaviour:
     extraBlood:
     - 0.15
     headOff: 0
-    gore: 0
-    reverseGrip: 0
+    gore: 1
+    reverseGrip: 1
     keepTravel: 0
     camOffset: {x: -0.8023282, y: 0.9568916, z: -1.0232475}
     camLook: {x: -0.16827412, y: 0.05304674, z: 0.19757238}
