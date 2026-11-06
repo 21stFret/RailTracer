@@ -2755,7 +2755,8 @@ namespace RailTracer
             foreach (var trail in eyes.trails)
             {
                 if (!trail) continue;
-                trail.emitting = k > 0.05f;
+                trail.emitting = k > 0.05f && !exiting; // none on the walk out of a cleared car
+                if (exiting && trail.positionCount > 0) trail.Clear();
                 trail.startColor = new Color(eyeGlow.r, eyeGlow.g, eyeGlow.b, Mathf.Clamp01(k));
                 trail.endColor = new Color(eyeGlow.r, eyeGlow.g, eyeGlow.b, 0f);
             }
