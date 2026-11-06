@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 18.36 (5 Nov 2026).
+Last updated: Update 18.37 (5 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -55,6 +55,7 @@ Inspector; the saved scene matches these.
 | 18.34 (walking out of a cleared car) | Done, not yet seen in Play mode |
 | 18.35 (legend gain in the tooltip, zone outline per tile, shove half the time) | Done, not yet seen in Play mode |
 | 18.36 (playtest batch: text, legend gains, Slash Combo gone, sack piles, heavy swing, eyes, demo ending) | Done, not yet seen in Play mode |
+| 18.37 (eye trails drawn on top) | Done, not yet seen in Play mode |
 | Still needed (art) | Rail grab, demon throw and crouched drag-down animations; unarmed finishers (skipped for now); a searching animation; more idles |
 | Next | Full audio pass |
 
@@ -239,7 +240,7 @@ In the game too, finisher blood now comes from the victim's chest bone (where th
 - **Legend readout** (only while a kill is targeted; gone when you cancel or pick another skill): the hover label says "Locked" on a heavy that isn't Shaken yet; the gain itself is in the skill's tooltip, small and red beside its name ("Brutal kill +20 legend", always shown for the three kills); the big number reads "42 +30"; the legend bar shows the gain hatched (#E0202F stripes on #4A0C15) from your legend to where the kill lands; notches it crosses turn red (no line of notch names: dropped in 18.36). Gains: stealth +10, brutal +20, rail grab +30 (Tuning "Quiet Legend", "Brutal Gain", "Rail Gain"). Skill boxes unchanged.
 - Move and leap previews: each tile that draws a shot shows its hit chance on the floor; a leap's says "LEAP -25", and the shooter's label "Hit 60% · leap -25".
 - The walk-through car has every legend effect off (demon aura, blood overlay); an aura starting at nothing clears what its systems played on awake.
-- **Eyes:** the character's lash and brow cards are drawn cut out and brown (Game "Brow Color"). Each eye gets a small iris disc where the lashes sit (Game "Iris Size", "Iris Nudge" to move them): enemies blue or green, yours blue ("Tracer Eye Color"), glowing red as the demon takes form (with the aura) and leaving a red trail as you move ("Eye Glow", "Eye Glow Strength", "Eye Trail Time / Width").
+- **Eyes:** the character's lash and brow cards are drawn cut out and brown (Game "Brow Color"). Each eye gets a small iris disc where the lashes sit (Game "Iris Size", "Iris Nudge" to move them): enemies blue or green, yours blue ("Tracer Eye Color"), glowing red as the demon takes form (with the aura) and leaving a red trail as you move, drawn over everything so the head never hides it ("Eye Glow", "Eye Glow Strength", "Eye Trail Time / Width").
 - **The knife:** `Assets/KitScripts/railtracer_knife.py` exports Prop_Knife to `Train Assets/Knife`: a 34 cm vintage hunting knife (from Alex's reference photo): a mirror-polished single-edged steel blade (Trn_Steel, roughness 0.06) with a full flat grind, a choil by the guard and an upswept curved tip; a thin brass guard; stacked black, brass and red spacers at both ends of the handle (Trn_SpacerBlack, Trn_SpacerRed); jigged stag scales (Trn_Stag) with two brass pins; an aluminium bird's-head pommel (Trn_Aluminium). Always in your right hand: the grip is worked out from the hand's bones (across the knuckles, blade out of the thumb side, edges along the fingers, in the palm); Game "Knife Offset" (m, in the knife's space) and "Knife Twist" (degrees) nudge it, live in Play mode. A takedown with Reverse Grip ticked (Heart Stab) holds it the other way round while it plays: the blade out of the little-finger side. The animation test's attacker holds it too, with its own Knife Offset / Twist to try values.
 - The demon aura sits under your hips, not on your tile, so it travels with you through a finisher's moves.
 - The stylish flip (a bloodied leap past 3 tiles) crosses the floor as its clip does (Game "Stylish Flip Travel", sampled from the clip's hips: across in 1.2 s, then the landing plays in place), so it lands on its tile without sliding.

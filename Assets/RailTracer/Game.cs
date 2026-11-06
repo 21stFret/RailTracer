@@ -2729,7 +2729,12 @@ namespace RailTracer
                 trail.minVertexDistance = 0.01f;
                 trail.widthMultiplier = eyeTrailWidth;
                 trail.widthCurve = AnimationCurve.Linear(0f, 1f, 1f, 0f);
-                trail.material = new Material(Shader.Find("Sprites/Default"));
+                // Drawn over everything (no depth test, the overlay queue): it would otherwise hide behind the head
+                // and only show where it pokes out at the sides.
+                var trailMat = new Material(Shader.Find("UI/Default") ?? Shader.Find("Sprites/Default"));
+                if (trailMat.HasProperty("unity_GUIZTestMode")) trailMat.SetInt("unity_GUIZTestMode", (int)CompareFunction.Always);
+                trailMat.renderQueue = (int)RenderQueue.Overlay;
+                trail.material = trailMat;
                 trail.shadowCastingMode = ShadowCastingMode.Off;
                 trail.emitting = false;
                 eyes.trails[side] = trail;
