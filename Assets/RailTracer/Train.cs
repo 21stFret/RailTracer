@@ -11,6 +11,7 @@ namespace RailTracer
     public class CarDef
     {
         public string name, blurb;
+        public int targetTurns; // the HUD's target: the level solver's best (Rail Tracer > Solve Demo Cars, seed 1); 0 = none
         public CarKind kind;
         public string[] map;
         public int[][] spawns;
@@ -106,16 +107,21 @@ namespace RailTracer
         static readonly CarDef[] demo = new CarDef[DemoCars];
         public static CarDef Demo(int i) => demo[i] ??= MakeDemo(i);
 
+        // The target turns per demo car: the level solver's results (18.40, seed 1). Rerun it after changing a car.
+        static readonly int[] Targets = { 11, 7, 11, 9, 24 };
+
         static CarDef MakeDemo(int i)
         {
-            switch (i)
+            var car = i switch
             {
-                case 0: return First();
-                case 1: return Generated("Second class", "The same booths, a little more room between them.", 2002, 8, 1, banks: 0.6, luggageMin: 1, luggageMax: 3); // 7 guards, 1 heavy
-                case 2: return Dining();
-                case 3: return Baggage();
-                default: return Generated("First class", "The last car. Whoever's left is waiting here.", 5005, 11, 3); // 8 guards, 3 heavies
-            }
+                0 => First(),
+                1 => Generated("Second class", "The same booths, a little more room between them.", 2002, 8, 1, banks: 0.6, luggageMin: 1, luggageMax: 3), // 7 guards, 1 heavy
+                2 => Dining(),
+                3 => Baggage(),
+                _ => Generated("First class", "The last car. Whoever's left is waiting here.", 5005, 11, 3), // 8 guards, 3 heavies
+            };
+            car.targetTurns = Targets[i];
+            return car;
         }
 
         // Endless car `n` (1-based) from `seed`: 7 to 9 guards and 0 to 2 heavies, rolled from the seed (the same each replay).

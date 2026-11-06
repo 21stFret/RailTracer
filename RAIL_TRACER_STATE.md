@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 18.41 (6 Nov 2026).
+Last updated: Update 18.42 (6 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -60,6 +60,7 @@ Inspector; the saved scene matches these.
 | 18.39 (level solver) | Done: every demo car cleared at full health on seed 1 (car 1 in 11 turns, 2 in 13, 3 in 10, 4 in 9, 5 in 12) |
 | 18.40 (enemies per car set by Alex) | Done: solver (seed 1) car 1 in 11 turns, 2 in 7, 3 in 11, 4 in 9 (all at full health), 5 in 24 with 10 health left |
 | 18.41 (wild fire needs sight of you, the drag box while dragging) | Done, not yet seen in Play mode |
+| 18.42 (turn count and target) | Done, not yet seen in Play mode |
 | Still needed (art) | Rail grab, demon throw and crouched drag-down animations; unarmed finishers (skipped for now); a searching animation; more idles |
 | Next | Full audio pass |
 
@@ -245,6 +246,7 @@ In the game too, finisher blood now comes from the victim's chest bone (where th
   - Brutal with half cover (a seat) straight out from the victim's tile: Shove to Table half the time (Takedown Library "Cover Chance", 0.5), the pair turned to face that seat; the other brutal finishers the rest.
   - The clips keep their own travel in the pose (imported with root XZ baked from the original position), so a pair lines up through the whole clip once its start offset is right. The exported clips start with both characters on the same spot; each pair has its own starting distance (as set up in Unreal), facing you: Victim Offset Z 1.5 (Shove Neck Slice 1.3), Victim Yaw 180.
   - Each entry can be tagged Guard / Heavy / Any (all Any for now).
+- **Turn count** (top left): "TURN 5" and under it "Target 11", the car's target turns (CarDef.targetTurns: the level solver's best on seed 1, kept in Train.cs Targets: 11, 7, 11, 9, 24; rerun the solver after changing a car). The count goes red once you pass the target. No target in endless; nothing in the walk-through car.
 - **Drag box:** while you hold a body it goes red and reads "Drop" in white.
 - **Legend readout** (only while a kill is targeted; gone when you cancel or pick another skill): the hover label says "Locked" on a heavy that isn't Shaken yet; the gain itself is in the skill's tooltip, small and red beside its name ("Brutal kill +20 legend", always shown for the three kills); the big number reads "42 +30"; the legend bar shows the gain hatched (#E0202F stripes on #4A0C15) from your legend to where the kill lands; notches it crosses turn red (no line of notch names: dropped in 18.36). Gains: stealth +10, brutal +20, rail grab +30 (Tuning "Quiet Legend", "Brutal Gain", "Rail Gain"). Skill boxes unchanged.
 - Move and leap previews: each tile that draws a shot shows its hit chance on the floor; a leap's says "LEAP -25", and the shooter's label "Hit 60% · leap -25".

@@ -1224,7 +1224,11 @@ namespace RailTracer
                 .Concat(c.enemies.Where(e => e.state == EnemyState.Active).Select(_ => 0)).ToArray();
         }
 
-        void Tickets() => hud.SetTickets(TicketStates());
+        void Tickets()
+        {
+            hud.SetTickets(TicketStates());
+            hud.SetTurn(c.freeWalk ? 0 : c.Round, car.targetTurns);
+        }
 
         // ---- Tutorial ----
 

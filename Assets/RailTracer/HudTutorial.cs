@@ -140,6 +140,36 @@ namespace RailTracer
             rt.gameObject.AddComponent<UISkew>();
         }
 
+        // Top left: the turn you're on and, under it, the car's target (the level solver's best). The count goes red
+        // once you're past the target. Hidden in the walk-through car.
+        RectTransform turnBox;
+        TMP_Text turnNum, turnTarget;
+
+        void BuildTurnCount(Transform root)
+        {
+            turnBox = Rect("Turn Count", root, new Vector2(0f, 1f), new Vector2(32, -26), Vector2.zero);
+            var col = Column(turnBox, new RectOffset(0, 0, 0, 0), 2f);
+            col.childAlignment = TextAnchor.UpperLeft;
+            Fit(turnBox);
+            turnNum = Text(turnBox, title, 26, TextAlignmentOptions.TopLeft, Vector2.zero, Vector2.zero);
+            turnNum.fontStyle = FontStyles.UpperCase;
+            turnNum.color = Bone;
+            Glow(turnNum);
+            turnTarget = Label(turnBox, "", 13, LockedText, 2f);
+            Glow(turnTarget);
+        }
+
+        // turn: the turn you're on (< 1 hides it all); target: the car's target turns (0 = none).
+        public void SetTurn(int turn, int target)
+        {
+            turnBox.gameObject.SetActive(turn >= 1);
+            if (turn < 1) return;
+            turnNum.text = $"Turn {turn}";
+            turnNum.color = target > 0 && turn > target ? Bright : Bone;
+            turnTarget.gameObject.SetActive(target > 0);
+            turnTarget.text = $"Target {target}";
+        }
+
         void BuildTickets(Transform root)
         {
             ticketBox = Rect("Ticket Counter", root, Vector2.one, new Vector2(-32, -26), Vector2.zero);

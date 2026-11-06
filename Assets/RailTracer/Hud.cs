@@ -474,6 +474,7 @@ namespace RailTracer
             stack.localScale = Vector3.one * StackScale;
 
             BuildTickets(root);
+            BuildTurnCount(root);
 
             // ---- Intro / end card: the screen dimmed, a slanted card with a blood bar down its left edge ----
             var cardRoot = new GameObject("Card", typeof(RectTransform), typeof(CanvasGroup)).GetComponent<RectTransform>();
