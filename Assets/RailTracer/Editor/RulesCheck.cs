@@ -218,6 +218,18 @@ namespace RailTracer
             Check(c.Perform(Act.QuietKill, victim), "standing stealth kill");
             Check(witness.awareness == Awareness.Combat && witness.terror == t.mediumTerror && witness.hasSeen, "witness sees you do it");
 
+            // The gramophone: half cover; a death on a tile next to it (diagonals too) stops the music, further away doesn't.
+            c = new Carriage(new[] { "P..G..", "......" }, t, 1);
+            Check(c.IsSeat(new Cell(3, 0)) && !c.Reachable().Contains(new Cell(3, 0)) && c.gramophone == new Cell(3, 0), "gramophone: seat rules");
+            victim = c.Spawn(1, 0, -1, 0, 0);
+            victim.facing = new Cell(1, 0);
+            Check(c.Perform(Act.QuietKill, victim) && !c.musicStopped, "a kill two tiles from it: still playing");
+            c = new Carriage(new[] { ".....", "P.G..", "....." }, t, 1);
+            victim = c.Spawn(1, 0, 1, 0, 0); // diagonal to the gramophone at (2, 1)
+            victim.facing = new Cell(0, -1);
+            c.legend = Unlock(t, SkillId.Brutal);
+            Check(c.Perform(Act.BrutalKill, victim) && c.musicStopped, "a kill next to it (diagonal): the music stops");
+
             // Brutal kill locked at 0, unlocked by the first stealth kill (legend 10); rail grab at 30.
             c = new Carriage(new[] { "P.....", "......" }, t, 1);
             victim = c.Spawn(1, 0, 1, 0, 0);

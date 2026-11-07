@@ -161,11 +161,13 @@ namespace RailTracer
         public readonly List<string> log = new List<string>();
         public readonly List<Enemy> shotsFired = new List<Enemy>(); // every shot at you, in order, for the view to play (it clears them)
         int round;                                                  // player turns started, so "spotted you" logs once a round
+        public Cell? gramophone;                                    // the dining car's gramophone, if this car has one
+        public bool musicStopped;                                   // someone died next to it: the record's stopped
 
         // Map: '.' floor, 'S' seat (half cover), 'L' luggage / 'W' wall (full cover), 'P' player start.
         // Edge rows are windows, middle-row ends are doors; on the edge rows '_' (floor) and 'l' (luggage) have a
         // plain wall behind them instead of a window. Dining car and baggage hold: 'T' table, 'O' round table,
-        // 'D' dining cart, 'B' bar, 'M' mail sack (seat rules); 'X' crate ('x' with plain wall behind; luggage rules); 'C' the safe's cage (blocks
+        // 'D' dining cart, 'B' bar, 'M' mail sack, 'G' gramophone (seat rules; the gramophone and the bar stand against plain wall); 'X' crate ('x' with plain wall behind; luggage rules); 'C' the safe's cage (blocks
         // walking and leaps like a wall, but you can see through it).
         public Carriage(string[] map, Tuning t, int seed)
         {
@@ -181,9 +183,10 @@ namespace RailTracer
                 for (int x = 0; x < W; x++)
                 {
                     char ch = map[y][x];
-                    seat[x, y] = "STBMOD".IndexOf(ch) >= 0;
+                    seat[x, y] = "STBMODG".IndexOf(ch) >= 0;
                     solid[x, y] = "LlWXx".IndexOf(ch) >= 0;
-                    blankWall[x, y] = "_lxB".IndexOf(ch) >= 0; // a bar stands against plain wall
+                    blankWall[x, y] = "_lxBG".IndexOf(ch) >= 0; // a bar or the gramophone stands against plain wall
+                    if (ch == 'G') gramophone = new Cell(x, y);
                     cage[x, y] = ch == 'C';
                     wall[x, y] = ch == 'W';
                     if (ch == 'P') player = new Cell(x, y);
@@ -1236,7 +1239,18 @@ namespace RailTracer
                 : $"You butcher {Name(e)}.");
             var b = new Body { who = e, pos = e.pos, kind = a == Act.QuietKill ? BodyKind.Stealth : a == Act.RailGrab ? BodyKind.Rail : BodyKind.Brutal };
             bodies.Add(b);
+            StopMusicNear(e.pos);
             return b;
+        }
+
+        // A death on a tile next to the gramophone (diagonals too) knocks the needle off: the music stops for the car.
+        void StopMusicNear(Cell at)
+        {
+            if (musicStopped || !gramophone.HasValue) return;
+            var g = gramophone.Value;
+            if (Math.Max(Math.Abs(at.x - g.x), Math.Abs(at.y - g.y)) > 1) return;
+            musicStopped = true;
+            Log("The needle skids off the record. The music stops.");
         }
 
         public void EndPlayerTurn() => turnOver = true;
@@ -1685,6 +1699,7 @@ namespace RailTracer
                         var v = EnemyAt(hit);
                         v.state = EnemyState.Dead;
                         bodies.Add(new Body { who = v, pos = v.pos, kind = BodyKind.Shot });
+                        StopMusicNear(v.pos);
                         Bleed(v.pos, false);
                         Log($"{Name(e)} fires wildly and kills {Name(v)}!");
                     }

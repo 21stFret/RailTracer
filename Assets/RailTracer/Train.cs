@@ -37,10 +37,11 @@ namespace RailTracer
         // Dining car: tables by the windows and a few out in the room, straight, L-shaped ('T') and round ('O',
         // 2x2), each a tile clear of the next; a dining cart ('D') in the aisle; an L-shaped bar at the far end.
         // Long sightlines, half cover only. Plain wall ('_') between some of the window tables and behind the bar.
-        // The bar stands in the room (row 1), its short leg back to the wall, the bartender behind it.
+        // The bar stands in the room (row 1), its short leg back to the wall, the bartender behind it. A gramophone
+        // ('G', half cover) against the wall just short of the bar plays the music; a death next to it stops it.
         static readonly string[] DiningMap =
         {
-            "..TT...OO___TT...____B___.",
+            "..TT...OO___TT...__G_B___.",
             ".......OO...T...T....BBBB.",
             "P.........D...............",
             "...T..T.......OO......T...",

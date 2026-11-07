@@ -376,6 +376,7 @@ namespace RailTracer
                 }
                 marks[e] = (route, Line(Color.white, 0.05f));
             }
+            gramophone = null; // the old car's went with it
             bool kitBuilt = useTrainKit && BuildKitCarriage(Resources.Load<TrainKit>("Kit/TrainKit"), c, Map, car.kind, root, true);
             if (!kitBuilt) BuildWhitebox();
             if (sun)
@@ -1042,6 +1043,7 @@ namespace RailTracer
 
         void Update()
         {
+            MusicStep();
             if (slowUntil >= 0f && Time.unscaledTime >= slowUntil) { slowUntil = -1f; if (camming) Time.timeScale = 1f; } // a hit's slow motion ends
             var kb = Keyboard.current;
             var mouse = Mouse.current;

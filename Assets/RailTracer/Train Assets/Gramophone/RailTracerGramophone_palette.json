@@ -1,0 +1,104 @@
+{
+  "kit": "RailTracerGramophone",
+  "style": "pbr",
+  "materials": [
+    {
+      "name": "Trn_Wood",
+      "color": [
+        0.45,
+        0.24,
+        0.12
+      ],
+      "metallic": 0.0,
+      "roughness": 0.55,
+      "tile": 2.0,
+      "albedo": "Trn_Wood_albedo.png",
+      "normal": "Trn_Wood_normal.png",
+      "mask": "Trn_Wood_mask.png"
+    },
+    {
+      "name": "Trn_WoodDark",
+      "color": [
+        0.2,
+        0.1,
+        0.05
+      ],
+      "metallic": 0.0,
+      "roughness": 0.6,
+      "tile": 1.0,
+      "albedo": "Trn_WoodDark_albedo.png",
+      "normal": "Trn_WoodDark_normal.png",
+      "mask": "Trn_WoodDark_mask.png"
+    },
+    {
+      "name": "Trn_Brass",
+      "color": [
+        0.95,
+        0.7,
+        0.25
+      ],
+      "metallic": 1.0,
+      "roughness": 0.3,
+      "tile": 0.5,
+      "albedo": "Trn_Brass_albedo.png",
+      "normal": "Trn_Brass_normal.png",
+      "mask": "Trn_Brass_mask.png"
+    },
+    {
+      "name": "Trn_Velvet",
+      "color": [
+        0.45,
+        0.07,
+        0.1
+      ],
+      "metallic": 0.0,
+      "roughness": 0.9,
+      "tile": 0.5,
+      "albedo": "Trn_Velvet_albedo.png",
+      "normal": "Trn_Velvet_normal.png",
+      "mask": "Trn_Velvet_mask.png"
+    },
+    {
+      "name": "Trn_Cream",
+      "color": [
+        0.9,
+        0.84,
+        0.68
+      ],
+      "metallic": 0.0,
+      "roughness": 0.8,
+      "tile": 2.0,
+      "albedo": "Trn_Cream_albedo.png",
+      "normal": "Trn_Cream_normal.png",
+      "mask": "Trn_Cream_mask.png"
+    },
+    {
+      "name": "Trn_Shellac",
+      "color": [
+        0.012,
+        0.012,
+        0.014
+      ],
+      "metallic": 0.0,
+      "roughness": 0.18,
+      "tile": 1.0,
+      "albedo": "Trn_Shellac_albedo.png",
+      "normal": "Trn_Shellac_normal.png",
+      "mask": "Trn_Shellac_mask.png"
+    },
+    {
+      "name": "Trn_Label",
+      "color": [
+        0.5,
+        0.04,
+        0.05
+      ],
+      "metallic": 0.0,
+      "roughness": 0.6,
+      "tile": 1.0,
+      "albedo": "Trn_Label_albedo.png",
+      "normal": "Trn_Label_normal.png",
+      "mask": "Trn_Label_mask.png"
+    }
+  ]
+}
