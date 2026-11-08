@@ -74,9 +74,12 @@ namespace RailTracer
             patrols = new Dictionary<int, Cell[]> { [3] = new[] { new Cell(10, 2), new Cell(12, 2) }, [6] = new[] { new Cell(18, 2), new Cell(23, 2) } },
         };
 
-        static CarDef Generated(string name, string blurb, int seed, int enemies, int toughs, double banks = 0.85, int luggageMin = 3, int luggageMax = 6)
+        // Endless cars always have at least this many seat banks (of about 16 places), for cover.
+        public const int EndlessMinBanks = 8;
+
+        static CarDef Generated(string name, string blurb, int seed, int enemies, int toughs, double banks = 0.85, int luggageMin = 3, int luggageMax = 6, int minBanks = 0)
         {
-            var (map, spawns, patrols) = TrainGen.Make(new Random(seed), enemies, toughs, banks, luggageMin, luggageMax);
+            var (map, spawns, patrols) = TrainGen.Make(new Random(seed), enemies, toughs, banks, luggageMin, luggageMax, minBanks);
             return new CarDef { name = name, blurb = blurb, kind = CarKind.Passenger, map = map, spawns = spawns, patrols = patrols };
         }
 
@@ -130,7 +133,7 @@ namespace RailTracer
         {
             var roll = new Random(seed ^ 0x5eed);
             int heavies = roll.Next(0, 3), guards = roll.Next(7, 10);
-            return Generated($"Endless car {n}", "Another car, another crowd.", seed, guards + heavies, heavies);
+            return Generated($"Endless car {n}", "Another car, another crowd.", seed, guards + heavies, heavies, minBanks: EndlessMinBanks);
         }
 
         public static CarDef WalkThrough() => new CarDef

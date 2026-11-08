@@ -590,11 +590,11 @@ namespace RailTracer
                 if (pair < 0) continue;
                 // Seat banks two rows wide, facing each other in pairs of columns (back at the FBX's local +Z).
                 float rot = pair % 2 == 0 ? 180f : 0f;
-                // A window seat on its own (its aisle place taken by a 1x1 prop): Seat_Single. Only doubles get clutter.
+                // A window seat on its own (its aisle place taken by a 1x1 prop): Seat_Single.
                 if (At(x, 0) == 'S' && At(x, 1) == 'S') { seats.Add(Place("Seat_Double", -1.45f, z, rot).transform); Lamp(x, true); }
-                else if (At(x, 0) == 'S' && kit.Get("Seat_Single")) { Place("Seat_Single", -1.95f, z, rot); Lamp(x, true); }
+                else if (At(x, 0) == 'S' && kit.Get("Seat_Single")) { seats.Add(Place("Seat_Single", -1.95f, z, rot).transform); Lamp(x, true); }
                 if (At(x, car.H - 2) == 'S' && At(x, car.H - 1) == 'S') { seats.Add(Place("Seat_Double", 1.45f, z, rot).transform); Lamp(x, false); }
-                else if (At(x, car.H - 1) == 'S' && kit.Get("Seat_Single")) { Place("Seat_Single", 1.95f, z, rot); Lamp(x, false); }
+                else if (At(x, car.H - 1) == 'S' && kit.Get("Seat_Single")) { seats.Add(Place("Seat_Single", 1.95f, z, rot).transform); Lamp(x, false); }
             }
             // The gramophone ('G', one per car), its back (local +Z) to the nearer side wall: against the wall, or beside
             // the window seat it shares a bank with. The live car's plays the music.
@@ -758,10 +758,11 @@ namespace RailTracer
                 Put("Prop_Umbrella", at + new Vector3(0f, 0f, yaw == 0f ? -0.31f : 0.31f), yaw);
             }
 
-            // Seat arms (two per bank, top at 0.66 m) and cushions (two per bank, top at 0.46 m), in the seat's own
-            // space: arms at local x +-0.96, cushions at +-0.465, both centred a few cm off the bank's middle.
-            var arms = seats.SelectMany(t => new[] { -0.96f, 0.96f }.Select(x => (t, x))).OrderBy(_ => rng.Next()).ToList();
-            var cushions = seats.SelectMany(t => new[] { -0.465f, 0.465f }.Select(x => (t, x))).OrderBy(_ => rng.Next()).ToList();
+            // Seat arms (two per seat, top at 0.66 m) and cushions (top at 0.46 m), in the seat's own space. Doubles: arms
+            // at local x +-0.96, two cushions at +-0.465. Singles (Seat_Single, 1 m): arms at +-0.46, one cushion at 0.
+            bool Single(Transform t) => t.name.StartsWith("Seat_Single");
+            var arms = seats.SelectMany(t => (Single(t) ? new[] { -0.46f, 0.46f } : new[] { -0.96f, 0.96f }).Select(x => (t, x))).OrderBy(_ => rng.Next()).ToList();
+            var cushions = seats.SelectMany(t => (Single(t) ? new[] { 0f } : new[] { -0.465f, 0.465f }).Select(x => (t, x))).OrderBy(_ => rng.Next()).ToList();
             int a = 0, s = 0;
             // Briefcases lying flat on seat cushions at an easy angle: turned onto their back (the case's thickness
             // now vertical), lifted by half that thickness, centred on the cushion.
@@ -775,8 +776,9 @@ namespace RailTracer
                 if (brief) brief.transform.rotation = rot;
             }
             // And one or two standing on the floor at the aisle end of a seat bank, against its arm, long side along it:
-            // only beside the far banks (rows 0-1), since the near ones would hide them from the camera.
-            var far = seats.Where(t => t.position.z > aisleZ).OrderBy(_ => rng.Next()).Take(More(1, 3));
+            // only beside the far banks (rows 0-1), since the near ones would hide them from the camera. Not singles:
+            // their aisle end is the prop that took the aisle place.
+            var far = seats.Where(t => t.position.z > aisleZ && !Single(t)).OrderBy(_ => rng.Next()).Take(More(1, 3));
             foreach (var t in far)
             {
                 float side = t.TransformPoint(Vector3.right).z < t.TransformPoint(Vector3.left).z ? 1f : -1f; // the arm nearer the aisle

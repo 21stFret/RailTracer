@@ -228,11 +228,16 @@ namespace RailTracer
             Check(c.Do($"act BrutalKill {victim.id}") && !c.musicStopped, "a kill beside it: still playing");
             Check(c.Do("needle") && c.musicStopped && !c.Do("needle"), "shoved onto it: the music stops, once");
             Check(!new Carriage(new[] { "P...." }, t, 1).Do("needle"), "no gramophone, no needle");
-            foreach (int seed in new[] { 2002, 5005, 7, 99 })
+            int byWallSeen = 0;
+            for (int seed = 1; seed <= 60; seed++)
             {
-                var (gm, _, _) = TrainGen.Make(new Random(seed));
-                Check(string.Concat(gm).Count(ch => ch == 'G') == 1, "every generated car has one gramophone");
+                var (gm, gs, _) = TrainGen.Make(new Random(seed), banks: 0.2, minBanks: 8);
+                var gt = Enumerable.Range(0, TrainGen.W).SelectMany(x => Enumerable.Range(0, 5).Select(y => (x, y))).Single(p => gm[p.y][p.x] == 'G');
+                Check(gt.y != TrainGen.Aisle && !gs.Any(sp => sp[0] == gt.x && sp[1] == gt.y), "one gramophone a car, never in the aisle or on a guard");
+                Check(Enumerable.Range(0, TrainGen.W).Count(x => gm[0][x] == 'S') + Enumerable.Range(0, TrainGen.W).Count(x => gm[4][x] == 'S') >= 8, "at least minBanks seat banks");
+                if (gt.y == 0 || gt.y == 4) byWallSeen++;
             }
+            Check(byWallSeen > 0 && byWallSeen < 60, "the gramophone sometimes stands alone by the wall, sometimes in a bank");
 
             // Brutal kill locked at 0, unlocked by the first stealth kill (legend 10); rail grab at 30.
             c = new Carriage(new[] { "P.....", "......" }, t, 1);

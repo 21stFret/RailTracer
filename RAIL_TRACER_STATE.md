@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 18.50 (7 Nov 2026).
+Last updated: Update 18.51 (7 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -70,6 +70,7 @@ Inspector; the saved scene matches these.
 | Still needed (art) | Rail grab, demon throw and crouched drag-down animations; unarmed finishers (skipped for now); a searching animation; more idles |
 | 18.49 (music and the gramophone) | Done, not yet seen in Play mode: DarkJazz fades in over the menus and carries on from the dining car's gramophone (1 FBX, Train Assets/Gramophone, railtracer_gramophone.py); a death next to it stops the music |
 | 18.50 (a gramophone in every car, Seat_Single, only the shove stops the music) | Done, not yet seen in Play mode: Seat_Single (1 FBX, railtracer_train_kit.py --only Seat_Single). Solver (seed 1): car 1 in 10 turns, 2 in 7, 3 in 11, 4 in 11 (all at full health), 5 in 24 with 10 health left |
+| 18.51 (single seats get clutter, endless seat minimum, gramophone by the wall) | Done, not yet seen in Play mode. Solver (seed 1) unchanged: car 2 in 7 turns, car 5 in 24 (10 health left) |
 | Next | Full audio pass |
 
 ## The train
@@ -96,7 +97,7 @@ Inspector; the saved scene matches these.
 - **Clearing a car:** the win card shows the tickets and "Hold Space / click to walk on" with a bar that fills over the hold (empties if you let go early), or R to ride again. Walking on: you stand up first if crouched (Game "Stand Up Time" 0.4 s), then walk out of the far door: the walk clip, at Game "Walk Out Pace" (1.25) x its own speed (a confident walk clip could replace it later). Then the **walk-through car**: the first carriage's seats, nobody in it, no turns, no move costs, no skills. A glowing tile by the far door asks "Board / Not yet" (Space or Enter boards).
 - **After car 5:** you walk out into the quiet carriage (no board tile), then a card like the tutorial's: "Thanks for playing the demo! If you enjoyed it, please leave a review and join our Discord. Try the Endless mode for more fun!"; any key or click, then "Demo complete": Restart from car 1, Try Endless mode, Main menu.
 - **Fleeing enemies** jump off the train: broken, gone, never in the next car.
-- **Endless mode:** generated cars without end (TrainGen), the same rules; each car 7 to 9 guards and 0 to 2 heavies, rolled from its seed (no climb).
+- **Endless mode:** generated cars without end (TrainGen), the same rules; each car 7 to 9 guards and 0 to 2 heavies, rolled from its seed (no climb), and at least 8 seat banks (of about 16 places; `Train.EndlessMinBanks`, missing banks added at random).
 - R restarts the current car from its start (the health you came in with; an endless car keeps its layout). N on a won car's card: straight out (debug).
 
 ## Saves
@@ -249,11 +250,11 @@ In the game too, finisher blood now comes from the victim's chest bone (where th
 
 - **The track:** `Resources/Audio/DarkJazz1.ogg` (Alex's, streamed: Editor/MusicImport.cs), one looping AudioSource for the whole game (`GameMusic.cs`), so it never restarts.
 - **Menus:** fades in at start-up (Game "Music Fade", 2.5 s, to "Music Volume" 0.6) as a flat 2D track, and plays over every menu screen.
-- **One in every car** (the walk-through car too, from car 1's map; generated and endless cars by TrainGen). In passenger cars it takes the aisle place of a seat bank (car 1: (8, 1); TrainGen: a random bank, after everything else is rolled) and the window place gets **Seat_Single** (`railtracer_train_kit.py`: one place of Seat_Double, 1 x 1 x 1 m; any window seat without its aisle partner gets one). Its back faces the nearer side wall. Baggage hold: against the wall at (5, 0). Single seats get no clutter (newspapers, briefcases are placed for doubles).
+- **One in every car** (the walk-through car too, from car 1's map; generated and endless cars by TrainGen). In passenger cars it takes the aisle place of a seat bank (car 1: (8, 1); TrainGen, after everything else is rolled: half the time a random bank's aisle place, otherwise alone on a window-row floor tile against the side wall, plain wall behind it, never in a booth, the aisle or on a guard's tile; car 2 has it by the wall at (22, 4), car 5 in a bank at (20, 3)) and the window place gets **Seat_Single** (`railtracer_train_kit.py`: one place of Seat_Double, 1 x 1 x 1 m; any window seat without its aisle partner gets one). Its back faces the nearer side wall. Baggage hold: against the wall at (5, 0). Single seats get clutter too (ashtrays and newspapers on their arms, briefcases and newspapers on their one cushion), but no briefcase on the floor at their aisle end (the gramophone's there).
 - **The gramophone:** Prop_Gramophone (`Assets/KitScripts/railtracer_gramophone.py`, `Train Assets/Gramophone`): a dark-wood record cabinet (0.62 x 0.70 x 0.58 m, panelled doors, brass knobs) with a brass-horned gramophone on top (1.39 m to the horn's lip), back to the wall; the Record child (shellac disc, red label with cream marks, spindle) turns at 78 rpm. New materials Trn_Shellac, Trn_Label. Dining car: against the wall at (19, 0) just short of the bar. 'G' tile: half cover, seat rules.
 - **Into a car:** the same source moves to the record and slides from 2D to 3D over the dive (1.1 s), so the menu music carries on from the gramophone at the same moment of the track (linear falloff, Game "Music Near" 2 m, "Music Far" 30 m).
 - **Only Shove to Table onto the gramophone stops it** (a brutal kill beside it, when the takedown library picks the cover finisher and the gramophone is the cover it uses; other kills beside it don't): "The needle skids off the record. The music stops." The view sends the "needle" command, so it's in the save history and a resumed save stays silent; R restarts it. The pitch, volume and the record's spin run down together (Game "Music Wind Down", 1.6 s). Back in the menus the music plays again.
-- **A car without a gramophone** (an endless car with no seat banks): the music fades out over 2.5 s while you play and back in at the menus.
+- **A car without a gramophone** (none at the moment: TrainGen always finds a spot): the music fades out over 2.5 s while you play and back in at the menus.
 
 ## Camera, HUD and presentation
 

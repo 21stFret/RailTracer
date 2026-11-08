@@ -7,8 +7,8 @@ namespace RailTracer
     // A new carriage and its passengers, laid out the way the hand-made one is (and the train kit expects):
     // 26 x 5, windows on rows 0 and 4, the aisle on row 2 kept clear, seat banks two rows deep every third column,
     // one partition wall with a door in the aisle, a few luggage stacks on the window rows (never in a booth
-    // between two seats facing each other), some stretches of outer wall with no windows, and a gramophone in one
-    // seat bank's aisle place. No UnityEngine, so
+    // between two seats facing each other), some stretches of outer wall with no windows, and a gramophone (in a seat
+    // bank's aisle place or alone against the side wall). No UnityEngine, so
     // Editor/RulesCheck.cs can test it.
     public static class TrainGen
     {
@@ -16,23 +16,34 @@ namespace RailTracer
 
         // spawns: x, y, facing x, facing y, (unused), tough. patrols: waypoints by spawn index.
         // enemies: how many (0 = 8 to 10 at random), toughs of them heavies; banks: the chance each seat bank is
-        // there; luggage: how many stacks (min, max exclusive). The defaults are the original generator.
+        // there; minBanks: at least this many banks (missing ones added at random, so cars that already have enough are
+        // unchanged); luggage: how many stacks (min, max exclusive). The defaults are the original generator.
         public static (string[] map, int[][] spawns, Dictionary<int, Cell[]> patrols) Make(Random rng, int enemies = 0, int toughs = 2,
-            double banks = 0.85, int luggageMin = 3, int luggageMax = 6)
+            double banks = 0.85, int luggageMin = 3, int luggageMax = 6, int minBanks = 0)
         {
             var g = new char[W, H];
             for (int x = 0; x < W; x++) for (int y = 0; y < H; y++) g[x, y] = '.';
 
             int part = rng.Next(11, 16);
             for (int y = 0; y < H; y++) if (y != Aisle) g[part, y] = 'W';
+            var empty = new List<(int x, int top)>(); // bank places left empty
+            int built = 0;
             void Banks(int from, int to)
             {
                 for (int x = from; x <= to; x += 3)
                     foreach (int top in new[] { 0, Aisle + 1 })
-                        if (rng.NextDouble() < banks) g[x, top] = g[x, top + 1] = 'S';
+                        if (rng.NextDouble() < banks) { g[x, top] = g[x, top + 1] = 'S'; built++; }
+                        else empty.Add((x, top));
             }
             Banks(2, part - 2);
             Banks(part + 1, W - 3);
+            for (; built < minBanks && empty.Count > 0; built++)
+            {
+                int i = rng.Next(empty.Count);
+                var (x, top) = empty[i];
+                empty.RemoveAt(i);
+                g[x, top] = g[x, top + 1] = 'S';
+            }
 
             // Luggage on the window rows only, so every booth tile still reaches the aisle, and never between two
             // seats facing each other. The kit turns every other seat column round, so columns 1 and 2, 3 and 4...
@@ -87,10 +98,15 @@ namespace RailTracer
             }
             foreach (int i in Enumerable.Range(0, spawns.Count).OrderBy(_ => rng.Next()).Take(toughs)) spawns[i][5] = 1; // the tough ones
 
-            // The gramophone: the aisle place of one seat bank (the window place keeps a single seat).
-            var aisleSeats = Enumerable.Range(0, W).SelectMany(x => new[] { (x, y: 1, win: 0), (x, y: H - 2, win: H - 1) })
-                .Where(s => g[s.x, s.y] == 'S' && g[s.x, s.win] == 'S').ToList();
-            if (aisleSeats.Count > 0) { var s = aisleSeats[rng.Next(aisleSeats.Count)]; g[s.x, s.y] = 'G'; }
+            // The gramophone, one per car, never in the aisle: half the time the aisle place of a seat bank (the window
+            // place keeps a single seat), otherwise on its own against the side wall, on a window-row floor tile (plain
+            // wall goes behind it) clear of the booths, the start and anyone placed. Whichever kind there is, if only one.
+            var inBank = Enumerable.Range(0, W).SelectMany(x => new[] { (x, y: 1, win: 0), (x, y: H - 2, win: H - 1) })
+                .Where(s => g[s.x, s.y] == 'S' && g[s.x, s.win] == 'S').Select(s => (s.x, s.y)).ToList();
+            var byWall = Enumerable.Range(4, W - 4).SelectMany(x => new[] { (x, y: 0), (x, y: H - 1) })
+                .Where(t => (g[t.x, t.y] == '.' || g[t.x, t.y] == '_') && !booths.Contains(t.x) && !placed.Contains(t)).ToList();
+            var spotsG = inBank.Count > 0 && (byWall.Count == 0 || rng.Next(2) == 0) ? inBank : byWall;
+            if (spotsG.Count > 0) { var (gx, gy) = spotsG[rng.Next(spotsG.Count)]; g[gx, gy] = 'G'; }
 
             var map = new string[H];
             for (int y = 0; y < H; y++)
