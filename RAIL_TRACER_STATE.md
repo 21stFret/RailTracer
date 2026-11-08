@@ -74,7 +74,7 @@ Inspector; the saved scene matches these.
 | 18.52 (NYC1950_CH01 pack in our materials) | Done, not yet imported in Unity: Editor/CharacterPackMaterials.cs. Not in the game yet: static T-pose meshes, no skeleton |
 | 18.53 (the guards are the NYC1950 CH01 model) | Done, checked in Unity batch mode (valid Humanoid, bones mapped, materials, ragdoll), not yet seen in Play mode. Watch: takedown alignment, the gun in the hand, eye colours, suit tints on the trousers |
 | 18.54 (CH02, the suited guard; heavies wear it) | Done, not yet imported in Unity (Unity was open, so no batch check; it builds Guard_CH02.prefab on its next script reload). Not yet seen in Play mode |
-| 18.55 (clean fullscreen, floor blood over the new bodies, music log) | Done, not yet seen in Play mode. No music heard in Play mode (Alex): no fault found; the Console now says what the music is doing |
+| 18.55 (clean fullscreen, floor blood over the new bodies, music log, the track re-encoded) | Done, not yet seen in Play mode. No music (Alex): DarkJazz1.ogg was Opus in an Ogg container, which Unity can't decode ("FSBTool ERROR: Failed decoding audio clip"); re-encoded to Ogg Vorbis |
 | Next | Full audio pass |
 
 ## The train
@@ -252,7 +252,7 @@ In the game too, finisher blood now comes from the victim's chest bone (where th
 
 ## Music
 
-- **The track:** `Resources/Audio/DarkJazz1.ogg` (Alex's, streamed: Editor/MusicImport.cs), one looping AudioSource for the whole game (`GameMusic.cs`), so it never restarts.
+- **The track:** `Resources/Audio/DarkJazz1.ogg` (Alex's, re-encoded from Opus to Ogg Vorbis 192 kbps, 48 kHz stereo, 4:59, with Blender's audio library: Unity reads only Vorbis in .ogg, so new tracks must be Vorbis .ogg, WAV or MP3; streamed: Editor/MusicImport.cs), one looping AudioSource for the whole game (`GameMusic.cs`), so it never restarts.
 - **Log:** when it starts, the Console says the track, the volume, which object has the listener and the audio output (sample rate, speakers, master volume; "NO AUDIO DEVICE" if Unity has none).
 - **Menus:** fades in at start-up (Game "Music Fade", 2.5 s, to "Music Volume" 0.6) as a flat 2D track, and plays over every menu screen.
 - **One in every car** (the walk-through car too, from car 1's map; generated and endless cars by TrainGen). In passenger cars it takes the aisle place of a seat bank (car 1: (8, 1); TrainGen, after everything else is rolled: half the time a random bank's aisle place, otherwise alone on a window-row floor tile against the side wall, plain wall behind it, never in a booth, the aisle or on a guard's tile; car 2 has it by the wall at (22, 4), car 5 in a bank at (20, 3)) and the window place gets **Seat_Single** (`railtracer_train_kit.py`: one place of Seat_Double, 1 x 1 x 1 m; any window seat without its aisle partner gets one). Its back faces the nearer side wall. Baggage hold: against the wall at (5, 0). Single seats get clutter too (ashtrays and newspapers on their arms, briefcases and newspapers on their one cushion), but no briefcase on the floor at their aisle end (the gramophone's there).
