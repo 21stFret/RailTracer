@@ -21,6 +21,9 @@ namespace RailTracer
         public float projectDepth = 0.3f;
         [Tooltip("Projection depth for stains on window glass (m): inside the sash, clear of the wall faces it slides past.")]
         public float glassDepth = 0.03f;
+        [Tooltip("Projection depth for floor stains (m), centred on the floor: half of it reaches up, over a body lying in the " +
+                 "blood (the NYC1950 guards lie up to ~0.35 m thick), still under the seat cushions (0.46 m).")]
+        public float floorDepth = 0.8f;
         GameObject Spawn(GameObject[] set, Vector3 pos, Quaternion rot, Transform parent)
         {
             if (set == null || set.Length == 0) return null;
@@ -52,7 +55,8 @@ namespace RailTracer
         // (down for the floor, sideways onto seats and walls). Never removed.
         public void Decal(Transform parent, Vector3 surface, Vector3 facing, float scale, float depth = -1f)
         {
-            float projectDepth = depth > 0f ? depth : this.projectDepth;
+            bool floor = depth <= 0f && facing.normalized.y < -0.9f; // straight down: a floor stain
+            float projectDepth = depth > 0f ? depth : floor ? floorDepth : this.projectDepth;
             scale *= Random.Range(0.8f, 1.2f);
             var rot = Quaternion.LookRotation(facing) * Quaternion.Euler(0, 0, Random.Range(0f, 360f));
             var pivot = surface - facing.normalized * (projectDepth * 0.5f); // centre the projection box on the surface
@@ -62,6 +66,7 @@ namespace RailTracer
             var projector = decal.GetComponentInChildren<UnityEngine.Rendering.Universal.DecalProjector>();
             float prefabDepth = projector ? projector.size.z : 1f;
             decal.transform.localScale = new Vector3(scale, scale, projectDepth / prefabDepth);
+            if (floor && projector) { projector.startAngleFade = 50f; projector.endAngleFade = 80f; } // tops of bodies, not up the walls
         }
 
         // Kill blood on one tile: five straight casts from `height` above its centre, down and out along the grid (left,

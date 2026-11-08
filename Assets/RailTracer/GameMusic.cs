@@ -18,6 +18,7 @@ namespace RailTracer
         public float recordRpm = 78f;      // a shellac 78
 
         AudioSource music;
+        bool enabledMusic = true; // false once the track was found missing (warned once)
         float musicLevel;          // the fade, before the wind-down
         Transform gramophone, gramophoneRecord;
         Vector3 recordPivot;       // the record's centre, in the gramophone's space
@@ -35,9 +36,16 @@ namespace RailTracer
         {
             if (!music)
             {
+                if (!enabledMusic) return;
                 var clip = Resources.Load<AudioClip>("Audio/DarkJazz1");
-                if (!clip || !cam) return;
-                if (!FindAnyObjectByType<AudioListener>()) cam.gameObject.AddComponent<AudioListener>();
+                if (!cam) return;
+                if (!clip) { Debug.LogWarning("Rail Tracer: no Resources/Audio/DarkJazz1; no music."); enabledMusic = false; return; }
+                var listener = FindAnyObjectByType<AudioListener>();
+                if (!listener) listener = cam.gameObject.AddComponent<AudioListener>();
+                var cfg = AudioSettings.GetConfiguration();
+                Debug.Log($"Rail Tracer: music {clip.name} ({clip.length:0}s) fading in to {musicVolume}; listener on {listener.name}; " +
+                          $"output {AudioSettings.outputSampleRate} Hz, {cfg.speakerMode}, master volume {AudioListener.volume}" +
+                          (AudioSettings.outputSampleRate == 0 ? " - NO AUDIO DEVICE" : ""));
                 music = new GameObject("Music").AddComponent<AudioSource>();
                 music.clip = clip;
                 music.loop = true;

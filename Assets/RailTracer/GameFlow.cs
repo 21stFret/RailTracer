@@ -46,8 +46,8 @@ namespace RailTracer
         public float killCamSlowMo = 1f;
         public float killCamChance = 1f; // how often a kill gets the kill cam (0-1), when it's on
         public int enemySpeed = 1;       // the enemy turn: 0 slow, 1 normal, 2 fast
-        public int windowMode = -1; // FullScreenMode, -1 = as the player started
-        public int width, height;   // 0 = as the player started
+        public int windowMode = -1; // FullScreenMode (FullScreenWindow or Windowed; an old ExclusiveFullScreen reads as FullScreenWindow), -1 = as the player started
+        public int width, height;   // the windowed size; 0 = as the player started
     }
 
     // The train and its menus: the demo's five cars in order (Train), legend and cooldowns reset each car and half
@@ -119,12 +119,23 @@ namespace RailTracer
             WriteSave();
         }
 
+        // Fullscreen is always a borderless window at the desktop's own resolution, never exclusive: exclusive mode switches
+        // the monitor's display mode, so alt-tab resized every other window and Print Screen broke. The Resolution
+        // setting is the windowed size.
+        static bool Windowed(Settings s) => s.windowMode >= 0 ? s.windowMode == (int)FullScreenMode.Windowed : Screen.fullScreenMode == FullScreenMode.Windowed;
+
         void ApplySettings()
         {
             var s = save.settings;
             killCamSlowMo = s.killCamSlowMo;
-            if (s.width > 0 && s.height > 0) Screen.SetResolution(s.width, s.height, s.windowMode >= 0 ? (FullScreenMode)s.windowMode : Screen.fullScreenMode);
-            else if (s.windowMode >= 0) Screen.fullScreenMode = (FullScreenMode)s.windowMode;
+            if (s.windowMode == (int)FullScreenMode.ExclusiveFullScreen || s.windowMode == (int)FullScreenMode.MaximizedWindow) s.windowMode = (int)FullScreenMode.FullScreenWindow;
+            if (Windowed(s))
+            {
+                if (s.width > 0 && s.height > 0) Screen.SetResolution(s.width, s.height, FullScreenMode.Windowed);
+                else Screen.fullScreenMode = FullScreenMode.Windowed;
+            }
+            else if (s.windowMode >= 0 || Screen.fullScreenMode != FullScreenMode.FullScreenWindow)
+                Screen.SetResolution(Display.main.systemWidth, Display.main.systemHeight, FullScreenMode.FullScreenWindow);
         }
 
         // ---- Cars ----
@@ -642,14 +653,15 @@ namespace RailTracer
                 case MenuScreen.Options:
                 {
                     var s = save.settings;
-                    var mode = s.windowMode >= 0 ? (FullScreenMode)s.windowMode : Screen.fullScreenMode;
-                    string modeName = mode == FullScreenMode.Windowed ? "Windowed" : mode == FullScreenMode.ExclusiveFullScreen ? "Fullscreen" : "Borderless";
+                    bool windowed = Windowed(s);
+                    string modeName = windowed ? "Windowed" : "Fullscreen";
                     int w = s.width > 0 ? s.width : Screen.width, h = s.height > 0 ? s.height : Screen.height;
+                    if (!windowed) (w, h) = (Display.main.systemWidth, Display.main.systemHeight); // fullscreen: the desktop's own
                     var items = new[]
                     {
                         $"Kill cam: {(s.killCam ? "On" : "Off")}", $"Kill cam chance: {Mathf.RoundToInt(100 * s.killCamChance)}%",
                         $"Kill cam slow motion: {s.killCamSlowMo:0.##}x", $"Enemy turn speed: {EnemySpeeds[Mathf.Clamp(s.enemySpeed, 0, 2)]}",
-                        $"Window: {modeName}", $"Resolution: {w} x {h}", "Controls", "Back",
+                        $"Window: {modeName}", windowed ? $"Resolution: {w} x {h}" : $"Resolution: {w} x {h} (screen)", "Controls", "Back",
                     };
                     int hit = hud.RefreshMenu(false, "Options", items, null, "Audio comes with the sound pass.", at, held, -1, "Reset data");
                     if (click && hit == -3) { screen = MenuScreen.ResetData; break; }
@@ -661,12 +673,19 @@ namespace RailTracer
                     else if (hit == 3) s.enemySpeed = (s.enemySpeed + 1) % EnemySpeeds.Length;
                     else if (hit == 4)
                     {
-                        var modes = new[] { FullScreenMode.FullScreenWindow, FullScreenMode.ExclusiveFullScreen, FullScreenMode.Windowed };
-                        s.windowMode = (int)modes[(System.Array.IndexOf(modes, mode) + 1) % modes.Length];
+                        s.windowMode = (int)(windowed ? FullScreenMode.FullScreenWindow : FullScreenMode.Windowed);
+                        if (!windowed && (s.width <= 0 || s.width >= Display.main.systemWidth)) // first window: the biggest that fits
+                        {
+                            var fit = Screen.resolutions.Where(r => r.width < Display.main.systemWidth && r.height < Display.main.systemHeight)
+                                .OrderBy(r => r.width * r.height).LastOrDefault();
+                            if (fit.width > 0) (s.width, s.height) = (fit.width, fit.height);
+                        }
                     }
                     else if (hit == 5)
                     {
-                        var sizes = Screen.resolutions.Select(r => (r.width, r.height)).Distinct().ToList();
+                        if (!windowed) break; // fullscreen always uses the screen's own resolution
+                        var sizes = Screen.resolutions.Select(r => (r.width, r.height)).Distinct()
+                            .Where(r => r.width < Display.main.systemWidth && r.height < Display.main.systemHeight).ToList(); // a window smaller than the desktop
                         if (sizes.Count > 0)
                         {
                             int i = sizes.IndexOf((w, h));
