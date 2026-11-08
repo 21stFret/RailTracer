@@ -54,6 +54,14 @@ namespace RailTracer
         public Color bloodOverlayColor = new Color(0.45f, 0.03f, 0.03f); // multiplied over the player as the legend fills
         public float bloodPatternScale = 6f, bloodSpreadSpeed = 0.5f;
         Material bloodOverlay;
+        // Bloody footprints behind you as you walk once your legend reaches Footprints From (looks only). Left and right
+        // in turn, Footprint Stride apart, Footprint Gap either side of your line, staying for the rest of the car.
+        public int footprintsFrom = 50;
+        public float footprintStride = 0.42f, footprintGap = 0.09f, footprintLength = 0.26f;
+        public Color footprintColor = new Color(0.42f, 0.02f, 0.04f, 0.85f);
+        Material footprintMat;
+        float strideLeft;
+        bool leftFoot;
         // The demon aura (Resources/Effects/Demon Aura) round your feet: fades in with the same eased legend as the
         // blood on you, from nothing at auraFrom (of the full legend) to the prefab's own colours at auraFull.
         [Range(0f, 1f)] public float auraFrom = 0.1f, auraFull = 1f;
@@ -226,6 +234,7 @@ namespace RailTracer
         Transform previewGhost;
         Renderer[] previewGhostRenderers;
         readonly Dictionary<Enemy, int> threats = new Dictionary<Enemy, int>();
+        readonly HashSet<Enemy> swingThreats = new HashSet<Enemy>(); // threats that are a heavy's swing, not a shot
         Cell? previewLanding; // the aimed move's end: the chips' crosshairs are for it
         // Reaction fire zone: one red dashed line round every tile a ready gun watches.
         readonly List<LineRenderer> zoneLines = new List<LineRenderer>();
@@ -1460,7 +1469,8 @@ namespace RailTracer
                         // (its "+30 legend" is in the skill's tooltip and on the legend bar)
                     }
                 }
-                string shot = threat ? $"Hit {pct}%" + (leaping && !(previewLanding.HasValue && c.Swings(e, previewLanding.Value)) ? $" · leap -{Mathf.RoundToInt(100 * c.t.leapHitPenalty)}" : "") : c.IntentText(e);
+                string shot = threat && swingThreats.Contains(e) ? $"Swing · Hit {pct}%" // a heavy's melee (never halved), not a shot
+                    : threat ? $"Hit {pct}%" + (leaping && !(previewLanding.HasValue && c.Swings(e, previewLanding.Value)) ? $" · leap -{Mathf.RoundToInt(100 * c.t.leapHitPenalty)}" : "") : c.IntentText(e);
                 chips[e] = hud.AddTag(sp, k, shownAwareness, e.terror, e.hasSeen, hover == e.pos || threat, c.Name(e), role, c.StatusText(e),
                     shot, threat, icon, plate, notYet, gain);
             }
@@ -2026,6 +2036,56 @@ namespace RailTracer
             blood.Decal(root, new Vector3(at.x, 0f, at.z), Vector3.down, blood.poolScale);
         }
 
+        // One bloody print each stride walked: a flat quad just over the floor, toes along the walk, alternate feet
+        // (the right one mirrored).
+        void Footprints(Vector3 step)
+        {
+            strideLeft -= step.magnitude;
+            if (strideLeft > 0f || step.sqrMagnitude < 1e-8f) return;
+            strideLeft = footprintStride;
+            leftFoot = !leftFoot;
+            if (!footprintMat)
+            {
+                footprintMat = new Material(Shader.Find("Sprites/Default")) { mainTexture = FootprintTexture() }; // unlit, no culling
+                footprintMat.renderQueue = (int)RenderQueue.Transparent - 10; // under blood splashes and the overlays
+            }
+            footprintMat.color = footprintColor;
+            var dir = new Vector3(step.x, 0f, step.z).normalized;
+            var q = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            q.name = "Footprint";
+            Destroy(q.GetComponent<Collider>());
+            var mr = q.GetComponent<MeshRenderer>();
+            mr.sharedMaterial = footprintMat;
+            mr.shadowCastingMode = ShadowCastingMode.Off;
+            mr.receiveShadows = false;
+            q.transform.SetParent(root, false);
+            var side = Vector3.Cross(Vector3.up, dir) * (leftFoot ? -footprintGap : footprintGap);
+            q.transform.localPosition = new Vector3(playerShown.x, 0.004f, playerShown.z) + side;
+            q.transform.localRotation = Quaternion.LookRotation(Vector3.down, dir); // lying flat, face up, toes forward
+            q.transform.localScale = new Vector3(footprintLength * 0.42f * (leftFoot ? 1f : -1f), footprintLength, 1f);
+        }
+
+        // A shoe print, white with alpha (tinted by the material): the sole's ellipse, a gap, the heel; blotchy.
+        static Texture2D FootprintTexture()
+        {
+            const int w = 32, h = 80;
+            var tex = new Texture2D(w, h, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
+            var rng = new System.Random(7);
+            for (int y = 0; y < h; y++)
+                for (int x = 0; x < w; x++)
+                {
+                    float u = (x + 0.5f) / w, v = (y + 0.5f) / h;
+                    float sole = 1f - (Sq((u - 0.52f) / 0.46f) + Sq((v - 0.68f) / 0.3f)); // toes up (v = 1), a touch to the inside
+                    float heel = 1f - (Sq((u - 0.5f) / 0.4f) + Sq((v - 0.17f) / 0.15f));
+                    float a = Mathf.Clamp01(Mathf.Max(sole, heel) * 6f) * (0.65f + 0.35f * (float)rng.NextDouble());
+                    tex.SetPixel(x, y, new Color(1f, 1f, 1f, a));
+                }
+            tex.Apply();
+            return tex;
+        }
+
+        static float Sq(float f) => f * f;
+
         void HitBlood()
         {
             if (!blood) return;
@@ -2144,6 +2204,7 @@ namespace RailTracer
             // Purple = your kill's noise: only when hovering a target you can act on, centred where it dies.
             var outcome = hovered != null && kill.HasValue && !busy ? c.KillOutcome(kill.Value, hovered) : null;
             threats.Clear();
+            swingThreats.Clear();
             if (preview != null)
                 foreach (var p in preview)
                     if (p.shooter != null) threats[p.shooter] = Mathf.RoundToInt(100 * c.HitChance(p.shooter, p.tile, leaping));
@@ -2151,7 +2212,11 @@ namespace RailTracer
             // A heavy that will reach the landing and swing counts like a shot.
             if (previewLanding.HasValue)
                 foreach (var e in c.enemies)
-                    if (!threats.ContainsKey(e) && c.Swings(e, previewLanding.Value)) threats[e] = Mathf.RoundToInt(100 * c.t.meleeHitChance); // its reaction shot on the way shows instead
+                    if (!threats.ContainsKey(e) && c.Swings(e, previewLanding.Value)) // its reaction shot on the way shows instead
+                    {
+                        threats[e] = Mathf.RoundToInt(100 * c.t.meleeHitChance);
+                        swingThreats.Add(e);
+                    }
             SyncShotMarks(preview);
             SyncPath(preview);
             SyncPreviewGhost(preview);
@@ -2616,6 +2681,7 @@ namespace RailTracer
             moving |= hopMoving;
             var step = playerShown - before;
             if (step.sqrMagnitude > 1e-6f) playerFacing = step.normalized;
+            if (moving && !hopMoving && !c.freeWalk && c.legend >= footprintsFrom) Footprints(step);
 
             playerAnim.SetBool("Crouched", c.crouched);
             playerAnim.SetBool("Moving", moving);

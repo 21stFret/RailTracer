@@ -97,6 +97,9 @@ namespace RailTracer
         public float cut = 10f;
         float fillTo = 1f;
         public float fill { get => fillTo; set { if (value != fillTo) { fillTo = value; Redraw(); } } }
+        // Below 1: only a clockwise sweep from 12 o'clock, this fraction of the way round (the cooldown's dark sweep).
+        float sweepTo = 1f;
+        public float sweep { get => sweepTo; set { if (value != sweepTo) { sweepTo = value; Redraw(); } } }
 
         public static Vector2[] Points(Rect r, float cut) => new[]
         {
@@ -104,9 +107,33 @@ namespace RailTracer
             new Vector2(r.xMax - cut, r.yMax), new Vector2(r.xMin + cut, r.yMax), new Vector2(r.xMin, r.yMax - cut), new Vector2(r.xMin, r.yMin + cut),
         };
 
+        // Angle clockwise from straight up, 0..2pi.
+        static float Clock(Vector2 v) => Mathf.Repeat(Mathf.Atan2(v.x, v.y), 2f * Mathf.PI);
+
         protected override void Build(VertexHelper vh, Rect r, Color32 col)
         {
-            if (fillTo <= 0f) return;
+            if (fillTo <= 0f || sweepTo <= 0f) return;
+            if (sweepTo < 1f)
+            {
+                // A fan from the centre: straight up, every corner before the sweep's end, then where its end ray leaves.
+                var c = r.center;
+                float end = sweepTo * 2f * Mathf.PI;
+                var corners = Points(r, cut);
+                var arc = new List<Vector2> { c, new Vector2(c.x, r.yMax) };
+                arc.AddRange(corners.Where(p => Clock(p - c) > 0f && Clock(p - c) < end).OrderBy(p => Clock(p - c)));
+                var dir = new Vector2(Mathf.Sin(end), Mathf.Cos(end));
+                for (int i = 0; i < corners.Length; i++) // the edge the end ray crosses
+                {
+                    Vector2 a = corners[i], e = corners[(i + 1) % corners.Length] - a;
+                    float den = dir.x * e.y - dir.y * e.x;
+                    if (Mathf.Abs(den) < 1e-6f) continue;
+                    var ac = a - c;
+                    float t = (ac.x * e.y - ac.y * e.x) / den, u = (ac.x * dir.y - ac.y * dir.x) / den;
+                    if (t > 0f && u >= 0f && u <= 1f) { arc.Add(c + dir * t); break; }
+                }
+                Fan(vh, col, arc);
+                return;
+            }
             float top = r.yMin + Mathf.Clamp01(fillTo) * r.height;
             var o = Points(r, cut);
             var pts = new List<Vector2>();
@@ -215,7 +242,7 @@ namespace RailTracer
         const float HealthY = 14f, LabelsY = HealthY + 28f + 8f, BarY = LabelsY + 18f + 2f, BoxY = BarY + BarHeight + 12f,
             MovesY = BoxY + 86f + 8f, TipY = MovesY + 18f + 12f;
 
-        class Box { public RectTransform rt; public Octagon card, fill, cd; public OctFrame frame; public Image icon; public TMP_Text key, name, wait; }
+        class Box { public RectTransform rt; public Octagon card, fill, cdTint, cd; public OctFrame frame; public Image icon; public TMP_Text key, name, wait; }
 
         readonly Box[] boxes = new Box[8];
         SkillDef[] skills;
@@ -403,9 +430,11 @@ namespace RailTracer
                 b.name.characterSpacing = 3f;
                 b.name.rectTransform.localRotation = Quaternion.Euler(0f, 0f, -2f);
                 b.name.text = skills[i].shortName;
-                // Cooldown: black at 72%, 4 px in, and the turns left.
+                // Cooldown: a light black tint and a dark sweep from 12 o'clock that loses a step each turn, 4 px in,
+                // and the turns left.
+                b.cdTint = Draw<Octagon>(b.rt, Alpha(Black, 0.18f), 4f);
                 b.cd = Draw<Octagon>(b.rt, Alpha(Black, 0.72f), 4f);
-                b.cd.cut = 8f;
+                b.cdTint.cut = b.cd.cut = 8f;
                 b.wait = Text(b.rt, sketchBold, 40, TextAlignmentOptions.Center, Vector2.zero, new Vector2(TileW, 60));
                 b.wait.color = Bone;
             }
@@ -757,12 +786,13 @@ namespace RailTracer
                 // What it becomes next, rising from the bottom: toward the unlock (bone, or red for skills that unlock
                 // already Bloodied), then red toward Bloodied.
                 float fill = 0f;
-                if (locked) { fill = d.unlock > 0 ? L / (float)d.unlock : 0f; b.fill.color = Alpha(d.bloodied == d.unlock ? Blood : Bone, 0.9f); }
-                else if (!bloodied && d.bloodied > d.unlock) { fill = (L - d.unlock) / (float)(d.bloodied - d.unlock); b.fill.color = Alpha(Blood, 0.85f); }
+                if (locked) { fill = d.unlock > 0 ? L / (float)d.unlock : 0f; b.fill.color = d.bloodied == d.unlock ? Blood : Bone; }
+                else if (!bloodied && d.bloodied > d.unlock) { fill = (L - d.unlock) / (float)(d.bloodied - d.unlock); b.fill.color = Blood; }
                 b.fill.fill = Mathf.Clamp01(fill);
-                // Cooldown: the dark overlay and the turns left.
+                // Cooldown: the tint, the dark sweep (turns left of the cooldown) and the turns left.
                 int wait = locked || d.cooldown <= 0 ? 0 : Mathf.Min(c.Wait(id), d.cooldown);
-                b.cd.shown = wait > 0;
+                b.cdTint.shown = b.cd.shown = wait > 0;
+                b.cd.sweep = wait / (float)Mathf.Max(1, d.cooldown);
                 b.wait.enabled = wait > 0;
                 b.wait.text = wait.ToString();
             }
