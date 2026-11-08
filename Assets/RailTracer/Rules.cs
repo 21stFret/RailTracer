@@ -60,7 +60,8 @@ namespace RailTracer
         public int bodyFearSmall = 10, bodyFearLarge = 45; // finding a stealth kill / a rail-grab or thrown body (brutal or shot: mediumTerror)
         public int jumpScareTerror = 15; // turning to find you right beside them, unseen till then
         public int unseenTerror = 35; // a body dragged or an enemy snatched away by something unseen: less than a kill seen
-        public float hitChance = 0.85f, shakenHitChance = 0.35f, wildHitChance = 0.3f, meleeHitChance = 0.9f;
+        public float hitChance = 0.8f, heavyHitChance = 0.9f, wildHitChance = 0.3f, meleeHitChance = 0.9f; // shots (guards, heavies); a heavy's swing is always meleeHitChance
+        public float shakenHitMult = 0.5f; // a shaken (or worse) shooter's hands: its shots at this share
         public float halfCoverHitMult = 0.75f;
         public float leapHitPenalty = 0.25f; // off the hit chance of shots at a leaping player
         public int shotDamage = 15, maxHp = 30, maxLegend = 100;
@@ -1333,7 +1334,7 @@ namespace RailTracer
 
         // Shots at a leaping player lose leapHitPenalty (percentage points).
         public float HitChance(Enemy e, Cell target, bool leaping = false) =>
-            Math.Max(0f, (StageOf(e) >= Stage.Shaken ? t.shakenHitChance : t.hitChance) * (HalfCovered(target, e.pos) ? t.halfCoverHitMult : 1f)
+            Math.Max(0f, (e.tough ? t.heavyHitChance : t.hitChance) * (StageOf(e) >= Stage.Shaken ? t.shakenHitMult : 1f) * (HalfCovered(target, e.pos) ? t.halfCoverHitMult : 1f)
                 - (leaping ? t.leapHitPenalty : 0f));
 
         // A Panicked guard's panic turn (every other turn, from the one after it panics): it freezes or fires wildly,

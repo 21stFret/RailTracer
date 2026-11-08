@@ -39,7 +39,7 @@ namespace RailTracer
 
         public static void Run()
         {
-            var t = new Tuning { hitChance = 1f, shakenHitChance = 1f, leapHitPenalty = 0f }; // sure shots, so hits can be checked
+            var t = new Tuning { hitChance = 1f, heavyHitChance = 1f, shakenHitMult = 1f, leapHitPenalty = 0f }; // sure shots, so hits can be checked
 
             // Cones: basic = forward and the forward diagonals; tough = also both sides, and further.
             var c = new Carriage(new[] { "P........", ".........", ".........", "........." }, t, 1);
@@ -1033,10 +1033,19 @@ namespace RailTracer
 
             // Shots at a leaping player are 25 points harder.
             var real = new Tuning();
+            // Shots need steady hands: guards 80%, heavies 90%, both halved once shaken; a heavy's swing stays 90%.
+            var hc = new Carriage(new[] { "P....", "....." }, real, 1);
+            var hg = hc.Spawn(4, 0, -1, 0, 0);
+            var hh = hc.Spawn(4, 1, -1, 0, 0, tough: true);
+            bool Near(float a, float b) => Math.Abs(a - b) < 1e-4f;
+            Check(Near(hc.HitChance(hg, new Cell(0, 0)), 0.8f) && Near(hc.HitChance(hh, new Cell(0, 1)), 0.9f), "shots: guard 80%, heavy 90%");
+            hg.terror = hh.terror = real.shakenAt;
+            Check(Near(hc.HitChance(hg, new Cell(0, 0)), 0.4f) && Near(hc.HitChance(hh, new Cell(0, 1)), 0.45f), "shaken: halved, 40% and 45%");
+            Check(Near(hc.HitChance(hh, new Cell(0, 1), true), 0.2f), "a heavy's shot at a leap loses the 25 points too");
             c = new Carriage(new[] { "P....", "....." }, real, 1);
             g = c.Spawn(4, 0, -1, 0, 0);
             Check(Math.Abs(c.HitChance(g, new Cell(1, 0), true) - (c.HitChance(g, new Cell(1, 0)) - 0.25f)) < 1e-4f, "leap shots: 25 points lower");
-            Check(real.hitChance == 0.85f && real.meleeHitChance == 0.9f && real.halfCoverHitMult == 0.75f, "the scene's tuning is the default");
+            Check(real.hitChance == 0.8f && real.heavyHitChance == 0.9f && real.shakenHitMult == 0.5f && real.meleeHitChance == 0.9f && real.halfCoverHitMult == 0.75f, "the scene's tuning is the default");
         }
 
         // Update 15: body fear by how the body was made.

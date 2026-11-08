@@ -1460,7 +1460,7 @@ namespace RailTracer
                         // (its "+30 legend" is in the skill's tooltip and on the legend bar)
                     }
                 }
-                string shot = threat ? $"Hit {pct}%" + (leaping && !e.tough ? $" · leap -{Mathf.RoundToInt(100 * c.t.leapHitPenalty)}" : "") : c.IntentText(e);
+                string shot = threat ? $"Hit {pct}%" + (leaping && !(previewLanding.HasValue && c.Swings(e, previewLanding.Value)) ? $" · leap -{Mathf.RoundToInt(100 * c.t.leapHitPenalty)}" : "") : c.IntentText(e);
                 chips[e] = hud.AddTag(sp, k, shownAwareness, e.terror, e.hasSeen, hover == e.pos || threat, c.Name(e), role, c.StatusText(e),
                     shot, threat, icon, plate, notYet, gain);
             }
@@ -2151,7 +2151,7 @@ namespace RailTracer
             // A heavy that will reach the landing and swing counts like a shot.
             if (previewLanding.HasValue)
                 foreach (var e in c.enemies)
-                    if (c.Swings(e, previewLanding.Value)) threats[e] = Mathf.RoundToInt(100 * c.t.meleeHitChance);
+                    if (!threats.ContainsKey(e) && c.Swings(e, previewLanding.Value)) threats[e] = Mathf.RoundToInt(100 * c.t.meleeHitChance); // its reaction shot on the way shows instead
             SyncShotMarks(preview);
             SyncPath(preview);
             SyncPreviewGhost(preview);

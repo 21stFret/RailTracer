@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 18.60 (8 Nov 2026).
+Last updated: Update 18.61 (8 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -80,6 +80,7 @@ Inspector; the saved scene matches these.
 | 18.58 (Master and Music volume in Options) | Done, not yet seen in Play mode. Options has 10 lines now (the menu's rows went 9 to 10) and 8 setting lamps |
 | 18.59 (enemies walk into you instead of round you; the jump scare) | Done, not yet seen in Play mode. Rules check passes; solver (seed 1) unchanged: 10, 7, 7, 11, 10 turns, all at full health |
 | 18.60 (Baggage hold: crate stack at map (4,4) gone, a window at (18,4), the near wall) | Done, not yet seen in Play mode. Solver: Baggage hold now 10 turns at full health (was 11) |
+| 18.61 (shots need steady hands: guards 80%, heavies 90%, halved when shaken; the swing stays 90%) | Done, not yet seen in Play mode. The preview no longer shows a heavy's reaction shot at its swing's 90%. Solver: 9, 7, 8, 10, 10 turns, all at full health |
 | Next | Full audio pass |
 
 ## The train
@@ -171,13 +172,13 @@ Chip icons (what they'll do if you end your turn where you are, or where the aim
 
 - **Crosshair:** a guard that sees you and will shoot (not one hesitating, startled or on a panic turn).
 - **The swing:** a heavy's melee plays its "Swing" clip (Editor/AnimationSetup: a Mixamo Punching.fbx in RailTracer/Mixamo when there is one, else the takedown pack's mid-section slash) once it has walked up, and the hit (blood, the red screen, your health going down) lands Game "Swing Hit At" (0.35 s) into it.
-- **Charge:** a heavy that sees you, or any berserk heavy. Heavies don't shoot: they charge 3 tiles a turn and melee (90%) when next to you. A charging heavy that gets beside you (a straight neighbour, still seeing you, or berserk) swings at once, which ends its turn; one that would need all 4 steps only closes in. So a heavy threatens any tile within 4 walkable steps (3 to arrive, 1 to swing): its chip shows the charge icon when your tile, or the aimed move's end, is in that range; hover reads "Charge · Hit 90%" (else "Charge"); the move preview highlights it with its hit chance like a shooter.
+- **Charge:** a heavy that sees you, or any berserk heavy. They charge 3 tiles a turn and melee (90%, always: no shaken, cover or leap cut) when next to you; their shots (reaction fire, overwatch) are 90%, cut like a guard's. A charging heavy that gets beside you (a straight neighbour, still seeing you, or berserk) swings at once, which ends its turn; one that would need all 4 steps only closes in. So a heavy threatens any tile within 4 walkable steps (3 to arrive, 1 to swing): its chip shows the charge icon when your tile, or the aimed move's end, is in that range; hover reads "Charge · Hit 90%" (else "Charge"); the move preview highlights it with its hit chance like a shooter.
 - **Wild fire:** a panicked guard on a wild fire turn.
 - **Ghost on a freeze turn:** a panicked guard frozen with fear (loses the turn, like startled): a small sheet ghost, black on white chips, white on red. Hover: "Frozen with fear: loses the turn".
 - **Armour plate** on toughs: whole while calm (can't be killed), cracked once Shaken. Targeting a kill on an unshaken tough shows "Not yet" over it.
 - Terror segments: three (Shaken, Panicked, Broken), white outline on red and black chips, black on white. The eye: has seen you (it can't be startled).
 
-Hover label: name, role, one state line ("Searching · Shaken", "Panicked · Freeze", "Berserk", "Fled", "Begging"), and what they'll do next ("Hit 85%", "Charge", "Investigate: Noise / Blood / Body / Movement", "Hold", "Patrol", "Back to post", "Loses the turn").
+Hover label: name, role, one state line ("Searching · Shaken", "Panicked · Freeze", "Berserk", "Fled", "Begging"), and what they'll do next ("Hit 80%", "Charge", "Investigate: Noise / Blood / Body / Movement", "Hold", "Patrol", "Back to post", "Loses the turn").
 
 ### Behaviour
 
@@ -196,7 +197,7 @@ Hover label: name, role, one state line ("Searching · Shaken", "Panicked · Fre
 
 ### Terror
 
-- Shaken (30+): hit chance 35%; 40% chance each turn to hesitate instead of shooting.
+- Shaken (30+): shots at half their hit chance (guards 40%, heavies 45%); 40% chance each turn to hesitate instead of shooting.
 - Panicked (60+), guards: every other turn is a panic turn, starting with the next turn after they panic. On a panic turn they freeze (50%, tunable; lose the turn, no reaction fire that player turn) or fire wildly at a random target in front of them (30% to hit, ally or you; you only if they can see you, so crouched behind a seat you're safe; allies by line of sight). The roll is made at the start of your turn and shown on the chip. Other turns: normal, with the Shaken penalties. No fleeing or charging.
 - Panicked (60+), heavies: berserk for good. They charge your real tile every turn (3 tiles), melee when next to you, and never drop to searching.
 - Broken (100): one roll: flee to the next carriage (50%, tunable; needs a path to a door, else they beg) or kneel and beg. Both count as broken; killing a broken enemy turns its ticket red. If the level is won while someone is still fleeing, they run out before the end card.
@@ -218,12 +219,12 @@ Hover label: name, role, one state line ("Searching · Shaken", "Panicked · Fre
 
 - From searching and combat enemies with their shot unspent this turn (not on a panicked guard's freeze turn).
 - Triggers on stepping onto a tile they see you on (not the tile you start on), every tile of a leap's arc and its landing, a hop's landing tile (shown once you've climbed back in: the tracers, flash and health drop wait for the hop), and standing up. Once per enemy per turn. A shot (hit or miss) doesn't stop a walk: you finish the move unless it kills you (so a walk past several ready guns can draw a shot from each; the preview marks each shooter's tile).
-- Shots at a leaping player are 25 points lower (85% becomes 60%).
+- Shots at a leaping player are 25 points lower (a guard's 80% becomes 55%).
 - Shown on the floor as a faint red tint on every watched tile (Game "Zone Tint", 0.12) and a fine red dashed line (8 dashes a tile) round exactly the red tiles: every edge between a watched tile and one that isn't. The move preview marks the tile in red and highlights the shooter with its hit chance.
 
 ## Hits
 
-- Hit 85% (Shaken 35%), half cover ×0.75, melee 90%, wild fire 30%.
+- Shots: guards 80%, heavies 90% (Tuning hitChance, heavyHitChance); shaken or worse ×0.5 (shakenHitMult); half cover ×0.75; leap −25. A heavy's melee 90% flat. Wild fire 30%.
 
 ## Level solver
 
@@ -295,7 +296,7 @@ In the game too, finisher blood now comes from the victim's chest bone (where th
 - **Turn count** (top left): "TURN 5" and under it "Target 11", the car's target turns (CarDef.targetTurns: the level solver's best on seed 1, kept in Train.cs Targets: 11, 7, 11, 9, 24; rerun the solver after changing a car). The count goes red once you pass the target. No target in endless; nothing in the walk-through car.
 - **Drag box:** while you hold a body it goes red and reads "Drop" in white.
 - **Legend readout** (only while a kill is targeted; gone when you cancel or pick another skill): the hover label says "Locked" on a heavy that isn't Shaken yet; the gain itself is in the skill's tooltip, small and red beside its name ("Brutal kill +20 legend", always shown for the three kills); the big number reads "42 +30"; the legend bar shows the gain hatched (#E0202F stripes on #4A0C15) from your legend to where the kill lands; notches it crosses turn red (no line of notch names: dropped in 18.36). Gains: stealth +10, brutal +20, rail grab +30 (Tuning "Quiet Legend", "Brutal Gain", "Rail Gain"). Skill boxes unchanged.
-- Move and leap previews: each tile that draws a shot shows its hit chance on the floor; a leap's says "LEAP -25", and the shooter's label "Hit 60% · leap -25".
+- Move and leap previews: each tile that draws a shot shows its hit chance on the floor; a leap's says "LEAP -25", and the shooter's label "Hit 55% · leap -25".
 - The walk-through car has every legend effect off (demon aura, blood overlay); an aura starting at nothing clears what its systems played on awake.
 - **Eyes:** the character's lash and brow cards are drawn cut out and brown (Game "Brow Color"). Each eye gets a small iris disc where the lashes sit (Game "Iris Size", "Iris Nudge" to move them): enemies blue or green, yours blue ("Tracer Eye Color"), glowing red as the demon takes form (with the aura) and leaving a red trail as you move, drawn over everything so the head never hides it, and off on the walk out of a cleared car ("Eye Glow", "Eye Glow Strength", "Eye Trail Time / Width").
 - **The guards' revolver:** `Resources/Weapons/Revolver.fbx` (Alex's download: body and cylinder meshes, no textures; barrel along its +Z, the grip hanging at the back). Every guard (not heavies) holds one in the right hand: measured once as it's made, scaled to Game "Gun Length" (0.33 m), gripped like the knife (the grip across the knuckles, the barrel past the fingers), finished dark steel ("Gun Steel", "Gun Cylinder"). Holstered (hidden) while they're unaware, gone once they're broken (dropped). Shots flash and trace from its muzzle. "Gun Offset" / "Gun Twist" nudge it, live in Play mode.

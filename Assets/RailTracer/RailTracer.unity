@@ -184,8 +184,9 @@ MonoBehaviour:
     bodyFearSmall: 10
     bodyFearLarge: 45
     unseenTerror: 35
-    hitChance: 0.85
-    shakenHitChance: 0.35
+    hitChance: 0.8
+    heavyHitChance: 0.9
+    shakenHitMult: 0.5
     wildHitChance: 0.3
     meleeHitChance: 0.9
     halfCoverHitMult: 0.75
