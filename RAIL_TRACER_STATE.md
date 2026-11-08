@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 18.59 (8 Nov 2026).
+Last updated: Update 18.60 (8 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -79,6 +79,7 @@ Inspector; the saved scene matches these.
 | 18.57 (a hop's reaction shots after you're back in; guards visible again) | Done, not yet seen in Play mode. The guard models' import settings still held the centimetre skeleton's bone layout, so their avatars broke (invisible guards): cleared, the prefabs rebuilt by Unity on the next refresh |
 | 18.58 (Master and Music volume in Options) | Done, not yet seen in Play mode. Options has 10 lines now (the menu's rows went 9 to 10) and 8 setting lamps |
 | 18.59 (enemies walk into you instead of round you; the jump scare) | Done, not yet seen in Play mode. Rules check passes; solver (seed 1) unchanged: 10, 7, 7, 11, 10 turns, all at full health |
+| 18.60 (Baggage hold: crate stack at map (4,4) gone, a window at (18,4), the near wall) | Done, not yet seen in Play mode. Solver: Baggage hold now 10 turns at full health (was 11) |
 | Next | Full audio pass |
 
 ## The train

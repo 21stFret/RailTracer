@@ -56,7 +56,7 @@ namespace RailTracer
             "..XX..M...MXX..CCC.M...XX.",
             "P...........X.............",
             "..M..XX...M.....XX..M..X..",
-            "___xx__..._____xx___..__x_",
+            "___x___..._____xx_._..__x_",
         };
 
         // The walk-through car: the first carriage's seats with nobody in them.
