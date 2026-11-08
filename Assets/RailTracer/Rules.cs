@@ -58,6 +58,7 @@ namespace RailTracer
         public int shakenAt = 30, panickedAt = 60, brokenAt = 100;
         public int smallTerror = 10, mediumTerror = 25, largeTerror = 45;
         public int bodyFearSmall = 10, bodyFearLarge = 45; // finding a stealth kill / a rail-grab or thrown body (brutal or shot: mediumTerror)
+        public int jumpScareTerror = 15; // turning to find you right beside them, unseen till then
         public int unseenTerror = 35; // a body dragged or an enemy snatched away by something unseen: less than a kill seen
         public float hitChance = 0.85f, shakenHitChance = 0.35f, wildHitChance = 0.3f, meleeHitChance = 0.9f;
         public float halfCoverHitMult = 0.75f;
@@ -407,16 +408,17 @@ namespace RailTracer
             return parent;
         }
 
-        // Steps from `from` toward `goal`, stopping short if the goal is occupied. Null if unreachable.
-        List<Cell> PathTo(Cell from, Cell goal)
+        // Steps from `from` toward `goal`, stopping short if the goal holds another enemy. Null if unreachable. Your tile
+        // isn't in the way: they don't route round someone they don't know is there; a walk that reaches it bumps into you.
+        List<Cell> PathTo(Cell from, Cell goal, bool aroundYou = false)
         {
             if (from == goal) return new List<Cell>();
-            var parent = Bfs(from, 99, n => n == goal || (!Blocked(n) && !Occupied(n)));
+            var parent = Bfs(from, 99, n => n == goal || (!Blocked(n) && EnemyAt(n) == null && !(aroundYou && n == player)));
             if (!parent.ContainsKey(goal)) return null;
             var path = new List<Cell>();
             for (var c = goal; c != from; c = parent[c]) path.Add(c);
             path.Reverse();
-            if (Occupied(goal)) path.RemoveAt(path.Count - 1);
+            if (EnemyAt(goal) != null) path.RemoveAt(path.Count - 1);
             return path;
         }
 
@@ -436,13 +438,20 @@ namespace RailTracer
         static void Face(Enemy e, Cell c) => e.facing = Cardinal(c.x - e.pos.x, c.y - e.pos.y, e.facing);
 
         // Walks up to `steps` tiles, asking `next` for each one (null = stop), noticing things on the way:
-        // seeing you or finding a body ends the move there.
+        // seeing you or finding a body ends the move there. Its next step onto your tile: it walks into you, turns to
+        // you and stops (unaware, it's a fight now).
         void Walk(Enemy e, int steps, Func<Cell?> next)
         {
             e.walked = new List<Cell>();
             for (int i = 0; i < steps; i++)
             {
                 var n = next();
+                if (n == player)
+                {
+                    Face(e, player);
+                    if (e.awareness != Awareness.Combat && e.state == EnemyState.Active) { Log($"{Name(e)} walks right into you!"); Fight(e); }
+                    break;
+                }
                 if (n == null || Occupied(n.Value)) break;
                 Face(e, n.Value);
                 e.pos = n.Value;
@@ -1548,7 +1557,7 @@ namespace RailTracer
             List<Cell> best = null;
             foreach (var door in new[] { new Cell(0, H / 2), new Cell(W - 1, H / 2) })
             {
-                var p = PathTo(e.pos, door);
+                var p = PathTo(e.pos, door, true); // running from you: round you
                 if (p != null && (e.pos == door || (p.Count > 0 && p[p.Count - 1] == door)) && (best == null || p.Count < best.Count)) best = p;
             }
             return best;
@@ -1576,6 +1585,7 @@ namespace RailTracer
                 Log($"{Name(e)} is startled and loses the turn.");
                 return;
             }
+            bool unseenBeside = Cheb(e.pos, player) == 1 && !CanSee(e, player); // right beside them as their turn starts, unseen
             bool panicTurn = PanicTurn(e);
             if (!e.berserk)
             {
@@ -1709,6 +1719,12 @@ namespace RailTracer
                 case Intent.Freeze:
                     Log($"{Name(e)} freezes in terror.");
                     break;
+            }
+            // The jump scare: it turned (or walked into you) and there you are, right beside it.
+            if (unseenBeside && e.InPlay && Cheb(e.pos, player) == 1 && CanSee(e, player))
+            {
+                Log($"{Name(e)} turns and finds you right beside them. They jump!");
+                AddTerror(e, t.jumpScareTerror);
             }
             NextPanicTurn(e, panicTurn);
         }

@@ -120,6 +120,31 @@ namespace RailTracer
             c.ToggleCrouch();
             Check(c.Move(new Cell(0, 1)) && c.movesLeft == t.moveRange - t.crouchMoveCost, "crouching halves movement");
 
+            // On a patroller's route, unseen (beside it, out of its cone): it doesn't route round you, it walks into you,
+            // turns, fights, and the surprise scares it a little.
+            c = new Carriage(new[] { "..P..", ".....", "....." }, t, 1);
+            e = c.Spawn(2, 1, -1, 0, 0, route: new List<Cell> { new Cell(2, 0), new Cell(2, 2) });
+            Check(!c.CanSee(e, c.player), "bump: unseen beside it");
+            EnemyTurn(c);
+            Check(e.pos == new Cell(2, 1) && e.facing == new Cell(0, -1) && e.awareness == Awareness.Combat, "bump: walks into you, turns and fights");
+            Check(e.terror == t.jumpScareTerror && c.log.Exists(l => l.Contains("jump")), "bump: jump scare, logged");
+            // A guard turning on its watch to find you beside it: scared (it fights you next turn, seeing you).
+            c = new Carriage(new[] { "..P..", ".....", "....." }, t, 1);
+            e = c.Spawn(2, 1, -1, 0, 0, looks: new List<Cell> { new Cell(-1, 0), new Cell(0, -1) });
+            e.guardTimer = t.guardTurnInterval - 1;
+            EnemyTurn(c);
+            Check(e.facing == new Cell(0, -1) && e.terror == t.jumpScareTerror, "turning on watch: jump scare");
+            // Already seeing you as its turn starts: no scare.
+            c = new Carriage(new[] { "..P..", ".....", "....." }, t, 1);
+            e = c.Spawn(2, 1, 0, -1, 0);
+            EnemyTurn(c);
+            Check(e.terror == 0, "seen you all along: no jump scare");
+            // Two away when its turn starts: no scare either.
+            c = new Carriage(new[] { "..P..", ".....", "....." }, t, 1);
+            e = c.Spawn(2, 2, -1, 0, 0, route: new List<Cell> { new Cell(2, 0), new Cell(2, 2) });
+            EnemyTurn(c);
+            Check(e.awareness != Awareness.Unaware && e.terror == 0, "two away: no jump scare");
+
             // Every tile of the path is checked: walking through a cone puts them in combat, even if you end out of sight.
             c = new Carriage(new[] { "P....", "....." }, t, 1);
             e = c.Spawn(1, 1, 0, -1, 0);

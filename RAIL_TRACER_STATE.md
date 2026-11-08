@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 18.58 (8 Nov 2026).
+Last updated: Update 18.59 (8 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -78,6 +78,7 @@ Inspector; the saved scene matches these.
 | 18.56 (walk on through reaction fire, the gramophone quieter and positional, guard heads fixed) | Done, not yet seen in Play mode. Solver (seed 1): car 1 in 10 turns, 2 in 7, 3 in 7, 4 in 11 (all at full health); car 5 needs a wider search (beam 20): 10 turns at full health |
 | 18.57 (a hop's reaction shots after you're back in; guards visible again) | Done, not yet seen in Play mode. The guard models' import settings still held the centimetre skeleton's bone layout, so their avatars broke (invisible guards): cleared, the prefabs rebuilt by Unity on the next refresh |
 | 18.58 (Master and Music volume in Options) | Done, not yet seen in Play mode. Options has 10 lines now (the menu's rows went 9 to 10) and 8 setting lamps |
+| 18.59 (enemies walk into you instead of round you; the jump scare) | Done, not yet seen in Play mode. Rules check passes; solver (seed 1) unchanged: 10, 7, 7, 11, 10 turns, all at full health |
 | Next | Full audio pass |
 
 ## The train
@@ -198,7 +199,8 @@ Hover label: name, role, one state line ("Searching · Shaken", "Panicked · Fre
 - Panicked (60+), guards: every other turn is a panic turn, starting with the next turn after they panic. On a panic turn they freeze (50%, tunable; lose the turn, no reaction fire that player turn) or fire wildly at a random target in front of them (30% to hit, ally or you; you only if they can see you, so crouched behind a seat you're safe; allies by line of sight). The roll is made at the start of your turn and shown on the chip. Other turns: normal, with the Shaken penalties. No fleeing or charging.
 - Panicked (60+), heavies: berserk for good. They charge your real tile every turn (3 tiles), melee when next to you, and never drop to searching.
 - Broken (100): one roll: flee to the next carriage (50%, tunable; needs a path to a door, else they beg) or kneel and beg. Both count as broken; killing a broken enemy turns its ticket red. If the level is won while someone is still fleeing, they run out before the end card.
-- Terror values: small 10, medium 25, large 45, unseen (a body dragged or someone snatched away by something unseen) 35. A leap landing seen: legend × 40 / 100.
+- Terror values: small 10, medium 25, large 45, unseen (a body dragged or someone snatched away by something unseen) 35. A leap landing seen: legend × 40 / 100. Jump scare 15: an enemy that starts its turn right beside you (any of the 8 tiles) without seeing you, and ends it seeing you (it turned on watch, or walked into you), is scared (log: "Name turns and finds you right beside them. They jump!").
+- Enemy routes don't go round you: they don't know you're there. A walk whose next step is your tile stops there; the enemy turns to you and, unless already fighting, fights you (log: "Name walks right into you!"). Fleeing broken enemies still run round you.
 
 ## Sight
 
