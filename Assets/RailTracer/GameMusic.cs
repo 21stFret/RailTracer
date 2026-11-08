@@ -86,7 +86,7 @@ namespace RailTracer
             music.pitch = Mathf.MoveTowards(music.pitch, playing && c.musicStopped ? 0f : 1f, dt / musicWindDown);
             float target = !playing ? musicVolume : here ? musicVolume * musicInCar : 0f;
             musicLevel = Mathf.MoveTowards(musicLevel, target, dt * musicVolume / musicFade);
-            music.volume = musicLevel * music.pitch;
+            music.volume = musicLevel * music.pitch * save.settings.musicVolume; // the Options music volume (master: AudioListener.volume)
             if (gramophoneRecord) gramophoneRecord.RotateAround(centre, gramophone.up, recordRpm * 6f * music.pitch * dt);
         }
     }

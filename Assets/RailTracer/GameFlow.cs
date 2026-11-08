@@ -46,6 +46,8 @@ namespace RailTracer
         public float killCamSlowMo = 1f;
         public float killCamChance = 1f; // how often a kill gets the kill cam (0-1), when it's on
         public int enemySpeed = 1;       // the enemy turn: 0 slow, 1 normal, 2 fast
+        public float masterVolume = 1f;  // everything (AudioListener.volume), 0-1
+        public float musicVolume = 1f;   // the music on top of that, 0-1
         public int windowMode = -1; // FullScreenMode (FullScreenWindow or Windowed; an old ExclusiveFullScreen reads as FullScreenWindow), -1 = as the player started
         public int width, height;   // the windowed size; 0 = as the player started
     }
@@ -128,6 +130,7 @@ namespace RailTracer
         {
             var s = save.settings;
             killCamSlowMo = s.killCamSlowMo;
+            AudioListener.volume = s.masterVolume;
             if (s.windowMode == (int)FullScreenMode.ExclusiveFullScreen || s.windowMode == (int)FullScreenMode.MaximizedWindow) s.windowMode = (int)FullScreenMode.FullScreenWindow;
             if (Windowed(s))
             {
@@ -476,11 +479,11 @@ namespace RailTracer
                 }
             }
             // The Options car: a lamp per setting, down the car in menu order (SyncSettingLamps).
-            for (int i = 0; i < 6; i++)
+            for (int i = 0; i < 8; i++)
             {
                 var l = new GameObject("Setting Lamp " + (i + 1)).AddComponent<Light>();
                 l.transform.SetParent(menuTrain.transform, false);
-                l.transform.localPosition = new Vector3(OptionsX + 3f + i * 4f, 2.1f, -2f);
+                l.transform.localPosition = new Vector3(OptionsX + 2f + i * 3.2f, 2.1f, -2f);
                 l.type = LightType.Point;
                 l.color = new Color(1f, 0.9f, 0.75f);
                 l.range = 7f;
@@ -493,11 +496,11 @@ namespace RailTracer
         float OptionsX => (LiveSlot >= 0 ? SlotX(LiveSlot) : 0f) + (LiveSlot == Train.DemoCars - 1 ? -Pitch : Pitch);
 
         // On the Options screens the car's lamps are the settings: off when a setting is off, a slider's value as
-        // the brightness (kill cam slow motion for now; the volumes when audio arrives). Its progress lamps go out.
+        // the brightness (the volumes, kill cam chance and slow motion, enemy speed). Its progress lamps go out.
         void SyncSettingLamps(bool showing)
         {
             var s = save.settings;
-            float[] level = { s.killCam ? 1f : 0f, s.killCam ? s.killCamChance : 0f, s.killCamSlowMo, 0.35f + 0.325f * Mathf.Clamp(s.enemySpeed, 0, 2), 1f, 1f }; // kill cam, chance, slow motion, enemy speed, window mode, resolution
+            float[] level = { s.masterVolume, s.musicVolume, s.killCam ? 1f : 0f, s.killCam ? s.killCamChance : 0f, s.killCamSlowMo, 0.35f + 0.325f * Mathf.Clamp(s.enemySpeed, 0, 2), 1f, 1f }; // master, music, kill cam, chance, slow motion, enemy speed, window mode, resolution
             for (int i = 0; i < settingLamps.Count; i++) settingLamps[i].intensity = showing ? 2.8f * level[i] : 0f;
             for (int k = 0; k < menuCars.Count; k++)
             {
@@ -611,6 +614,7 @@ namespace RailTracer
             bool click = mouse != null && mouse.leftButton.wasPressedThisFrame;
             bool back = kb != null && kb.escapeKey.wasPressedThisFrame;
             bool held = mouse != null && mouse.leftButton.isPressed;
+            bool down = mouse != null && mouse.rightButton.wasPressedThisFrame; // right-click: a volume down
             switch (screen)
             {
                 case MenuScreen.Start:
@@ -661,19 +665,28 @@ namespace RailTracer
                     if (!windowed) (w, h) = (Display.main.systemWidth, Display.main.systemHeight); // fullscreen: the desktop's own
                     var items = new[]
                     {
+                        $"Master volume: {Mathf.RoundToInt(100 * s.masterVolume)}%", $"Music volume: {Mathf.RoundToInt(100 * s.musicVolume)}%",
                         $"Kill cam: {(s.killCam ? "On" : "Off")}", $"Kill cam chance: {Mathf.RoundToInt(100 * s.killCamChance)}%",
                         $"Kill cam slow motion: {s.killCamSlowMo:0.##}x", $"Enemy turn speed: {EnemySpeeds[Mathf.Clamp(s.enemySpeed, 0, 2)]}",
                         $"Window: {modeName}", windowed ? $"Resolution: {w} x {h}" : $"Resolution: {w} x {h} (screen)", "Controls", "Back",
                     };
-                    int hit = hud.RefreshMenu(false, "Options", items, null, "Audio comes with the sound pass.", at, held, -1, "Reset data");
+                    int hit = hud.RefreshMenu(false, "Options", items, null, "Volumes: click to turn up, right-click to turn down.", at, held, -1, "Reset data");
                     if (click && hit == -3) { screen = MenuScreen.ResetData; break; }
-                    if (back || (click && (hit == 7 || hit == -2))) { screen = MenuScreen.Start; break; }
+                    if (back || (click && (hit == 9 || hit == -2))) { screen = MenuScreen.Start; break; }
+                    if ((click || down) && (hit == 0 || hit == 1)) // 10% steps, wrapping round
+                    {
+                        float Step(float v) => Mathf.Repeat(Mathf.Round(v * 10f) + (down ? -1f : 1f), 11f) / 10f;
+                        if (hit == 0) AudioListener.volume = s.masterVolume = Step(s.masterVolume);
+                        else s.musicVolume = Step(s.musicVolume);
+                        WriteSave();
+                        break;
+                    }
                     if (!click) break;
-                    if (hit == 0) s.killCam = !s.killCam;
-                    else if (hit == 1) s.killCamChance = Chances[(System.Array.IndexOf(Chances, s.killCamChance) + 1) % Chances.Length];
-                    else if (hit == 2) s.killCamSlowMo = SlowMos[(System.Array.IndexOf(SlowMos, s.killCamSlowMo) + 1) % SlowMos.Length];
-                    else if (hit == 3) s.enemySpeed = (s.enemySpeed + 1) % EnemySpeeds.Length;
-                    else if (hit == 4)
+                    if (hit == 2) s.killCam = !s.killCam;
+                    else if (hit == 3) s.killCamChance = Chances[(System.Array.IndexOf(Chances, s.killCamChance) + 1) % Chances.Length];
+                    else if (hit == 4) s.killCamSlowMo = SlowMos[(System.Array.IndexOf(SlowMos, s.killCamSlowMo) + 1) % SlowMos.Length];
+                    else if (hit == 5) s.enemySpeed = (s.enemySpeed + 1) % EnemySpeeds.Length;
+                    else if (hit == 6)
                     {
                         s.windowMode = (int)(windowed ? FullScreenMode.FullScreenWindow : FullScreenMode.Windowed);
                         if (!windowed && (s.width <= 0 || s.width >= Display.main.systemWidth)) // first window: the biggest that fits
@@ -683,7 +696,7 @@ namespace RailTracer
                             if (fit.width > 0) (s.width, s.height) = (fit.width, fit.height);
                         }
                     }
-                    else if (hit == 5)
+                    else if (hit == 7)
                     {
                         if (!windowed) break; // fullscreen always uses the screen's own resolution
                         var sizes = Screen.resolutions.Select(r => (r.width, r.height)).Distinct()
@@ -694,7 +707,7 @@ namespace RailTracer
                             (s.width, s.height) = sizes[(i + 1) % sizes.Count];
                         }
                     }
-                    else if (hit == 6) { screen = MenuScreen.Controls; break; }
+                    else if (hit == 8) { screen = MenuScreen.Controls; break; }
                     else break;
                     ApplySettings();
                     WriteSave();
