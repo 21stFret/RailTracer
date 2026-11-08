@@ -219,7 +219,7 @@ namespace RailTracer
             EnemyTurn(c);
             Check(guard.facing == new Cell(0, -1), "guard turned after 2 turns");
 
-            // Stealth kill: only when the victim can't see you; pulled onto your tile; heard by adjacent tiles only.
+            // Stealth kill: only when the victim can't see you; pulled onto your tile; silent.
             c = new Carriage(new[] { "P.....", "......" }, t, 1);
             var victim = c.Spawn(1, 0, -1, 0, 0);
             Check(c.CantAct(Act.QuietKill, victim) != null, "can't stealth kill someone who sees you");
@@ -228,8 +228,7 @@ namespace RailTracer
             var far = c.Spawn(5, 1, 1, 0, 1);
             Check(c.Perform(Act.QuietKill, victim), "stealth kill from behind");
             Check(c.BodyAt(c.player) != null && c.player == new Cell(0, 0), "pulled onto your tile; you don't move");
-            Check(adjacent.awareness == Awareness.Searching && adjacent.lastKnown == new Cell(0, 0) && adjacent.terror == t.smallTerror
-                  && adjacent.clue == Clue.Noise && c.IntentText(adjacent) == "Investigate: Noise", "next to you hears it: investigates the noise");
+            Check(adjacent.awareness == Awareness.Unaware && adjacent.terror == 0, "silent: even right next to you nobody hears it");
             Check(far.awareness == Awareness.Unaware && far.terror == 0, "two tiles away hears nothing");
             Check(c.bodies.Count == 1 && c.stains.Count == 1 && c.stains[0].tiles.Count == 1 && c.IsBloody(c.player), "stealth kill bloodies just your tile");
             Check(c.legend == t.quietLegend && c.movesLeft == t.moveRange && !c.Perform(Act.QuietKill, far), "legend, action spent");
@@ -1127,7 +1126,8 @@ namespace RailTracer
             victim = c.Spawn(1, 0, 1, 0, 0);
             var hearer = c.Spawn(1, 1, 1, 0, 1);
             c.NameEnemies();
-            c.Perform(Act.QuietKill, victim);
+            c.legend = Unlock(t, SkillId.Brutal);
+            c.Perform(Act.BrutalKill, victim); // a stealth kill is silent; a brutal one is heard
             Check(c.IntentText(hearer) == "Investigate: Noise" && c.log.Contains($"{hearer.name} is searching: noise."), "14/8: investigating the noise, logged by name");
 
             // 9. Spotted, then into combat: both logged.

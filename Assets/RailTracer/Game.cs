@@ -2174,7 +2174,7 @@ namespace RailTracer
                         bool react = c.enemies.Exists(e => Shown(e) && (c.WillReact(e) || e.awareness == Awareness.Combat) && c.Sees(e, cell, false));
                         if (c.enemies.Exists(e => Shown(e) && c.CanSee(e, cell))) col = Fill(react ? ReactCol : SightCol, 0.55f);
                         else if (c.enemies.Exists(e => Shown(e) && c.Sees(e, cell, false))) col = Fill(react ? ReactCol : SightCol, 0.07f);
-                        else if (targeting && Within(cell, dies, noise)) col = Fill(HearCol, 0.4f);
+                        else if (targeting && noise > 0 && Within(cell, dies, noise)) col = Fill(HearCol, 0.4f);
                     }
                     else if (preview != null && preview.Exists(p => p.shooter != null && p.tile == cell))
                         col = Fill(ReactCol, 0.75f); // the move draws reaction fire here

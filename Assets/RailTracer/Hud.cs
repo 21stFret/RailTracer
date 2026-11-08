@@ -142,6 +142,7 @@ namespace RailTracer
         TMP_Text endWord;
         // The player's stack above the health row (legend bar, skill boxes, moves line, tooltip) is drawn at this
         // scale, shrinking towards its bottom-left corner; the health row keeps its size.
+        const float DragIconLift = 4f; // px: the Dragging icon raised to sit level with its word
         const float StackScale = 0.8f;
         static readonly Vector2 StackOrigin = new Vector2(40f, LabelsY);
 
@@ -337,7 +338,10 @@ namespace RailTracer
             sightWord = Label(sight, "Unseen", 14, Grey, 1.5f);
             // Hauling a body: red on purpose (you're dragging a corpse). A lying figure: the stand icon on its side.
             var drag = Row("Dragging", state, 6f);
-            var corpse = Icon(drag, "stand", 16, 16);
+            var corpseHolder = Rect("Corpse", drag, Vector2.zero, Vector2.zero, new Vector2(16, 16)); // laid out by the row; the icon inside it isn't
+            Size(corpseHolder, 16, 16);
+            var corpse = Icon(corpseHolder, "stand", 16, 16);
+            Place(corpse.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0f, DragIconLift)); // turned on its side it sits low: lifted to the word
             corpse.color = Blood;
             corpse.rectTransform.localRotation = Quaternion.Euler(0f, 0f, -90f);
             Label(drag, "Dragging", 14, Blood, 1.5f);

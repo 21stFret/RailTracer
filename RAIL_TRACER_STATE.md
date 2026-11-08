@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 18.61 (8 Nov 2026).
+Last updated: Update 18.62 (8 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -81,6 +81,7 @@ Inspector; the saved scene matches these.
 | 18.59 (enemies walk into you instead of round you; the jump scare) | Done, not yet seen in Play mode. Rules check passes; solver (seed 1) unchanged: 10, 7, 7, 11, 10 turns, all at full health |
 | 18.60 (Baggage hold: crate stack at map (4,4) gone, a window at (18,4), the near wall) | Done, not yet seen in Play mode. Solver: Baggage hold now 10 turns at full health (was 11) |
 | 18.61 (shots need steady hands: guards 80%, heavies 90%, halved when shaken; the swing stays 90%) | Done, not yet seen in Play mode. The preview no longer shows a heavy's reaction shot at its swing's 90%. Solver: 9, 7, 8, 10, 10 turns, all at full health |
+| 18.62 (stealth kills silent; the Dragging icon lifted level with its word) | Done, not yet seen in Play mode. The icon's lift: Hud DragIconLift (4 px) |
 | Next | Full audio pass |
 
 ## The train
@@ -152,7 +153,7 @@ Every menu is over the real carriages: the live (saved) car plus the other demo 
 
 Kill details:
 
-- **Stealth kill:** only when the victim can't see you. The victim is pulled onto your tile and dies there; you never move and keep your stance. Heard within 1 tile. Witnesses who see your tile: medium terror (25), combat. Who see only where the victim stood: they vanish (small terror 10; a snatch 35) and they search there.
+- **Stealth kill:** only when the victim can't see you. The victim is pulled onto your tile and dies there; you never move and keep your stance. Silent (Tuning quietNoise 0: no one hears it, and no purple noise ring on the preview). Witnesses who see your tile: medium terror (25), combat. Who see only where the victim stood: they vanish (small terror 10; a snatch 35) and they search there.
 - **Brutal kill:** a standing act. You move onto the victim's tile; crouched before it, you drop back to crouching after. Heard within 8. Witnesses take large terror (45) and go into combat, except anyone who has never seen you, who is startled. No free shots.
 - **Rail grab:** the victim hangs out of their window (or yours, if they're not at one) with one leg inside. Blood on every tile within 1 of the window. Heard within 10 (louder than a brutal kill). Witnesses: large terror (45, or 67 bloodied).
 - **Demon throw:** large terror (45) for everyone who sees it land; they investigate the body.
