@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 18.63 (8 Nov 2026).
+Last updated: Update 18.64 (8 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -83,6 +83,7 @@ Inspector; the saved scene matches these.
 | 18.61 (shots need steady hands: guards 80%, heavies 90%, halved when shaken; the swing stays 90%) | Done, not yet seen in Play mode. The preview no longer shows a heavy's reaction shot at its swing's 90%. Solver: 9, 7, 8, 10, 10 turns, all at full health |
 | 18.62 (stealth kills silent; the Dragging icon lifted level with its word) | Done, not yet seen in Play mode. The icon's lift: Hud DragIconLift (4 px) |
 | 18.63 (stealth kills heard within 1 again: small terror and an investigation for whoever hears it) | Done |
+| 18.64 (Alex's tweaks committed) | Done: Thigh and Neck Stab reverse grip; Demon Aura particles fainter (max colour alpha 0.39), smaller (size 0.8-1.5) and one of its renderers off; the guard prefabs (Guard, Guard_CH02) as Unity built them; the TMP font atlases as Unity grew them |
 | Next | Full audio pass |
 
 ## The train

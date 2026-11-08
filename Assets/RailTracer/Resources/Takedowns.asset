@@ -263,7 +263,7 @@ MonoBehaviour:
     - 0.1
     headOff: 0
     gore: 0
-    reverseGrip: 0
+    reverseGrip: 1
     keepTravel: 0
     camOffset: {x: 0.5117213, y: -0.40498307, z: 1.6633775}
     camLook: {x: 0.04975728, y: 0.099454485, z: 0.31946307}
