@@ -57,7 +57,7 @@ namespace RailTracer
         // Bloody footprints behind you as you walk once your legend reaches Footprints From (looks only). Left and right
         // in turn, Footprint Stride apart, Footprint Gap either side of your line, staying for the rest of the car.
         public int footprintsFrom = 50;
-        public float footprintStride = 0.42f, footprintGap = 0.09f, footprintLength = 0.26f;
+        public float footprintStride = 0.42f, footprintGap = 0.09f, footprintLength = 0.26f, footprintHeight = 0.02f;
         public Color footprintColor = new Color(0.42f, 0.02f, 0.04f, 0.85f);
         Material footprintMat;
         float strideLeft;
@@ -1980,7 +1980,10 @@ namespace RailTracer
                 lastState[e] = e.state;
             }
             pendingAct = null;
-            if (c.hitsTaken > lastHits && !holdHit) HitBlood(); // a heavy's hit waits for its swing
+            // A heavy's hit waits for its swing; a hop's reaction hits wait (still counted) until its shots play as you
+            // climb back in (HopThrough).
+            if (hopShots.Count > 0) return;
+            if (c.hitsTaken > lastHits && !holdHit) HitBlood();
             lastHits = c.hitsTaken;
         }
 
@@ -2059,8 +2062,8 @@ namespace RailTracer
             mr.shadowCastingMode = ShadowCastingMode.Off;
             mr.receiveShadows = false;
             q.transform.SetParent(root, false);
-            var side = Vector3.Cross(Vector3.up, dir) * (leftFoot ? -footprintGap : footprintGap);
-            q.transform.localPosition = new Vector3(playerShown.x, 0.004f, playerShown.z) + side;
+            var at = new Vector3(playerShown.x, 0f, playerShown.z) + Vector3.Cross(Vector3.up, dir) * (leftFoot ? -footprintGap : footprintGap);
+            q.transform.localPosition = at + Vector3.up * footprintHeight; // over the velvet aisle runner (1.5 cm proud of the floor)
             q.transform.localRotation = Quaternion.LookRotation(Vector3.down, dir); // lying flat, face up, toes forward
             q.transform.localScale = new Vector3(footprintLength * 0.42f * (leftFoot ? 1f : -1f), footprintLength, 1f);
         }
