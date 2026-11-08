@@ -5,13 +5,13 @@ using UnityEngine;
 
 namespace RailTracer
 {
-    // Ragdoll bones on Resources/Anim/Character, made by Unity's own Ragdoll Builder (driven from code: its bones
+    // Ragdoll bones on Resources/Anim/Character and Guard, made by Unity's own Ragdoll Builder (driven from code: its bones
     // auto-assigned from the Humanoid avatar). Every rigidbody is left kinematic and every collider off, on the
     // Ignore Raycast layer, so living characters are untouched; Game goes limp at a death (Game.Ragdoll). Runs
     // after each script reload until the prefab has them; delete the bones' Rigidbodies to rebuild.
     static class RagdollSetup
     {
-        const string Prefab = "Assets/RailTracer/Resources/Anim/Character.prefab";
+        static readonly string[] Prefabs = { "Assets/RailTracer/Resources/Anim/Character.prefab", "Assets/RailTracer/Resources/Anim/Guard.prefab" };
         const float Mass = 70f;
 
         [InitializeOnLoadMethod]
@@ -20,7 +20,9 @@ namespace RailTracer
         [MenuItem("Rail Tracer/Set Up Ragdoll")]
         static void Menu() => Run(true);
 
-        static void Run(bool rebuild)
+        static void Run(bool rebuild) { foreach (var p in Prefabs) Run(p, rebuild); }
+
+        internal static void Run(string Prefab, bool rebuild)
         {
             if (!System.IO.File.Exists(Prefab)) return;
             var root = PrefabUtility.LoadPrefabContents(Prefab);
@@ -66,7 +68,7 @@ namespace RailTracer
                 foreach (var col in root.GetComponentsInChildren<Collider>(true)) { col.enabled = false; col.gameObject.layer = 2; }
                 if (n == 0) { Debug.LogWarning("Rail Tracer: the Ragdoll Builder made no bones."); return; }
                 PrefabUtility.SaveAsPrefabAsset(root, Prefab);
-                Debug.Log($"Rail Tracer: ragdoll on the character ({n} bones).");
+                Debug.Log($"Rail Tracer: ragdoll on {System.IO.Path.GetFileNameWithoutExtension(Prefab)} ({n} bones).");
             }
             finally { PrefabUtility.UnloadPrefabContents(root); }
         }

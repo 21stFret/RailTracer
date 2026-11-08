@@ -130,6 +130,7 @@ namespace RailTracer
         float flipTime;
         readonly HashSet<Enemy> begging = new HashSet<Enemy>(); // broken enemies who have dropped to their knees
         GameObject characterModel;
+        GameObject guardModel; // Resources/Anim/Guard (the NYC1950 CH01 model, Editor/CharacterPackSetup.cs); else the Mixamo one
         RuntimeAnimatorController enemyController, playerController;
         bool HasModels => characterModel && enemyController && playerController;
         float FigureHeight => playerAnim ? 1.8f * characterScale : 1f; // Mixamo characters are ~1.8 m at scale 1
@@ -238,6 +239,7 @@ namespace RailTracer
         void Start()
         {
             characterModel = Resources.Load<GameObject>("Anim/Character");
+            guardModel = Resources.Load<GameObject>("Anim/Guard");
             enemyController = Resources.Load<RuntimeAnimatorController>("Anim/Enemy");
             takedowns = Resources.Load<TakedownLibrary>("Takedowns");
             baseAmbient = RenderSettings.ambientLight;
@@ -437,7 +439,7 @@ namespace RailTracer
             foreach (var e in c.enemies)
             {
                 views[e].body.enabled = views[e].nose.enabled = false;
-                var a = anims[e] = Character(characterModel, new AnimatorOverrideController(enemyController));
+                var a = anims[e] = Character(guardModel ? guardModel : characterModel, new AnimatorOverrideController(enemyController));
                 a.Play(0, 0, Random.value); // out of sync so they don't bob together
                 AddEyes(a, e.id % 2 == 0 ? enemyEyeBlue : enemyEyeGreen, false);
                 if (a.parameters.Any(p => p.name == "Armed")) armed.Add(a);
@@ -463,12 +465,15 @@ namespace RailTracer
             return a;
         }
 
-        // Colour multiplied onto the meshes whose names contain one of the parts (Mixamo Ch33_Suit, Ch33_Hair...).
+        // Colour multiplied onto the meshes whose names contain one of the parts (Mixamo Ch33_Suit, Ch33_Hair...), or, on
+        // a mesh with several materials (the guard model: one mesh, Chr_Suit, Chr_Hair...), onto the materials named so.
         static void Colour(Animator a, string[] parts, Color col)
         {
+            bool Named(string n) => System.Array.Exists(parts, p => n.IndexOf(p, System.StringComparison.OrdinalIgnoreCase) >= 0);
             foreach (var r in a.GetComponentsInChildren<Renderer>())
-                if (System.Array.Exists(parts, p => r.name.IndexOf(p, System.StringComparison.OrdinalIgnoreCase) >= 0))
-                    foreach (var m in r.materials) m.color = col;
+                if (Named(r.name)) foreach (var m in r.materials) m.color = col;
+                else if (r.sharedMaterials.Length > 1 && r.sharedMaterials.Any(m => m && Named(m.name)))
+                    foreach (var m in r.materials) if (Named(m.name)) m.color = col;
         }
 
         Color SuitColor(Enemy e) => e.state == EnemyState.Broken ? brokenColor : e.tough ? strongSuitColor : weakSuitColor;
@@ -2713,7 +2718,8 @@ namespace RailTracer
         {
             var head = a.GetBoneTransform(HumanBodyBones.Head);
             var lash = a.GetComponentsInChildren<SkinnedMeshRenderer>().FirstOrDefault(r => r.name.IndexOf("Eyelash", System.StringComparison.OrdinalIgnoreCase) >= 0);
-            if (!head || !lash) return null;
+            if (!lash) { Colour(a, new[] { "Chr_Eye" }, iris); return null; } // the guard model has real eyes: colour them
+            if (!head) return null;
             var mesh = new Mesh();
             lash.BakeMesh(mesh, true);
             var lt = lash.transform;
