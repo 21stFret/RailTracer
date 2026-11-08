@@ -157,6 +157,8 @@ namespace RailTracer
             startHp = Mathf.Clamp(hp, 1, MaxHpCarry);
             replay = null;
             StopAllCoroutines();
+            hopShots.Clear();
+            if (hud != null) hud.shownHp = -1;
             Build();
             AutoSave();
         }

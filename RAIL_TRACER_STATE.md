@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 18.56 (8 Nov 2026).
+Last updated: Update 18.57 (8 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -76,6 +76,7 @@ Inspector; the saved scene matches these.
 | 18.54 (CH02, the suited guard; heavies wear it) | Done, not yet imported in Unity (Unity was open, so no batch check; it builds Guard_CH02.prefab on its next script reload). Not yet seen in Play mode |
 | 18.55 (clean fullscreen, floor blood over the new bodies, music log, the track re-encoded) | Done, not yet seen in Play mode. No music (Alex): DarkJazz1.ogg was Opus in an Ogg container, which Unity can't decode ("FSBTool ERROR: Failed decoding audio clip"); re-encoded to Ogg Vorbis |
 | 18.56 (walk on through reaction fire, the gramophone quieter and positional, guard heads fixed) | Done, not yet seen in Play mode. Solver (seed 1): car 1 in 10 turns, 2 in 7, 3 in 7, 4 in 11 (all at full health); car 5 needs a wider search (beam 20): 10 turns at full health |
+| 18.57 (a hop's reaction shots after you're back in; guards visible again) | Done, not yet seen in Play mode. The guard models' import settings still held the centimetre skeleton's bone layout, so their avatars broke (invisible guards): cleared, the prefabs rebuilt by Unity on the next refresh |
 | Next | Full audio pass |
 
 ## The train
@@ -212,7 +213,7 @@ Hover label: name, role, one state line ("Searching · Shaken", "Panicked · Fre
 ## Reaction fire
 
 - From searching and combat enemies with their shot unspent this turn (not on a panicked guard's freeze turn).
-- Triggers on stepping onto a tile they see you on (not the tile you start on), every tile of a leap's arc and its landing, a hop's landing tile, and standing up. Once per enemy per turn. A shot (hit or miss) doesn't stop a walk: you finish the move unless it kills you (so a walk past several ready guns can draw a shot from each; the preview marks each shooter's tile).
+- Triggers on stepping onto a tile they see you on (not the tile you start on), every tile of a leap's arc and its landing, a hop's landing tile (shown once you've climbed back in: the tracers, flash and health drop wait for the hop), and standing up. Once per enemy per turn. A shot (hit or miss) doesn't stop a walk: you finish the move unless it kills you (so a walk past several ready guns can draw a shot from each; the preview marks each shooter's tile).
 - Shots at a leaping player are 25 points lower (85% becomes 60%).
 - Shown on the floor as a faint red tint on every watched tile (Game "Zone Tint", 0.12) and a fine red dashed line (8 dashes a tile) round exactly the red tiles: every edge between a watched tile and one that isn't. The move preview marks the tile in red and highlights the shooter with its hit chance.
 

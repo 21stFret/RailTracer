@@ -1211,7 +1211,12 @@ namespace RailTracer
                     }
                 }
                 else if (leaping) used = c.Do($"leap {hover.Value.x} {hover.Value.y}");
-                else if (hopping) used = c.Do($"hop {hover.Value.x} {hover.Value.y}");
+                else if (hopping)
+                {
+                    int hp0 = c.hp;
+                    used = c.Do($"hop {hover.Value.x} {hover.Value.y}");
+                    if (used && c.shotsFired.Count > 0) { hopShots.AddRange(c.shotsFired); c.shotsFired.Clear(); hud.shownHp = hp0; } // fired as you climb back in
+                }
                 else if (c.Do($"move {hover.Value.x} {hover.Value.y}")) Follow(playerRoute, c.walked);
                 if (used) selected = null;
                 if (paired) StartCoroutine(PairedKill(target, kill.Value)); // the turn only ends when you end it
@@ -2928,6 +2933,8 @@ namespace RailTracer
         // The window hop as it looks: the window slides up, you climb out, walk along the outside of the carriage
         // (hidden while you're out there), the next window slides up, you climb back in; each shuts behind you.
         // The rules already moved you.
+        readonly List<Enemy> hopShots = new List<Enemy>(); // reaction shots drawn by a hop, held until you're back in
+
         IEnumerator HopThrough(Vector3 from, Vector3 to, int row)
         {
             hopRunning = true;
@@ -2947,6 +2954,9 @@ namespace RailTracer
             }
             hopMoving = false;
             yield return Climb(SashNear(to, row), outside, to, () => ShowPlayer(true));
+            foreach (var o in hopShots) ShotEffect(o); // reaction fire at the landing, now you're on the tile
+            if (hopShots.Count > 0) hud.shownHp = -1;
+            hopShots.Clear();
             hopRunning = false;
             busy = wasBusy;
         }
