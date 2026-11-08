@@ -62,6 +62,17 @@ namespace RailTracer
         Material footprintMat;
         float strideLeft;
         bool leftFoot;
+        // The kit floor's velvet aisle runner (1 m wide down the car's middle) stands Runner Height proud of the floor:
+        // characters walking on it stand on it, eased in over its edges, so their feet don't sink in.
+        public float runnerHeight = 0.015f;
+        bool onKit; // this car is the kit carriage (the whitebox has no runner)
+
+        Vector3 OnRunner(Vector3 p)
+        {
+            if (!onKit) return p;
+            float d = Mathf.Abs(p.z + (c.H - 1) / 2f); // from the car's centreline
+            return p + Vector3.up * runnerHeight * Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.62f, 0.38f, d));
+        }
         // The demon aura (Resources/Effects/Demon Aura) round your feet: fades in with the same eased legend as the
         // blood on you, from nothing at auraFrom (of the full legend) to the prefab's own colours at auraFull.
         [Range(0f, 1f)] public float auraFrom = 0.1f, auraFull = 1f;
@@ -397,7 +408,7 @@ namespace RailTracer
                 marks[e] = (route, Line(Color.white, 0.05f));
             }
             gramophone = null; // the old car's went with it
-            bool kitBuilt = useTrainKit && BuildKitCarriage(Resources.Load<TrainKit>("Kit/TrainKit"), c, Map, car.kind, root, true);
+            bool kitBuilt = onKit = useTrainKit && BuildKitCarriage(Resources.Load<TrainKit>("Kit/TrainKit"), c, Map, car.kind, root, true);
             if (!kitBuilt) BuildWhitebox();
             if (sun)
             {
@@ -2690,7 +2701,7 @@ namespace RailTracer
             playerAnim.SetBool("Moving", moving);
             Stride(playerAnim, moving ? speed : 0f, c.crouched);
             var t = playerAnim.transform;
-            t.localPosition = playerShown;
+            t.localPosition = OnRunner(playerShown);
             t.localRotation = Quaternion.LookRotation(playerFacing);
             t.localScale = Vector3.one * characterScale;
             PoseKnife(knife, knifeOffset, knifeTwist, knifeReversed); // live, so Knife Offset / Twist can be tuned in Play mode
@@ -3208,7 +3219,7 @@ namespace RailTracer
             }
             Stride(a, moving ? pace : 0f, false);
             var t = a.transform;
-            t.localPosition = pos;
+            t.localPosition = OnRunner(pos);
             // Face where they're walking; once there, face where the rules say they're looking.
             var step = pos - before;
             t.localRotation = Quaternion.LookRotation(moving && step.sqrMagnitude > 1e-8f ? step : new Vector3(e.facing.x, 0, -e.facing.y));
