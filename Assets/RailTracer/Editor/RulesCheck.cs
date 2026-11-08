@@ -219,7 +219,7 @@ namespace RailTracer
             EnemyTurn(c);
             Check(guard.facing == new Cell(0, -1), "guard turned after 2 turns");
 
-            // Stealth kill: only when the victim can't see you; pulled onto your tile; silent.
+            // Stealth kill: only when the victim can't see you; pulled onto your tile; heard by adjacent tiles only.
             c = new Carriage(new[] { "P.....", "......" }, t, 1);
             var victim = c.Spawn(1, 0, -1, 0, 0);
             Check(c.CantAct(Act.QuietKill, victim) != null, "can't stealth kill someone who sees you");
@@ -228,7 +228,8 @@ namespace RailTracer
             var far = c.Spawn(5, 1, 1, 0, 1);
             Check(c.Perform(Act.QuietKill, victim), "stealth kill from behind");
             Check(c.BodyAt(c.player) != null && c.player == new Cell(0, 0), "pulled onto your tile; you don't move");
-            Check(adjacent.awareness == Awareness.Unaware && adjacent.terror == 0, "silent: even right next to you nobody hears it");
+            Check(adjacent.awareness == Awareness.Searching && adjacent.lastKnown == new Cell(0, 0) && adjacent.terror == t.smallTerror
+                  && adjacent.clue == Clue.Noise && c.IntentText(adjacent) == "Investigate: Noise", "next to you hears it: a small scare, investigates the noise");
             Check(far.awareness == Awareness.Unaware && far.terror == 0, "two tiles away hears nothing");
             Check(c.bodies.Count == 1 && c.stains.Count == 1 && c.stains[0].tiles.Count == 1 && c.IsBloody(c.player), "stealth kill bloodies just your tile");
             Check(c.legend == t.quietLegend && c.movesLeft == t.moveRange && !c.Perform(Act.QuietKill, far), "legend, action spent");

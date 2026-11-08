@@ -54,7 +54,7 @@ namespace RailTracer
         public int searchNoticeRange = 1; // the close look: a searcher spots you this close inside its cone, cover or not
         // Noise radius in tiles (square, so 1 = the 8 tiles round it); any enemy inside hears it. 0 = silent.
         // Gunfire is louder than all of these: it alerts the whole carriage.
-        public int quietNoise = 0, brutalHeard = 8, railHeard = 10, shoutNoise = 6;
+        public int quietNoise = 1, brutalHeard = 8, railHeard = 10, shoutNoise = 6;
         public int shakenAt = 30, panickedAt = 60, brokenAt = 100;
         public int smallTerror = 10, mediumTerror = 25, largeTerror = 45;
         public int bodyFearSmall = 10, bodyFearLarge = 45; // finding a stealth kill / a rail-grab or thrown body (brutal or shot: mediumTerror)
