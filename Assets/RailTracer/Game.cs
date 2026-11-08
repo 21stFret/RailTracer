@@ -130,7 +130,15 @@ namespace RailTracer
         float flipTime;
         readonly HashSet<Enemy> begging = new HashSet<Enemy>(); // broken enemies who have dropped to their knees
         GameObject characterModel;
-        GameObject guardModel; // Resources/Anim/Guard (the NYC1950 CH01 model, Editor/CharacterPackSetup.cs); else the Mixamo one
+        // The guards' models (Editor/CharacterPackSetup.cs): Resources/Anim/Guard (NYC1950 CH01, shirt sleeves) and Guard_CH02
+        // (CH02, a double-breasted suit). Heavies wear CH02, so their red covers a whole suit; guards alternate between
+        // the two. Whichever is missing falls back to the other, then to the Mixamo character.
+        GameObject guardModel, suitModel;
+        GameObject GuardModel(Enemy e)
+        {
+            var pick = e.tough || e.id % 2 == 0 ? suitModel ?? guardModel : guardModel ?? suitModel;
+            return pick ? pick : characterModel;
+        }
         RuntimeAnimatorController enemyController, playerController;
         bool HasModels => characterModel && enemyController && playerController;
         float FigureHeight => playerAnim ? 1.8f * characterScale : 1f; // Mixamo characters are ~1.8 m at scale 1
@@ -240,6 +248,7 @@ namespace RailTracer
         {
             characterModel = Resources.Load<GameObject>("Anim/Character");
             guardModel = Resources.Load<GameObject>("Anim/Guard");
+            suitModel = Resources.Load<GameObject>("Anim/Guard_CH02");
             enemyController = Resources.Load<RuntimeAnimatorController>("Anim/Enemy");
             takedowns = Resources.Load<TakedownLibrary>("Takedowns");
             baseAmbient = RenderSettings.ambientLight;
@@ -439,7 +448,7 @@ namespace RailTracer
             foreach (var e in c.enemies)
             {
                 views[e].body.enabled = views[e].nose.enabled = false;
-                var a = anims[e] = Character(guardModel ? guardModel : characterModel, new AnimatorOverrideController(enemyController));
+                var a = anims[e] = Character(GuardModel(e), new AnimatorOverrideController(enemyController));
                 a.Play(0, 0, Random.value); // out of sync so they don't bob together
                 AddEyes(a, e.id % 2 == 0 ? enemyEyeBlue : enemyEyeGreen, false);
                 if (a.parameters.Any(p => p.name == "Armed")) armed.Add(a);

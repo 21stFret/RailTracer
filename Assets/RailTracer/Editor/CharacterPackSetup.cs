@@ -5,24 +5,28 @@ using UnityEngine;
 
 namespace RailTracer
 {
-    // The NYC1950_CH01 character pack (Assets/NYC1950_CH01/Meshes) in our materials instead of its 4k textures, and the
-    // guards' model.
-    //   SK_CH01_FullClothes.fbx: the rigged one (Unreal mannequin skeleton), exported from Alex's Unreal project and
-    //     split in Blender so every part already has one of our material names (the pack's clothes are atlases shared
-    //     by several parts). Imported Humanoid; Resources/Anim/Guard.prefab is made from it (with a ragdoll), and the
-    //     game dresses the guards in it.
-    //   SM_CH01_*.FBX: the static parts in a T-pose; each dressed by its file (hat, shirt...), not its material name.
-    // Ours: hat Trn_Felt (the props kit's fedora felt), chain and watch Trn_Brass, shirt and vest Chr_Shirt, trousers
-    // Chr_Suit (Fabric.mat copies: our weave, tinted), shoes Chr_Shoes, skin Chr_Skin, beard, brows and hair Chr_Hair,
-    // eyes Chr_Eye, mouth Chr_Mouth (flat, the game's own tones). The static parts' UCX_ collision hulls are dropped.
-    // The Chr_ materials and Guard.prefab are made once (never overwritten: tune them freely; delete to rebuild).
+    // The NYC1950 character packs (Assets/NYC1950_CH01 and _CH02) in our materials instead of their 4k textures, and
+    // the guards' models.
+    //   SK_CH0#_FullClothes.fbx: the rigged ones (Unreal mannequin skeleton), exported from Alex's Unreal projects and
+    //     split in Blender so every part already has one of our material names (the packs' clothes are atlases shared
+    //     by several parts). Imported Humanoid; Resources/Anim/Guard.prefab (CH01: shirt sleeves, chain, watch) and
+    //     Guard_CH02.prefab (CH02: double-breasted suit, tie, sunglasses, ring) are made from them, with ragdolls.
+    //   SM_CH01_*.FBX: CH01's static parts in a T-pose; each dressed by its file (hat, shirt...), not its material name.
+    // Ours: hats Trn_Felt (the props kit's fedora felt), chain, watch and ring Trn_Brass, shirts and vest Chr_Shirt,
+    // trousers and jacket Chr_Suit (Fabric.mat copies: our weave, tinted), shoes Chr_Shoes, glasses Chr_Glasses, skin
+    // Chr_Skin, beards, brows and hair Chr_Hair, eyes Chr_Eye, mouths Chr_Mouth (flat, the game's own tones). The static
+    // parts' UCX_ collision hulls are dropped.
+    // The Chr_ materials and the prefabs are made once (never overwritten: tune them freely; delete to rebuild).
     // Runs before KitModelPostprocessor, so that finds every material by name.
     class CharacterPackSetup : AssetPostprocessor
     {
-        const string Pack = "Assets/NYC1950_CH01/";
+        const string Packs = "Assets/NYC1950_";
         const string Dir = "Assets/RailTracer/Characters/Materials/";
-        const string Rigged = Pack + "Meshes/SK_CH01_FullClothes.fbx";
-        const string Guard = "Assets/RailTracer/Resources/Anim/Guard.prefab";
+        static readonly (string model, string prefab)[] Rigged =
+        {
+            ("Assets/NYC1950_CH01/Meshes/SK_CH01_FullClothes.fbx", "Assets/RailTracer/Resources/Anim/Guard.prefab"),
+            ("Assets/NYC1950_CH02/Meshes/SK_CH02_FullClothes.fbx", "Assets/RailTracer/Resources/Anim/Guard_CH02.prefab"),
+        };
 
         public override int GetPostprocessOrder() => -10;
 
@@ -32,7 +36,8 @@ namespace RailTracer
         [MenuItem("Rail Tracer/Set Up Character Pack")]
         static void Make()
         {
-            if (!AssetDatabase.IsValidFolder(Pack.TrimEnd('/'))) return;
+            var packs = new[] { "Assets/NYC1950_CH01", "Assets/NYC1950_CH02" }.Where(AssetDatabase.IsValidFolder).ToArray();
+            if (packs.Length == 0) return;
             var lit = Shader.Find("Universal Render Pipeline/Lit");
             var fabric = AssetDatabase.LoadAssetAtPath<Material>("Assets/RailTracer/Resources/Materials/Fabric.mat");
             if (!lit || !fabric) return;
@@ -54,21 +59,22 @@ namespace RailTracer
             Mat("Chr_Eye", flat, new Color(0.08f, 0.05f, 0.03f), 0.85f);
             Mat("Chr_Mouth", flat, new Color(0.45f, 0.18f, 0.17f), 0.5f);
             Mat("Chr_Shoes", flat, new Color(0.03f, 0.03f, 0.03f), 0.55f);  // Game shoesColor, polished
+            Mat("Chr_Glasses", flat, new Color(0.02f, 0.02f, 0.025f), 0.92f); // dark glasses, frames and lenses
             Mat("Chr_Shirt", fabric, new Color(0.85f, 0.82f, 0.74f), 0.12f);
             Mat("Chr_Suit", fabric, new Color(0.15f, 0.15f, 0.17f), 0.12f);
             Object.DestroyImmediate(flat);
             if (made)
             {
                 AssetDatabase.SaveAssets();
-                foreach (var g in AssetDatabase.FindAssets("t:Model", new[] { Pack.TrimEnd('/') }))
+                foreach (var g in AssetDatabase.FindAssets("t:Model", packs))
                     AssetDatabase.ImportAsset(AssetDatabase.GUIDToAssetPath(g), ImportAssetOptions.ForceUpdate);
                 Debug.Log("Rail Tracer: character pack materials made in " + Dir);
             }
-            MakeGuard();
+            foreach (var (model, prefab) in Rigged) MakeGuard(model, prefab);
         }
 
-        // Resources/Anim/Guard.prefab from the rigged model (the game owns position: no root motion), with a ragdoll.
-        static void MakeGuard()
+        // A guard prefab from a rigged model (the game owns position: no root motion), with a ragdoll.
+        static void MakeGuard(string Rigged, string Guard)
         {
             if (File.Exists(Guard)) return;
             var model = AssetDatabase.LoadAssetAtPath<GameObject>(Rigged);
@@ -89,6 +95,12 @@ namespace RailTracer
             Debug.Log("CH01 CHECK kit materials: " + string.Join(", ", new[] { "Trn_Shellac", "Trn_Label", "Trn_Felt" }
                 .Select(n => n + (AssetDatabase.FindAssets(n + " t:Material").Length > 0 ? " ok" : " MISSING"))));
             Make();
+            foreach (var (Rigged, Guard) in CharacterPackSetup.Rigged) Check(Rigged, Guard);
+        }
+
+        static void Check(string Rigged, string Guard)
+        {
+            Debug.Log("CH01 CHECK ---- " + Path.GetFileName(Rigged));
             var model = AssetDatabase.LoadAssetAtPath<GameObject>(Rigged);
             var a = model ? model.GetComponent<Animator>() : null;
             Debug.Log($"CH01 CHECK model={(bool)model} avatar={(a && a.avatar ? a.avatar.name : "none")} human={(a && a.avatar && a.avatar.isHuman)} valid={(a && a.avatar && a.avatar.isValid)}");
@@ -108,7 +120,7 @@ namespace RailTracer
 
         void OnPreprocessModel()
         {
-            if (assetPath != Rigged) return;
+            if (!Rigged.Any(r => r.model == assetPath)) return;
             var mi = (ModelImporter)assetImporter;
             mi.animationType = ModelImporterAnimationType.Human;
             mi.avatarSetup = ModelImporterAvatarSetup.CreateFromThisModel;
@@ -134,7 +146,7 @@ namespace RailTracer
 
         void OnPostprocessModel(GameObject root)
         {
-            if (!assetPath.StartsWith(Pack)) return;
+            if (!assetPath.StartsWith(Packs)) return;
             foreach (var t in root.GetComponentsInChildren<Transform>(true).Where(t => t.name.StartsWith("UCX_")).ToList())
                 Object.DestroyImmediate(t.gameObject, true); // Unreal collision hulls
             string file = Path.GetFileNameWithoutExtension(assetPath);

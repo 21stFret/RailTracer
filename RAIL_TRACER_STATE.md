@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 18.53 (8 Nov 2026).
+Last updated: Update 18.54 (8 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -73,6 +73,7 @@ Inspector; the saved scene matches these.
 | 18.51 (single seats get clutter, endless seat minimum, gramophone by the wall) | Done, not yet seen in Play mode. Solver (seed 1) unchanged: car 2 in 7 turns, car 5 in 24 (10 health left) |
 | 18.52 (NYC1950_CH01 pack in our materials) | Done, not yet imported in Unity: Editor/CharacterPackMaterials.cs. Not in the game yet: static T-pose meshes, no skeleton |
 | 18.53 (the guards are the NYC1950 CH01 model) | Done, checked in Unity batch mode (valid Humanoid, bones mapped, materials, ragdoll), not yet seen in Play mode. Watch: takedown alignment, the gun in the hand, eye colours, suit tints on the trousers |
+| 18.54 (CH02, the suited guard; heavies wear it) | Done, not yet imported in Unity (Unity was open, so no batch check; it builds Guard_CH02.prefab on its next script reload). Not yet seen in Play mode |
 | Next | Full audio pass |
 
 ## The train
@@ -261,11 +262,12 @@ In the game too, finisher blood now comes from the victim's chest bone (where th
 ## Characters
 
 - **The conductor (you):** the Mixamo model (Resources/Anim/Character), as before.
-- **The guards:** the NYC1950 CH01 model (Resources/Anim/Guard.prefab, made by `Editor/CharacterPackSetup.cs`, with an 11-bone ragdoll from RagdollSetup): a 1950s man in a fedora, cream shirt, trousers and shoes, a brass chain and watch. Falls back to the Mixamo model if the prefab is missing.
-  - Source: Alex's Unreal project (NYC_Character01, UE 5.6), SK_CH01_FullClothes on the Unreal mannequin skeleton (67 bones), exported by a headless editor run (Python), then split in Blender so each face carries one of our material names (the pack's clothes materials are atlases shared by several parts; each face takes the nearest static part's material). Saved as `Assets/NYC1950_CH01/Meshes/SK_CH01_FullClothes.fbx`, imported Humanoid (hips = pelvis, toes = ball). 26k faces.
+- **The guards:** two NYC1950 models (made by `Editor/CharacterPackSetup.cs`, each with an 11-bone ragdoll from RagdollSetup): **CH01** (Resources/Anim/Guard.prefab: fedora, cream shirt sleeves, trousers, a brass chain and watch) and **CH02** (Guard_CH02.prefab: fedora, double-breasted suit, cream shirt and tie, dark glasses, a brass ring). **Heavies wear CH02**, so their red covers the whole suit; guards alternate by id (even CH02, odd CH01). A missing model falls back to the other, then to the Mixamo character.
+  - CH02 came from Alex's UE 4.22 project (NYC_Character02), exported from a copy (UE 5.6 upgrades it in memory; the Downloads copy untouched). Its split is by section: each clothes section of the skinned mesh (the suit section holds jacket and trousers; another shoes, shirt with tie and ring; hat; glasses) takes the nearest static part among the parts that make it up, so the jacket can't take the shirt under it. New material Chr_Glasses (near black, glossy). `Assets/NYC1950_CH02/Meshes/SK_CH02_FullClothes.fbx`, gitignored like CH01.
+  - CH01 source: Alex's Unreal project (NYC_Character01, UE 5.6), SK_CH01_FullClothes on the Unreal mannequin skeleton (67 bones), exported by a headless editor run (Python), then split in Blender so each face carries one of our material names (the pack's clothes materials are atlases shared by several parts; each face takes the nearest static part's material). Saved as `Assets/NYC1950_CH01/Meshes/SK_CH01_FullClothes.fbx`, imported Humanoid (hips = pelvis, toes = ball). 26k faces.
   - The pack (`Assets/NYC1950_CH01`) is gitignored like the other store packs; Guard.prefab needs it.
   - **Our materials, not its 4k textures:** hat Trn_Felt, chain and watch Trn_Brass, shirt and vest Chr_Shirt (cream) and trousers Chr_Suit (charcoal), both copies of Fabric.mat's weave; flat Chr_Skin, Chr_Hair, Chr_Eye, Chr_Mouth, Chr_Shoes in the game's own tones. Chr_ materials in `Characters/Materials`, made once, never overwritten. The beard and brows are alpha cards, so without their texture they read as blocky stubble up close.
-  - **Type colours:** the suit tint (black guards, red heavies, grey broken) goes on the trousers (Chr_Suit); hair and shoes take the game's hair and shoe colours; the guards' blue / green eyes colour the model's own eyes (Chr_Eye), since it has no Mixamo lash mesh to place iris discs from. Game.Colour now matches material names too on a mesh with several materials.
+  - **Type colours:** the suit tint (black guards, red heavies, grey broken) goes on Chr_Suit (CH01's trousers, CH02's jacket and trousers); hair and shoes take the game's hair and shoe colours; the guards' blue / green eyes colour the model's own eyes (Chr_Eye), since it has no Mixamo lash mesh to place iris discs from. Game.Colour now matches material names too on a mesh with several materials.
 - The static T-pose parts (SM_CH01_*) are dressed the same way (by file) but unused.
 - **Batch check:** `Unity -batchmode -projectPath . -executeMethod RailTracer.CharacterPackSetup.Check -quit` sets up every kit's materials, the pack and the guard, and logs the avatar, bones, materials and ragdoll.
 

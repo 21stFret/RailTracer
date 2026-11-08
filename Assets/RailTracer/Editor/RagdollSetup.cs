@@ -11,7 +11,8 @@ namespace RailTracer
     // after each script reload until the prefab has them; delete the bones' Rigidbodies to rebuild.
     static class RagdollSetup
     {
-        static readonly string[] Prefabs = { "Assets/RailTracer/Resources/Anim/Character.prefab", "Assets/RailTracer/Resources/Anim/Guard.prefab" };
+        static readonly string[] Prefabs = { "Assets/RailTracer/Resources/Anim/Character.prefab", "Assets/RailTracer/Resources/Anim/Guard.prefab",
+            "Assets/RailTracer/Resources/Anim/Guard_CH02.prefab" };
         const float Mass = 70f;
 
         [InitializeOnLoadMethod]
