@@ -812,16 +812,17 @@ namespace RailTracer
             if (path == null) return false;
             var watching = enemies.FindAll(WillReact); // only enemies already aware when you set off
             walked = new List<Cell>();
-            // Every tile walked counts; reaction fire stops you where it happens.
+            // Every tile walked counts. Reaction fire doesn't stop you: shot (or missed) and still standing, you finish the
+            // move; only a shot that kills you ends it there.
             foreach (var tile in path)
             {
                 var left = player;
                 player = tile;
                 walked.Add(tile);
                 movesLeft -= MoveCost;
-                bool shot = StepInto(tile, watching, crouched);
+                StepInto(tile, watching, crouched);
                 if (held != null) DragTo(left);
-                if (shot) { Log("Your move is cut short."); break; }
+                if (hp <= 0) break;
             }
             foreach (var e in enemies)
                 if (e.InPlay && e.lastKnown.HasValue && path.Contains(e.lastKnown.Value)) Face(e, e.lastKnown.Value);

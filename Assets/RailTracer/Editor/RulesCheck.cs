@@ -157,10 +157,9 @@ namespace RailTracer
             e.lastKnown = new Cell(3, 0);
             Check(c.WillReact(e), "reaction ready");
             c.Move(new Cell(4, 0));
-            Check(c.player == new Cell(1, 0) && c.hp == t.maxHp - t.shotDamage, "reaction interrupts move");
+            Check(c.player == new Cell(4, 0), "shot and still standing: the move carries on");
+            Check(c.hp == t.maxHp - t.shotDamage, "one reaction per turn, though every tile of the walk is watched");
             Check(e.awareness == Awareness.Combat && c.Decide(e) == Intent.Shoot, "whoever fires a reaction shot is in combat, not still searching");
-            c.Move(new Cell(4, 0));
-            Check(c.player == new Cell(4, 0) && c.hp == t.maxHp - t.shotDamage, "one reaction per turn");
             Check(!c.WillReact(c.Spawn(0, 1, 1, 0, 0)), "unaware: no reaction fire");
             // Stepping off a watched tile onto a hidden one draws nothing: the shot would miss as you go.
             c = new Carriage(new[] { ".....", ".L...", "....." }, t, 1);

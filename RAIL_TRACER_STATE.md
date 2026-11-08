@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 18.55 (8 Nov 2026).
+Last updated: Update 18.56 (8 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -75,6 +75,7 @@ Inspector; the saved scene matches these.
 | 18.53 (the guards are the NYC1950 CH01 model) | Done, checked in Unity batch mode (valid Humanoid, bones mapped, materials, ragdoll), not yet seen in Play mode. Watch: takedown alignment, the gun in the hand, eye colours, suit tints on the trousers |
 | 18.54 (CH02, the suited guard; heavies wear it) | Done, not yet imported in Unity (Unity was open, so no batch check; it builds Guard_CH02.prefab on its next script reload). Not yet seen in Play mode |
 | 18.55 (clean fullscreen, floor blood over the new bodies, music log, the track re-encoded) | Done, not yet seen in Play mode. No music (Alex): DarkJazz1.ogg was Opus in an Ogg container, which Unity can't decode ("FSBTool ERROR: Failed decoding audio clip"); re-encoded to Ogg Vorbis |
+| 18.56 (walk on through reaction fire, the gramophone quieter and positional, guard heads fixed) | Done, not yet seen in Play mode. Solver (seed 1): car 1 in 10 turns, 2 in 7, 3 in 7, 4 in 11 (all at full health); car 5 needs a wider search (beam 20): 10 turns at full health |
 | Next | Full audio pass |
 
 ## The train
@@ -211,7 +212,7 @@ Hover label: name, role, one state line ("Searching · Shaken", "Panicked · Fre
 ## Reaction fire
 
 - From searching and combat enemies with their shot unspent this turn (not on a panicked guard's freeze turn).
-- Triggers on stepping onto a tile they see you on (not the tile you start on), every tile of a leap's arc and its landing, a hop's landing tile, and standing up. Once per enemy per turn; a shot ends a walk there.
+- Triggers on stepping onto a tile they see you on (not the tile you start on), every tile of a leap's arc and its landing, a hop's landing tile, and standing up. Once per enemy per turn. A shot (hit or miss) doesn't stop a walk: you finish the move unless it kills you (so a walk past several ready guns can draw a shot from each; the preview marks each shooter's tile).
 - Shots at a leaping player are 25 points lower (85% becomes 60%).
 - Shown on the floor as a faint red tint on every watched tile (Game "Zone Tint", 0.12) and a fine red dashed line (8 dashes a tile) round exactly the red tiles: every edge between a watched tile and one that isn't. The move preview marks the tile in red and highlights the shooter with its hit chance.
 
@@ -257,7 +258,8 @@ In the game too, finisher blood now comes from the victim's chest bone (where th
 - **Menus:** fades in at start-up (Game "Music Fade", 2.5 s, to "Music Volume" 0.6) as a flat 2D track, and plays over every menu screen.
 - **One in every car** (the walk-through car too, from car 1's map; generated and endless cars by TrainGen). In passenger cars it takes the aisle place of a seat bank (car 1: (8, 1); TrainGen, after everything else is rolled: half the time a random bank's aisle place, otherwise alone on a window-row floor tile against the side wall, plain wall behind it, never in a booth, the aisle or on a guard's tile; car 2 has it by the wall at (22, 4), car 5 in a bank at (20, 3)) and the window place gets **Seat_Single** (`railtracer_train_kit.py`: one place of Seat_Double, 1 x 1 x 1 m; any window seat without its aisle partner gets one). Its back faces the nearer side wall. Baggage hold: against the wall at (5, 0). Single seats get clutter too (ashtrays and newspapers on their arms, briefcases and newspapers on their one cushion), but no briefcase on the floor at their aisle end (the gramophone's there).
 - **The gramophone:** Prop_Gramophone (`Assets/KitScripts/railtracer_gramophone.py`, `Train Assets/Gramophone`): a dark-wood record cabinet (0.62 x 0.70 x 0.58 m, panelled doors, brass knobs) with a brass-horned gramophone on top (1.39 m to the horn's lip), back to the wall; the Record child (shellac disc, red label with cream marks, spindle) turns at 78 rpm. New materials Trn_Shellac, Trn_Label. Dining car: against the wall at (19, 0) just short of the bar. 'G' tile: half cover, seat rules.
-- **Into a car:** the same source moves to the record and slides from 2D to 3D over the dive (1.1 s), so the menu music carries on from the gramophone at the same moment of the track (linear falloff, Game "Music Near" 2 m, "Music Far" 30 m).
+- **Into a car:** the same source moves to the record and slides from 2D to 3D over the dive (1.1 s), so the menu music carries on from the gramophone at the same moment of the track, and changes on the way: far quieter (Game "Music In Car", 25% of the menu level even right beside it), its top end taken off (a low-pass filter down to Game "Music Muffle", 3200 Hz: the gramophone's tinny sound), and heard from where it stands: full within 1.5 m, easing down to Game "Music Far Level" (25%) at "Music Far" (30 m), so it's soft but there all through the carriage.
+- **The listener** (Ears): the camera in the menus; in play, at head height (Game "Ears Height", 1.1 m) over what the camera follows (you), turned like the camera so left and right match the screen.
 - **Only Shove to Table onto the gramophone stops it** (a brutal kill beside it, when the takedown library picks the cover finisher and the gramophone is the cover it uses; other kills beside it don't): "The needle skids off the record. The music stops." The view sends the "needle" command, so it's in the save history and a resumed save stays silent; R restarts it. The pitch, volume and the record's spin run down together (Game "Music Wind Down", 1.6 s). Back in the menus the music plays again.
 - **A car without a gramophone** (none at the moment: TrainGen always finds a spot): the music fades out over 2.5 s while you play and back in at the menus.
 
@@ -268,6 +270,7 @@ In the game too, finisher blood now comes from the victim's chest bone (where th
   - CH02 came from Alex's UE 4.22 project (NYC_Character02), exported from a copy (UE 5.6 upgrades it in memory; the Downloads copy untouched). Its split is by section: each clothes section of the skinned mesh (the suit section holds jacket and trousers; another shoes, shirt with tie and ring; hat; glasses) takes the nearest static part among the parts that make it up, so the jacket can't take the shirt under it. New material Chr_Glasses (near black, glossy). `Assets/NYC1950_CH02/Meshes/SK_CH02_FullClothes.fbx`, gitignored like CH01.
   - CH01 source: Alex's Unreal project (NYC_Character01, UE 5.6), SK_CH01_FullClothes on the Unreal mannequin skeleton (67 bones), exported by a headless editor run (Python), then split in Blender so each face carries one of our material names (the pack's clothes materials are atlases shared by several parts; each face takes the nearest static part's material). Saved as `Assets/NYC1950_CH01/Meshes/SK_CH01_FullClothes.fbx`, imported Humanoid (hips = pelvis, toes = ball). 26k faces.
   - The pack (`Assets/NYC1950_CH01`) is gitignored like the other store packs; Guard.prefab needs it.
+  - Both skeletons are in metres at scale 1 (the Unreal export came in centimetres under a 0.01 root scale; Unity's Ragdoll Builder then made the head's sphere under a millimetre across in that space, so the heads glitched as they died). The guard prefabs are rebuilt with fresh ragdolls.
   - **Our materials, not its 4k textures:** hat Trn_Felt, chain and watch Trn_Brass, shirt and vest Chr_Shirt (cream) and trousers Chr_Suit (charcoal), both copies of Fabric.mat's weave; flat Chr_Skin, Chr_Hair, Chr_Eye, Chr_Mouth, Chr_Shoes in the game's own tones. Chr_ materials in `Characters/Materials`, made once, never overwritten. The beard and brows are alpha cards, so without their texture they read as blocky stubble up close.
   - **Type colours:** the suit tint (black guards, red heavies, grey broken) goes on Chr_Suit (CH01's trousers, CH02's jacket and trousers); hair and shoes take the game's hair and shoe colours; the guards' blue / green eyes colour the model's own eyes (Chr_Eye), since it has no Mixamo lash mesh to place iris discs from. Game.Colour now matches material names too on a mesh with several materials.
 - The static T-pose parts (SM_CH01_*) are dressed the same way (by file) but unused.
