@@ -99,13 +99,17 @@ namespace RailTracer
             }
         }
 
-        TicketRow MakeTicketRow(Transform parent)
+        // sketch: the sketch HUD's top-right row (Update 19): 24 x 34, 5 px apart, alternately tilted +-1.5 degrees.
+        // The win card keeps the classic row.
+        TicketRow MakeTicketRow(Transform parent, bool sketch = false)
         {
-            var row = new TicketRow { rt = Row("Tickets", parent, 6f) };
+            var row = new TicketRow { rt = Row("Tickets", parent, sketch ? 5f : 6f) };
             row.make = p =>
             {
-                var t = Rect("Ticket", p, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(22, 34));
-                Size(t, 22, 34);
+                float w = sketch ? 24f : 22f;
+                var t = Rect("Ticket", p, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(w, 34));
+                Size(t, w, 34);
+                if (sketch) t.localRotation = Quaternion.Euler(0f, 0f, p.childCount % 2 == 1 ? -1.5f : 1.5f); // this one is child childCount - 1
                 Shape(t, Bone, 0f);
                 Shape(t, Black, 2f);
                 // Live: a dashed tear line across the middle.
@@ -147,15 +151,16 @@ namespace RailTracer
 
         void BuildTurnCount(Transform root)
         {
-            turnBox = Rect("Turn Count", root, new Vector2(0f, 1f), new Vector2(32, -26), Vector2.zero);
-            var col = Column(turnBox, new RectOffset(0, 0, 0, 0), 2f);
+            turnBox = Rect("Turn Count", root, new Vector2(0f, 1f), new Vector2(30, -22), Vector2.zero);
+            turnBox.localRotation = Quaternion.Euler(0f, 0f, -1.5f);
+            var col = Column(turnBox, new RectOffset(0, 0, 0, 0), 0f);
             col.childAlignment = TextAnchor.UpperLeft;
             Fit(turnBox);
-            turnNum = Text(turnBox, title, 26, TextAlignmentOptions.TopLeft, Vector2.zero, Vector2.zero);
+            turnNum = Text(turnBox, sketchBold, 34, TextAlignmentOptions.TopLeft, Vector2.zero, Vector2.zero);
             turnNum.fontStyle = FontStyles.UpperCase;
             turnNum.color = Bone;
             Glow(turnNum);
-            turnTarget = Label(turnBox, "", 13, LockedText, 2f);
+            turnTarget = SketchLabel(turnBox, "", 15, LockedText);
             Glow(turnTarget);
         }
 
@@ -172,18 +177,19 @@ namespace RailTracer
 
         void BuildTickets(Transform root)
         {
-            ticketBox = Rect("Ticket Counter", root, Vector2.one, new Vector2(-32, -26), Vector2.zero);
+            ticketBox = Rect("Ticket Counter", root, Vector2.one, new Vector2(-30, -22), Vector2.zero);
+            ticketBox.localRotation = Quaternion.Euler(0f, 0f, 1f);
             var col = Column(ticketBox, new RectOffset(0, 0, 0, 0), 6f);
             col.childAlignment = TextAnchor.UpperRight;
             Fit(ticketBox);
-            tickets = MakeTicketRow(ticketBox);
+            tickets = MakeTicketRow(ticketBox, sketch: true);
             tickets.rt.GetComponent<HorizontalLayoutGroup>().childAlignment = TextAnchor.MiddleRight;
             var count = Row("Count", ticketBox, 8f);
             count.GetComponent<HorizontalLayoutGroup>().childAlignment = TextAnchor.LowerRight;
-            ticketCount = Text(count, title, 26, TextAlignmentOptions.BottomRight, Vector2.zero, Vector2.zero);
+            ticketCount = Text(count, sketchBold, 30, TextAlignmentOptions.BottomRight, Vector2.zero, Vector2.zero);
             ticketCount.color = Bone;
             Glow(ticketCount);
-            var left = Label(count, "Tickets left", 13, LockedText, 2f);
+            var left = SketchLabel(count, "Tickets left", 16, Bone);
             left.margin = new Vector4(0, 0, 0, 3);
             Glow(left);
         }

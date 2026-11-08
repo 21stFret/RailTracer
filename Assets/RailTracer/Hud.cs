@@ -78,6 +78,98 @@ namespace RailTracer
             vh.AddTriangle(i, i + 1, i + 2);
             vh.AddTriangle(i + 2, i + 3, i);
         }
+
+        // A convex outline, fanned from its first point.
+        protected static void Fan(VertexHelper vh, Color32 col, IList<Vector2> pts)
+        {
+            int i0 = vh.currentVertCount;
+            var v = UIVertex.simpleVert;
+            v.color = col;
+            foreach (var p in pts) { v.position = p; vh.AddVert(v); }
+            for (int i = 1; i + 1 < pts.Count; i++) vh.AddTriangle(i0, i0 + i, i0 + i + 1);
+        }
+    }
+
+    // The sketch HUD's tile (Update 19): the rect with `cut` px corners cut off, drawn up to `fill` of its height from
+    // the bottom (the fill rising in a locked or not-yet-Bloodied tile).
+    public class Octagon : UIShape
+    {
+        public float cut = 10f;
+        float fillTo = 1f;
+        public float fill { get => fillTo; set { if (value != fillTo) { fillTo = value; Redraw(); } } }
+
+        public static Vector2[] Points(Rect r, float cut) => new[]
+        {
+            new Vector2(r.xMin + cut, r.yMin), new Vector2(r.xMax - cut, r.yMin), new Vector2(r.xMax, r.yMin + cut), new Vector2(r.xMax, r.yMax - cut),
+            new Vector2(r.xMax - cut, r.yMax), new Vector2(r.xMin + cut, r.yMax), new Vector2(r.xMin, r.yMax - cut), new Vector2(r.xMin, r.yMin + cut),
+        };
+
+        protected override void Build(VertexHelper vh, Rect r, Color32 col)
+        {
+            if (fillTo <= 0f) return;
+            float top = r.yMin + Mathf.Clamp01(fillTo) * r.height;
+            var o = Points(r, cut);
+            var pts = new List<Vector2>();
+            for (int i = 0; i < o.Length; i++) // the outline cut off at `top`
+            {
+                Vector2 a = o[i], b = o[(i + 1) % o.Length];
+                if (a.y <= top) pts.Add(a);
+                if ((a.y < top) != (b.y < top)) pts.Add(Vector2.Lerp(a, b, (top - a.y) / (b.y - a.y)));
+            }
+            Fan(vh, col, pts);
+        }
+    }
+
+    // The tile's frame: `thickness` px inside the octagon's edge, solid (gap 0) or dashed (`dash` on, `gap` off).
+    public class OctFrame : UIShape
+    {
+        public float cut = 10f, thickness = 3f, dash = 7f;
+        float gapLen;
+        public float gap { get => gapLen; set { if (value != gapLen) { gapLen = value; Redraw(); } } }
+        const float Tan22 = 0.4142f; // an octagon inset by d loses d * tan 22.5 of each corner cut
+
+        static Rect Inset(Rect r, float d) => new Rect(r.xMin + d, r.yMin + d, r.width - 2f * d, r.height - 2f * d);
+
+        protected override void Build(VertexHelper vh, Rect r, Color32 col)
+        {
+            if (gapLen <= 0f)
+            {
+                var outer = Octagon.Points(r, cut);
+                var inner = Octagon.Points(Inset(r, thickness), Mathf.Max(0f, cut - thickness * Tan22));
+                for (int i = 0; i < 8; i++) Fan(vh, col, new[] { outer[i], outer[(i + 1) % 8], inner[(i + 1) % 8], inner[i] });
+                return;
+            }
+            float h = thickness / 2f, along = 0f;
+            var p = Octagon.Points(Inset(r, h), Mathf.Max(0f, cut - h * Tan22));
+            for (int i = 0; i < 8; i++)
+            {
+                Vector2 a = p[i], b = p[(i + 1) % 8];
+                float len = Vector2.Distance(a, b);
+                if (len < 0.01f) continue;
+                var dir = (b - a) / len;
+                var n = new Vector2(-dir.y, dir.x) * h;
+                for (float s = 0f; s < len;)
+                {
+                    float phase = along % (dash + gapLen);
+                    bool on = phase < dash;
+                    float e = Mathf.Min(len, s + Mathf.Max(0.01f, on ? dash - phase : dash + gapLen - phase));
+                    if (on) Fan(vh, col, new[] { a + dir * s - n, a + dir * e - n, a + dir * e + n, a + dir * s + n });
+                    along += e - s;
+                    s = e;
+                }
+            }
+        }
+    }
+
+    // A card slanted `slant` px: its top edge shifted right, its bottom left (the tooltip).
+    public class Slant : UIShape
+    {
+        public float slant = 14f;
+
+        protected override void Build(VertexHelper vh, Rect r, Color32 col) => Fan(vh, col, new[]
+        {
+            new Vector2(r.xMin, r.yMin), new Vector2(r.xMax - slant, r.yMin), new Vector2(r.xMax, r.yMax), new Vector2(r.xMin + slant, r.yMax),
+        });
     }
 
     // A dashed border round the rect (the "no target" skill box; one long dash per side makes a solid frame).
@@ -111,13 +203,19 @@ namespace RailTracer
         static Color Hex(string h) { ColorUtility.TryParseHtmlString("#" + h, out var c); return c; }
         static Color Alpha(Color c, float a) => new Color(c.r, c.g, c.b, a);
         static readonly Color Black = Hex("0B0809"), Bone = Hex("F2EFEA"), Blood = Hex("C8102E"), Bright = Hex("E0202F"),
-            LockedBox = Hex("3A3536"), LockedText = Hex("B4AEAF"), Grey = Hex("8A8A8A"), Burgundy = Hex("6E1A26"), NotchOff = Hex("6A6264");
-        const float BarWidth = 774f, BarHeight = 26f, Taper = 0.28f, Left = 48f;
-        // Bottom up from 36: health row (24), 6, notch labels (18), 4, legend bar (26), 14, boxes (88), 10, moves line, 14, tooltip.
-        const float HealthY = 36f, LabelsY = HealthY + 24f + 6f, BarY = LabelsY + 18f + 4f, BoxY = BarY + BarHeight + 14f,
-            MovesY = BoxY + 88f + 10f, TipY = MovesY + 16f + 14f;
+            LockedBox = Hex("3A3536"), LockedText = Hex("B4AEAF"), Grey = Hex("8A8A8A"), Burgundy = Hex("6E1A26");
+        // The sketch HUD (Update 19): locked ink, the tooltip's locked grey and muted Bloodied line, bar backs, notches ahead.
+        static readonly Color LockedInk = Hex("9A9093"), TipGrey = Hex("8A8285"), TipBurgundy = Hex("7A1424"), BarBack = Hex("1A1416"), NotchAhead = Hex("6E6466");
+        const float BarWidth = 652f, BarHeight = 20f, Taper = 0.3f, HpWidth = 318f, HpHeight = 18f, HpTaper = 0.6f, Left = 46f, TileLeft = 42f;
+        const float TileW = 80f, TileH = 76f, TileGap = 6f;
+        // Per tile, slots 1-8: fixed, so they read as hand-placed cards.
+        static readonly float[] TileTilt = { -1.2f, 0.8f, -0.5f, 1f, -0.8f, 0.6f, -1f, 0.7f };
+        // Bottom up from 14, 8 between rows: health row (28), notch labels (18), 2, legend bar (20), 12, tiles (76 and
+        // room to lift: 86), status row (18), 12, tooltip.
+        const float HealthY = 14f, LabelsY = HealthY + 28f + 8f, BarY = LabelsY + 18f + 2f, BoxY = BarY + BarHeight + 12f,
+            MovesY = BoxY + 86f + 8f, TipY = MovesY + 18f + 12f;
 
-        class Box { public RectTransform rt; public Image border, bg, fill, cdTint, cdDark; public DashedFrame dashed; public TMP_Text key, name, wait; }
+        class Box { public RectTransform rt; public Octagon card, fill, cd; public OctFrame frame; public Image icon; public TMP_Text key, name, wait; }
 
         readonly Box[] boxes = new Box[8];
         SkillDef[] skills;
@@ -132,8 +230,8 @@ namespace RailTracer
         Image[] notches, movePips;
         TMP_Text[] notchLabels;
         TMP_Text legendNum, hpNum, hpWord, log;
-        RectTransform bar, tip;
-        Image tipBorder;
+        RectTransform bar, tip, legendGroup;
+        Slant tipBorder;
         TMP_Text tipName, tipStatus, tipDesc, tipUp;
         Image actionPip, stanceIcon, sightIcon;
         TMP_Text stanceWord, sightWord;
@@ -150,7 +248,7 @@ namespace RailTracer
         public void SetEndTurn(float held, bool ready)
         {
             endFill.fillAmount = Mathf.Clamp01(held);
-            endWord.color = ready ? (held > 0f ? Bone : Grey) : Alpha(Grey, 0.4f);
+            endWord.color = ready ? (held > 0f ? Bone : LockedText) : Alpha(LockedText, 0.4f);
         }
         RectTransform banner;
         TMP_Text bannerName, bannerHint;
@@ -161,7 +259,7 @@ namespace RailTracer
         Image cardHoldFill;
         float cardShown, cardAuto, cardFading = -1f;
         bool cardDismissable;
-        TMP_FontAsset title, body;
+        TMP_FontAsset title, body, sketch, sketchBold; // sketch: Kalam, for the sketch-style HUD (not menus, cards, chips, log)
         Sprite white;
         readonly Dictionary<string, Sprite> icons = new Dictionary<string, Sprite>();
 
@@ -220,6 +318,9 @@ namespace RailTracer
             // Anton / Barlow Condensed once imported as TextMeshPro assets (Resources/Fonts), else TMP's default.
             title = Resources.Load<TMP_FontAsset>("Fonts/Anton SDF") ?? TMP_Settings.defaultFontAsset;
             body = Resources.Load<TMP_FontAsset>("Fonts/BarlowCondensed SDF") ?? TMP_Settings.defaultFontAsset;
+            // Kalam (Editor/FontSetup builds it from Fonts/Kalam-*.ttf), else the old fonts.
+            sketch = Resources.Load<TMP_FontAsset>("Fonts/Kalam SDF") ?? body;
+            sketchBold = Resources.Load<TMP_FontAsset>("Fonts/Kalam-Bold SDF") ?? title;
             white = Sprite.Create(Texture2D.whiteTexture, new Rect(0, 0, 4, 4), new Vector2(0.5f, 0.5f)); // Filled images need a sprite
             foreach (var s in Resources.LoadAll<Sprite>("UI/Icons")) icons[s.name] = s;
 
@@ -235,107 +336,102 @@ namespace RailTracer
             tagRoot.SetParent(root, false);
             Stretch(tagRoot, 0f);
 
-            // ---- Health: a tapered white bar, the number and the word ----
-            var hp = hpBar = Rect("Health Bar", root, Vector2.zero, new Vector2(Left, HealthY + 4f), new Vector2(300, 16));
-            Img(hp, Hex("2A2224"), 0f).gameObject.AddComponent<UITaper>().start = 0.55f;
-            hpFill = Img(hp, Bone, 0f);
-            Filled(hpFill, Image.FillMethod.Horizontal, (int)Image.OriginHorizontal.Left);
-            hpFill.gameObject.AddComponent<UITaper>().start = 0.55f;
-            hpNum = Text(root, title, 24, TextAlignmentOptions.MidlineLeft, Vector2.zero, new Vector2(60, 24));
-            Place(hpNum.rectTransform, Vector2.zero, new Vector2(Left + 310, HealthY));
+            // ---- Health: a wedge (60% high at its left end) outlined in bone, filled bone; the number and the word ----
+            var hp = hpBar = Rect("Health Bar", root, Vector2.zero, new Vector2(Left, HealthY + (28f - HpHeight) / 2f), new Vector2(HpWidth, HpHeight));
+            hpFill = OutlinedWedge(hp, HpHeight, HpTaper, Bone);
+            hpNum = Text(root, sketchBold, 28, TextAlignmentOptions.MidlineLeft, Vector2.zero, new Vector2(60, 28));
+            Place(hpNum.rectTransform, Vector2.zero, new Vector2(Left + HpWidth + 10f, HealthY));
             hpNum.color = Bone;
-            hpWord = Label(root, "Health", 13, LockedText, 3f);
-            Place(hpWord.rectTransform, Vector2.zero, new Vector2(Left + 350, HealthY));
-            hpWord.rectTransform.sizeDelta = new Vector2(80, 24);
-            hpWord.alignment = TextAlignmentOptions.MidlineLeft;
+            hpWord = SketchLabel(root, "Health", 15, Bone);
+            Place(hpWord.rectTransform, Vector2.zero, new Vector2(Left + HpWidth + 50f, HealthY));
+            hpWord.rectTransform.sizeDelta = new Vector2(90, 28);
 
-            // ---- Legend bar: black wedge, blood fill from the left, a notch at every unlock and Bloodied point ----
+            // ---- Legend bar: a wedge (30% high at its left end) outlined in bone, red fill, a notch every 10 ----
             bar = Rect("Legend Bar", root, Vector2.zero, new Vector2(Left, BarY), new Vector2(BarWidth, BarHeight));
-            Img(bar, Black, 0f).gameObject.AddComponent<UITaper>().start = Taper;
-            legendFill = Img(bar, Blood, 0f);
-            Filled(legendFill, Image.FillMethod.Horizontal, (int)Image.OriginHorizontal.Left);
-            legendFill.gameObject.AddComponent<UITaper>().start = Taper;
+            bar.localRotation = Quaternion.Euler(0f, 0f, -0.4f);
+            legendFill = OutlinedWedge(bar, BarHeight, Taper, Blood);
             // A targeted kill's legend, not happened yet: hatched from your legend to where the kill lands.
-            hatchMask = Rect("Gain", bar, Vector2.zero, Vector2.zero, new Vector2(0f, BarHeight));
+            hatchMask = Rect("Gain", bar, Vector2.zero, Vector2.zero, new Vector2(0f, BarHeight - 4f));
             hatchMask.gameObject.AddComponent<RectMask2D>();
-            hatch = Rect("Hatch", hatchMask, Vector2.zero, Vector2.zero, new Vector2(BarWidth, BarHeight));
+            hatch = Rect("Hatch", hatchMask, Vector2.zero, Vector2.zero, new Vector2(BarWidth, BarHeight - 4f));
             var hatchImg = hatch.gameObject.AddComponent<RawImage>();
             hatchImg.texture = Stripes();
-            hatchImg.uvRect = new Rect(0f, 0f, BarWidth / 12f, BarHeight / 12f);
+            hatchImg.uvRect = new Rect(0f, 0f, BarWidth / 12f, (BarHeight - 4f) / 12f);
             hatchImg.raycastTarget = false;
-            hatch.gameObject.AddComponent<UITaper>().start = Taper;
+            hatch.gameObject.AddComponent<UITaper>().start = InnerTaper(BarHeight, Taper);
             notchAt = skills.SelectMany(s => new[] { s.unlock, s.bloodied }).Where(v => v > 0).Distinct().OrderBy(v => v).ToArray();
             notches = new Image[notchAt.Length];
             notchLabels = new TMP_Text[notchAt.Length];
             for (int i = 0; i < notchAt.Length; i++)
             {
                 float u = notchAt[i] / (float)maxLegend;
-                var n = Rect("Notch " + notchAt[i], bar, Vector2.zero, new Vector2(u * BarWidth - 2f, 0), new Vector2(3, BarHeight * Mathf.Lerp(Taper, 1f, u)));
+                var n = Rect("Notch " + notchAt[i], bar, Vector2.zero, new Vector2(u * BarWidth - 1.5f, 0), new Vector2(3, BarHeight * Mathf.Lerp(Taper, 1f, u)));
                 notches[i] = n.gameObject.AddComponent<Image>();
                 notches[i].sprite = white;
-                var label = notchLabels[i] = Text(root, body, 14, TextAlignmentOptions.Center, Vector2.zero, new Vector2(40, 18));
+                var label = notchLabels[i] = Text(root, sketchBold, 13, TextAlignmentOptions.Center, Vector2.zero, new Vector2(40, 18));
                 Place(label.rectTransform, Vector2.zero, new Vector2(Left + u * BarWidth - 20, LabelsY));
-                label.fontStyle = FontStyles.Bold;
                 label.text = notchAt[i].ToString();
             }
-            // The big number and "LEGEND", just right of the bar's end, level with it.
-            var word = legendWord = Label(root, "Legend", 15, Bone, 4f);
-            Place(word.rectTransform, Vector2.zero, new Vector2(868, BarY - 4f));
-            legendNum = Text(root, title, 32, TextAlignmentOptions.BottomLeft, Vector2.zero, new Vector2(160, 80));
-            Place(legendNum.rectTransform, Vector2.zero, new Vector2(868, BarY + 20f));
+            // The big number and "LEGEND" under it, right of the skill row, tilted -2 degrees.
+            legendGroup = Rect("Legend Number", root, Vector2.zero, new Vector2(740, 60), Vector2.zero);
+            legendGroup.localRotation = Quaternion.Euler(0f, 0f, -2f);
+            var word = legendWord = SketchLabel(legendGroup, "Legend", 15, Bone);
+            Place(word.rectTransform, Vector2.zero, Vector2.zero);
+            word.rectTransform.sizeDelta = new Vector2(90, 18);
+            legendNum = Text(legendGroup, sketchBold, 32, TextAlignmentOptions.BottomLeft, Vector2.zero, new Vector2(220, 100));
+            Place(legendNum.rectTransform, Vector2.zero, new Vector2(0, 16));
             legendNum.textWrappingMode = TextWrappingModes.NoWrap; // "42 +30" on one line
 
-            // ---- Skill boxes ----
+            // ---- Skill tiles: octagon cards, each tilted its own way; the frame is dashed while there's no target ----
             for (int i = 0; i < boxes.Length; i++)
             {
                 var b = boxes[i] = new Box();
-                b.rt = Rect("Skill " + (i + 1), root, Vector2.zero, new Vector2(Left + i * 98, BoxY), new Vector2(88, 88));
-                b.border = Img(b.rt, Black, 0f, skew: true); // white while hovered or selected
-                b.bg = Img(b.rt, Bone, 3f, skew: true);
-                b.fill = Img(b.rt, Bone, 3f, skew: true);
-                Filled(b.fill, Image.FillMethod.Vertical, (int)Image.OriginVertical.Bottom);
-                var dash = new GameObject("Dashed", typeof(RectTransform)).GetComponent<RectTransform>();
-                dash.SetParent(b.rt, false);
-                Stretch(dash, 0f);
-                b.dashed = dash.gameObject.AddComponent<DashedFrame>();
-                b.dashed.raycastTarget = false;
-                dash.gameObject.AddComponent<UISkew>();
-                b.key = Text(b.rt, title, 30, TextAlignmentOptions.Center, new Vector2(0, 10), new Vector2(88, 36));
+                b.rt = Rect("Skill " + (i + 1), root, Vector2.zero, new Vector2(TileLeft + i * (TileW + TileGap), BoxY), new Vector2(TileW, TileH));
+                b.rt.pivot = new Vector2(0.5f, 0.5f); // tilted about its middle
+                b.rt.anchoredPosition += new Vector2(TileW, TileH) / 2f;
+                b.rt.localRotation = Quaternion.Euler(0f, 0f, TileTilt[i]);
+                b.card = Draw<Octagon>(b.rt, Bone, 0f);
+                b.fill = Draw<Octagon>(b.rt, Bone, 0f);
+                b.frame = Draw<OctFrame>(b.rt, Black, 0f);
+                b.icon = Icon(b.rt, "skill_" + skills[i].shortName.ToLowerInvariant(), 38, 34);
+                Place(b.icon.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0f, 1f));
+                b.key = Text(b.rt, sketchBold, 16, TextAlignmentOptions.TopLeft, Vector2.zero, new Vector2(24, 20));
+                Place(b.key.rectTransform, new Vector2(0f, 1f), new Vector2(9f, -3f));
                 b.key.text = (i + 1).ToString();
-                b.name = Text(b.rt, body, 13, TextAlignmentOptions.Center, new Vector2(0, -18), new Vector2(88, 18));
-                b.name.fontStyle = FontStyles.Bold | FontStyles.UpperCase;
+                b.name = Text(b.rt, sketchBold, 15, TextAlignmentOptions.Center, new Vector2(0, -26.5f), new Vector2(TileW, 18));
+                b.name.fontStyle = FontStyles.UpperCase;
                 b.name.characterSpacing = 3f;
+                b.name.rectTransform.localRotation = Quaternion.Euler(0f, 0f, -2f);
                 b.name.text = skills[i].shortName;
-                b.cdTint = Img(b.rt, Alpha(Black, 0.18f), 3f, skew: true);
-                b.cdDark = Img(b.rt, Alpha(Black, 0.84f), 3f, skew: true);
-                Filled(b.cdDark, Image.FillMethod.Radial360, (int)Image.Origin360.Top);
-                b.cdDark.fillClockwise = true;
-                b.wait = Text(b.rt, title, 40, TextAlignmentOptions.Center, Vector2.zero, new Vector2(88, 60));
+                // Cooldown: black at 72%, 4 px in, and the turns left.
+                b.cd = Draw<Octagon>(b.rt, Alpha(Black, 0.72f), 4f);
+                b.cd.cut = 8f;
+                b.wait = Text(b.rt, sketchBold, 40, TextAlignmentOptions.Center, Vector2.zero, new Vector2(TileW, 60));
                 b.wait.color = Bone;
-                Glow(b.wait);
             }
 
-            // ---- Moves line: move pips, action pip, stance, sight, undo lock ----
-            var line = movesLine = Row("Moves Line", root, 22f);
+            // ---- Status row: move pips, action pip, stance, sight, dragging, undo ----
+            var line = movesLine = Row("Moves Line", root, 18f);
             Place(line, Vector2.zero, new Vector2(Left, MovesY));
             Fit(line);
-            var moves = Row("Moves", line, 8f);
-            var pips = Row("Pips", moves, 4f);
+            var moves = Row("Moves", line, 6f);
+            var pips = Row("Pips", moves, 3f);
             movePips = new Image[moveRange];
-            for (int i = 0; i < moveRange; i++) movePips[i] = Pip(pips, 18f);
-            Label(moves, "Moves", 13, LockedText, 2f);
-            var action = Row("Action", line, 8f);
-            actionPip = Pip(action, 26f);
-            Label(action, "Action", 13, LockedText, 2f);
-            var state = Row("State", line, 16f);
+            for (int i = 0; i < moveRange; i++) movePips[i] = Pip(pips, 16f);
+            SketchLabel(moves, "Moves", 14, LockedText);
+            var action = Row("Action", line, 6f);
+            actionPip = Pip(action, 24f);
+            SketchLabel(action, "Action", 14, LockedText);
+            var state = Row("State", line, 18f);
             var stance = Row("Stance", state, 6f);
-            var crouchCap = KeyCap(stance, "C");
-            stanceIcon = Icon(stance, "stand", 16, 16);
-            stanceWord = Label(stance, "Standing", 14, Bone, 1.5f);
+            var crouchCap = SketchCap(stance, "C", 14);
+            stanceIcon = Icon(stance, "stand", 14, 16);
+            stanceIcon.color = Bone;
+            stanceWord = SketchLabel(stance, "Standing", 14, Bone);
             Button("crouch", stance, crouchCap.border, crouchCap.text, stanceWord);
             var sight = sightRow = Row("Sight", state, 6f);
             sightIcon = Icon(sight, "eye_slash", 18, 12);
-            sightWord = Label(sight, "Unseen", 14, Grey, 1.5f);
+            sightWord = SketchLabel(sight, "Unseen", 14, LockedText);
             // Hauling a body: red on purpose (you're dragging a corpse). A lying figure: the stand icon on its side.
             var drag = Row("Dragging", state, 6f);
             var corpseHolder = Rect("Corpse", drag, Vector2.zero, Vector2.zero, new Vector2(16, 16)); // laid out by the row; the icon inside it isn't
@@ -344,42 +440,42 @@ namespace RailTracer
             Place(corpse.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0f, DragIconLift)); // turned on its side it sits low: lifted to the word
             corpse.color = Blood;
             corpse.rectTransform.localRotation = Quaternion.Euler(0f, 0f, -90f);
-            Label(drag, "Dragging", 14, Blood, 1.5f);
+            SketchLabel(drag, "Dragging", 14, Blood);
             dragging = drag.gameObject;
             // Undo: the key while you can undo, the padlock once it's locked, nothing when there's nothing to undo.
             var undoRow = Row("Undo Key", state, 6f);
-            var undoCap = KeyCap(undoRow, "Z");
-            Button("undo", undoRow, undoCap.border, undoCap.text, Label(undoRow, "Undo", 14, Grey, 1.5f));
+            var undoCap = SketchCap(undoRow, "Z", 14);
+            Button("undo", undoRow, undoCap.border, undoCap.text, SketchLabel(undoRow, "Undo", 14, LockedText));
             undoKey = undoRow.gameObject;
             var lockRow = Row("Undo", state, 6f);
-            Icon(lockRow, "lock", 12, 14).color = Grey;
-            Label(lockRow, "Undo", 14, Grey, 1.5f);
+            Icon(lockRow, "lock", 12, 14).color = LockedText;
+            SketchLabel(lockRow, "Undo", 14, LockedText);
             undo = lockRow.gameObject;
 
-            // ---- Tooltip: above the moves line, slanted, sized to its text ----
-            tip = Rect("Tooltip", root, Vector2.zero, new Vector2(40, TipY), new Vector2(420, 100));
-            tipBorder = Img(tip, Bone, 0f, skew: true);
-            Img(tip, Black, 2f, skew: true);
+            // ---- Tooltip: above the status row, a parallelogram slanted 14 px, sized to its text, tilted -1 degree ----
+            tip = Rect("Tooltip", root, Vector2.zero, new Vector2(40, TipY), new Vector2(364, 100));
+            tip.localRotation = Quaternion.Euler(0f, 0f, -1f);
+            tipBorder = Draw<Slant>(tip, Bone, 0f);
+            Draw<Slant>(tip, Black, 3f).slant = 13f;
             IgnoreLayout(tip);
-            var column = Column(tip, new RectOffset(22, 22, 14, 16), 6f);
+            var column = Column(tip, new RectOffset(30, 30, 12, 14), 4f);
             column.childAlignment = TextAnchor.UpperLeft;
             column.childForceExpandWidth = true;
             tip.gameObject.AddComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
             var header = new GameObject("Header", typeof(RectTransform)).GetComponent<RectTransform>();
             header.SetParent(tip, false);
-            header.gameObject.AddComponent<LayoutElement>().preferredHeight = 32;
-            tipName = Text(header, title, 26, TextAlignmentOptions.BottomLeft, Vector2.zero, Vector2.zero);
+            header.gameObject.AddComponent<LayoutElement>().preferredHeight = 28;
+            tipName = Text(header, sketchBold, 24, TextAlignmentOptions.BottomLeft, Vector2.zero, Vector2.zero);
             Stretch(tipName.rectTransform, 0f);
             tipName.fontStyle = FontStyles.UpperCase;
-            tipName.characterSpacing = 3f;
-            tipStatus = Text(header, body, 15, TextAlignmentOptions.BottomRight, Vector2.zero, Vector2.zero);
+            tipStatus = Text(header, sketch, 14, TextAlignmentOptions.BottomRight, Vector2.zero, Vector2.zero);
             Stretch(tipStatus.rectTransform, 0f);
             tipStatus.margin = new Vector4(0, 0, 0, 3);
-            tipStatus.fontStyle = FontStyles.Bold | FontStyles.UpperCase;
+            tipStatus.fontStyle = FontStyles.UpperCase;
             tipStatus.characterSpacing = 5f;
-            tipDesc = Text(tip, body, 18, TextAlignmentOptions.TopLeft, Vector2.zero, Vector2.zero);
-            tipUp = Text(tip, body, 18, TextAlignmentOptions.TopLeft, Vector2.zero, Vector2.zero);
-            tipUp.fontStyle = FontStyles.Bold;
+            tipStatus.color = Bone;
+            tipDesc = Text(tip, sketch, 16, TextAlignmentOptions.TopLeft, Vector2.zero, Vector2.zero);
+            tipUp = Text(tip, sketchBold, 16, TextAlignmentOptions.TopLeft, Vector2.zero, Vector2.zero);
             tipDesc.textWrappingMode = tipUp.textWrappingMode = TextWrappingModes.Normal;
 
             // ---- Mode banner, top centre ----
@@ -400,30 +496,30 @@ namespace RailTracer
             var escCap = KeyCap(esc, "Esc");
             Button("cancel", esc, escCap.border, escCap.text, Label(esc, "Cancel", 14, Grey, 2f));
 
-            // ---- Bottom right: end turn (hold Space), the controls hint above it, the log above that ----
+            // ---- Bottom right: the key hints (ESC MENU, H CONTROLS, L LOG; under them SPACE HOLD: END TURN), the log above ----
             var end = Row("End Turn", root, 6f);
-            Place(end, Vector2.right, new Vector2(-32, 26));
+            Place(end, Vector2.right, new Vector2(-30, 14));
             Fit(end);
             var spaceCap = Row("Key Space", end, 0f);
-            spaceCap.GetComponent<HorizontalLayoutGroup>().padding = new RectOffset(10, 10, 0, 0);
-            var spaceBorder = Img(spaceCap, Grey, 0f);
+            spaceCap.GetComponent<HorizontalLayoutGroup>().padding = new RectOffset(8, 8, 0, 0);
+            var spaceBorder = Img(spaceCap, LockedText, 0f);
             Img(spaceCap, Black, 1.5f);
             endFill = Img(spaceCap, Alpha(Blood, 0.85f), 1.5f); // fills left to right while held
             Filled(endFill, Image.FillMethod.Horizontal, (int)Image.OriginHorizontal.Left);
             IgnoreLayout(spaceCap);
-            var spaceWord = Label(spaceCap, "Space", 14, Grey, 1f);
+            var spaceWord = SketchLabel(spaceCap, "Space", 15, LockedText);
             spaceWord.gameObject.AddComponent<LayoutElement>().minHeight = 20;
-            endWord = Label(end, "Hold: end turn", 14, Grey, 2f);
+            endWord = SketchLabel(end, "Hold: end turn", 15, LockedText);
             Glow(endWord);
             Button("end", end, spaceBorder, spaceWord, endWord); // a click ends the turn too
-            var hint = Row("Controls Hint", root, 12f);
-            Place(hint, Vector2.right, new Vector2(-32, 54));
+            var hint = Row("Controls Hint", root, 16f);
+            Place(hint, Vector2.right, new Vector2(-30, 44));
             Fit(hint);
             foreach (var (key, caption, id) in new[] { ("Esc", "Menu", "pause"), ("H", "Controls", "controls"), ("L", "Log", "log") })
             {
                 var b = Row(caption, hint, 6f);
-                var cap = KeyCap(b, key);
-                var w = Label(b, caption, 14, Grey, 2f);
+                var cap = SketchCap(b, key, 15);
+                var w = SketchLabel(b, caption, 15, LockedText);
                 Glow(w);
                 Button(id, b, cap.border, cap.text, w);
             }
@@ -472,7 +568,7 @@ namespace RailTracer
 
             // Shrink the player's stack (everything above the health row) towards its bottom-left corner.
             var stack = Rect("Player Stack", root, Vector2.zero, StackOrigin, Vector2.zero);
-            var parts = new[] { bar, legendWord.rectTransform, legendNum.rectTransform, movesLine, tip }
+            var parts = new[] { bar, legendGroup, movesLine, tip }
                 .Concat(boxes.Select(b => b.rt)).Concat(notchLabels.Select(l => l.rectTransform)).ToList();
             foreach (var part in parts) part.SetParent(stack, true);
             stack.localScale = Vector3.one * StackScale;
@@ -637,50 +733,48 @@ namespace RailTracer
                 var b = boxes[i];
                 var d = skills[i];
                 var id = (SkillId)i;
-                // Locked (solid grey) beats no target (hollow, dashed) beats the plain available / bloodied look.
-                // Cooling down isn't "no target": the box keeps its look so the dark sweep shows over it.
-                // Selected, or (the drag box) while you hold a body.
-                bool locked = !c.Has(id), bloodied = c.Bloodied(id), lifted = selected == id || (id == SkillId.Drag && c.held != null);
+                // Locked (grey) beats holding a body (red DROP) beats no target (black, dashed) beats Bloodied (red)
+                // and ready (bone). Cooling down isn't "no target": the tile keeps its look under the dark overlay.
+                bool locked = !c.Has(id), bloodied = c.Bloodied(id), holding = id == SkillId.Drag && c.held != null;
                 bool cooling = !locked && d.cooldown > 0 && c.Wait(id) > 0;
-                bool noTarget = !locked && !cooling && !c.Usable(id);
-                var own = bloodied ? Bright : Bone;
-                b.bg.color = locked ? Alpha(LockedBox, 0.92f) : noTarget ? Black : bloodied ? Blood : Bone;
-                b.key.color = b.name.color = locked ? LockedText : noTarget ? own : bloodied ? Bone : Black;
-                // Holding a body: the drag box goes red and reads "Drop" in white.
-                bool holding = id == SkillId.Drag && c.held != null;
+                bool noTarget = !locked && !cooling && !holding && !c.Usable(id);
+                bool picked = selected == id || holding, over = i == hovered;
+                Color card, ink, frame = Black;
+                if (locked) { card = LockedBox; ink = LockedInk; }
+                else if (holding) { card = Blood; ink = Bone; }
+                else if (noTarget) { card = Black; ink = frame = bloodied ? Blood : Bone; }
+                else if (bloodied) { card = Blood; ink = Bone; }
+                else { card = Bone; ink = Black; }
+                if (picked) frame = Blood; // selected (or holding a body): red, lifted 10 px
+                else if (over) frame = Bone; // hovered: bone, solid, lifted 4 px
+                b.card.color = card;
+                b.icon.color = b.key.color = b.name.color = ink;
+                b.frame.color = frame;
+                b.frame.gap = noTarget && !picked && !over ? 5f : 0f;
                 b.name.text = holding ? "Drop" : d.shortName;
-                if (holding)
-                {
-                    b.bg.color = Blood;
-                    b.key.color = b.name.color = Bone;
-                }
-                bool white = i == hovered || lifted;
-                b.border.enabled = white || !noTarget;
-                b.border.color = white ? Bone : Black;
-                b.dashed.shown = noTarget && !white;
-                b.dashed.color = own;
-                b.rt.anchoredPosition = new Vector2(Left + i * 98, BoxY + (lifted ? 6f : 0f)) - StackOrigin; // inside the stack
-                // Progress: white toward the unlock (red for skills that unlock already bloodied), then red toward Bloodied.
+                float lift = picked ? 10f : over ? 4f : 0f;
+                b.rt.anchoredPosition = new Vector2(TileLeft + i * (TileW + TileGap) + TileW / 2f, BoxY + TileH / 2f + lift) - StackOrigin; // inside the stack
+                // What it becomes next, rising from the bottom: toward the unlock (bone, or red for skills that unlock
+                // already Bloodied), then red toward Bloodied.
                 float fill = 0f;
-                if (locked) { fill = d.unlock > 0 ? L / (float)d.unlock : 0f; b.fill.color = d.bloodied == d.unlock ? Blood : Bone; }
-                else if (!bloodied && d.bloodied > d.unlock) { fill = (L - d.unlock) / (float)(d.bloodied - d.unlock); b.fill.color = Blood; }
-                b.fill.fillAmount = Mathf.Clamp01(fill);
-                b.fill.enabled = fill > 0f;
-                // Cooldown: a dark sweep from 12 o'clock that loses a step each turn, and the turns left.
+                if (locked) { fill = d.unlock > 0 ? L / (float)d.unlock : 0f; b.fill.color = Alpha(d.bloodied == d.unlock ? Blood : Bone, 0.9f); }
+                else if (!bloodied && d.bloodied > d.unlock) { fill = (L - d.unlock) / (float)(d.bloodied - d.unlock); b.fill.color = Alpha(Blood, 0.85f); }
+                b.fill.fill = Mathf.Clamp01(fill);
+                // Cooldown: the dark overlay and the turns left.
                 int wait = locked || d.cooldown <= 0 ? 0 : Mathf.Min(c.Wait(id), d.cooldown);
-                b.cdTint.enabled = b.cdDark.enabled = b.wait.enabled = wait > 0;
-                b.cdDark.fillAmount = wait / (float)Mathf.Max(1, d.cooldown);
+                b.cd.shown = wait > 0;
+                b.wait.enabled = wait > 0;
                 b.wait.text = wait.ToString();
             }
 
             legendFill.fillAmount = L / (float)maxLegend;
             int to = Mathf.Min(maxLegend, L + legendGain);
             hatchMask.gameObject.SetActive(to > L);
-            hatchMask.anchoredPosition = new Vector2(L / (float)maxLegend * BarWidth, 0f);
-            hatchMask.sizeDelta = new Vector2((to - L) / (float)maxLegend * BarWidth, BarHeight);
-            hatch.anchoredPosition = -hatchMask.anchoredPosition; // the stripes and taper stay fixed to the bar
+            hatchMask.anchoredPosition = new Vector2(L / (float)maxLegend * BarWidth, 2f); // inside the outline
+            hatchMask.sizeDelta = new Vector2((to - L) / (float)maxLegend * BarWidth, BarHeight - 4f);
+            hatch.anchoredPosition = new Vector2(-hatchMask.anchoredPosition.x, 0f); // the stripes and taper stay fixed to the bar
             for (int i = 0; i < notchAt.Length; i++)
-                notches[i].color = notchLabels[i].color = L >= notchAt[i] ? Bone : notchAt[i] <= to ? Bright : NotchOff;
+                notches[i].color = notchLabels[i].color = L >= notchAt[i] ? Bone : notchAt[i] <= to ? Bright : NotchAhead;
             float k = L / (float)maxLegend;
             legendNum.text = legendGain > 0 ? $"{L}<size=60%><color=#E0202F> +{legendGain}</color></size>" : L.ToString();
             legendNum.fontSize = Mathf.Round(32f + 40f * k);
@@ -692,33 +786,33 @@ namespace RailTracer
                 var d = skills[hovered];
                 var id = (SkillId)hovered;
                 bool locked = !c.Has(id), bloodied = c.Bloodied(id), usable = c.Usable(id);
-                var state = locked ? Grey : bloodied ? Bright : Bone;
-                tipBorder.color = tipName.color = tipStatus.color = state;
+                tipBorder.color = locked ? Grey : bloodied ? Bright : Bone; // the outline keeps the game's state colour
+                tipName.color = locked ? TipGrey : bloodied ? Bright : Bone;
                 // A kill's legend, small and red beside its name.
                 Act? kill = id == SkillId.Stealth ? Act.QuietKill : id == SkillId.Rail ? Act.RailGrab : id == SkillId.Brutal ? Act.BrutalKill : (Act?)null;
-                tipName.text = kill.HasValue ? $"{d.name} <size=55%><color=#E0202F>+{c.LegendGain(kill.Value)} legend</color></size>" : d.name;
+                tipName.text = kill.HasValue ? $"{d.name} <size=14><color=#E0202F>+{c.LegendGain(kill.Value)} legend</color></size>" : d.name;
                 int cool = c.Wait(id);
                 tipStatus.text = locked ? $"Unlocks at {d.unlock}" : cool > 0 ? $"Ready in {cool}" : !usable ? (c.WhyNot(id) ?? "No target") : bloodied ? "Bloodied" : "Ready";
                 tipDesc.text = d.description;
-                tipDesc.color = locked ? Grey : Bone;
+                tipDesc.color = locked ? TipGrey : Bone;
                 bool upgrade = d.bloodied > d.unlock && !string.IsNullOrEmpty(d.upgrade);
                 tipUp.gameObject.SetActive(upgrade);
                 tipUp.text = upgrade ? $"At {d.bloodied}: {d.upgrade}" : "";
-                tipUp.color = bloodied ? Bright : Burgundy;
+                tipUp.color = bloodied ? Bright : TipBurgundy;
             }
 
             int hp = shownHp >= 0 ? shownHp : c.hp; // held back while a heavy's swing is still on its way
             hpFill.fillAmount = hp / (float)c.t.maxHp;
             hpNum.text = hp.ToString();
-            hpWord.rectTransform.anchoredPosition = new Vector2(Left + 310 + hpNum.preferredWidth + 10, HealthY);
+            hpWord.rectTransform.anchoredPosition = new Vector2(Left + HpWidth + 10f + hpNum.preferredWidth + 10f, HealthY);
 
-            for (int i = 0; i < movePips.Length; i++) movePips[i].color = i < c.movesLeft ? Bone : LockedBox;
-            actionPip.color = c.acted || c.turnOver ? LockedBox : Bone;
+            for (int i = 0; i < movePips.Length; i++) movePips[i].enabled = i < c.movesLeft; // filled while unspent, hollow when spent
+            actionPip.enabled = !(c.acted || c.turnOver);
             stanceIcon.sprite = IconSprite(c.crouched ? "crouch" : "stand");
             stanceWord.text = c.crouched ? "Crouched" : "Standing";
             bool seen = c.SeenByAnyone(c.player);
             sightIcon.sprite = IconSprite(seen ? "eye" : "eye_slash");
-            sightIcon.color = sightWord.color = seen ? Bone : Grey;
+            sightIcon.color = sightWord.color = seen ? Bright : LockedText;
             sightWord.text = seen ? "Seen" : "Unseen";
             dragging.SetActive(c.held != null);
             undoKey.SetActive(c.CanReset);
@@ -975,16 +1069,70 @@ namespace RailTracer
             return img;
         }
 
-        // A slanted pip (moves, action), laid out at w x 11.
+        // A pip (moves, action) at w x 9, skewed 12 degrees: a 1.5 px bone outline, and the returned fill (shown while unspent).
         Image Pip(Transform parent, float w)
         {
-            var rt = Rect("Pip", parent, Vector2.zero, Vector2.zero, new Vector2(w, 11));
-            Size(rt, w, 11);
-            var img = rt.gameObject.AddComponent<Image>();
-            img.sprite = white;
-            img.raycastTarget = false;
-            rt.gameObject.AddComponent<UISkew>();
+            var rt = Rect("Pip", parent, Vector2.zero, Vector2.zero, new Vector2(w, 9));
+            Size(rt, w, 9);
+            var edge = Draw<DashedFrame>(rt, Bone, 0f);
+            edge.thickness = 1.5f;
+            edge.dash = 100000f; // one unbroken stroke per side
+            edge.gameObject.AddComponent<UISkew>().degrees = 12f;
+            var img = Img(rt, Bone, 0f);
+            img.gameObject.AddComponent<UISkew>().degrees = 12f;
             return img;
+        }
+
+        // A UIShape (Octagon, OctFrame, Slant, ...) filling its parent, `inset` in from the edges.
+        T Draw<T>(Transform parent, Color col, float inset) where T : UIShape
+        {
+            var rt = new GameObject(typeof(T).Name, typeof(RectTransform)).GetComponent<RectTransform>();
+            rt.SetParent(parent, false);
+            Stretch(rt, inset);
+            var shape = rt.gameObject.AddComponent<T>();
+            shape.color = col;
+            shape.raycastTarget = false;
+            return shape;
+        }
+
+        // A wedge's taper for the area 2 px inside its outline, so the slanted top edge stays 2 px thick.
+        static float InnerTaper(float height, float taper) => Mathf.Max(0f, (taper * height - 4f) / (height - 4f));
+
+        // A bar (the legend, health): a wedge `taper` high at its left end, a 2 px bone outline round a dark inside;
+        // returns the fill (left to right) inside the outline.
+        Image OutlinedWedge(RectTransform bar, float height, float taper, Color fill)
+        {
+            Img(bar, Bone, 0f).gameObject.AddComponent<UITaper>().start = taper;
+            float inner = InnerTaper(height, taper);
+            Img(bar, BarBack, 2f).gameObject.AddComponent<UITaper>().start = inner;
+            var f = Img(bar, fill, 2f);
+            Filled(f, Image.FillMethod.Horizontal, (int)Image.OriginHorizontal.Left);
+            f.gameObject.AddComponent<UITaper>().start = inner;
+            return f;
+        }
+
+        // Kalam, uppercase, a little letter-spaced (the sketch HUD's labels: MOVES, HEALTH, key hints).
+        TMP_Text SketchLabel(Transform parent, string text, float size, Color col)
+        {
+            var t = Text(parent, sketch, size, TextAlignmentOptions.MidlineLeft, Vector2.zero, Vector2.zero);
+            t.fontStyle = FontStyles.UpperCase;
+            t.characterSpacing = 5f;
+            t.color = col;
+            t.text = text;
+            return t;
+        }
+
+        // The sketch HUD's key cap: the key in Kalam in a 1.5 px #B4AEAF box.
+        (Image border, TMP_Text text) SketchCap(Transform parent, string key, float size)
+        {
+            var cap = Row("Key " + key, parent, 0f);
+            cap.GetComponent<HorizontalLayoutGroup>().padding = new RectOffset(6, 6, 0, 0);
+            var border = Img(cap, LockedText, 0f);
+            Img(cap, Black, 1.5f);
+            IgnoreLayout(cap);
+            var t = SketchLabel(cap, key, size, LockedText);
+            t.gameObject.AddComponent<LayoutElement>().minHeight = 20;
+            return (border, t);
         }
 
         Image Icon(Transform parent, string sprite, float w, float h)

@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 18.64 (8 Nov 2026).
+Last updated: Update 19 (8 Nov 2026), on branch ui/sketch-hud.
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -84,6 +84,7 @@ Inspector; the saved scene matches these.
 | 18.62 (stealth kills silent; the Dragging icon lifted level with its word) | Done, not yet seen in Play mode. The icon's lift: Hud DragIconLift (4 px) |
 | 18.63 (stealth kills heard within 1 again: small terror and an investigation for whoever hears it) | Done |
 | 18.64 (Alex's tweaks committed) | Done: Thigh and Neck Stab reverse grip; Demon Aura particles fainter (max colour alpha 0.39), smaller (size 0.8-1.5) and one of its renderers off; the guard prefabs (Guard, Guard_CH02) as Unity built them; the TMP font atlases as Unity grew them |
+| 19 (sketch-style HUD) | On branch ui/sketch-hud, not merged. main keeps the classic HUD (tag hud-classic). Not yet seen in Play mode |
 | Next | Full audio pass |
 
 ## The train
@@ -136,7 +137,7 @@ Every menu is over the real carriages: the live (saved) car plus the other demo 
 - 4 moves and 1 action per turn. Crouched or dragging a body costs 2 moves a tile.
 - At the start of your turn, anyone not startled who can see you (a searcher that turned your way) is in combat.
 - End the turn by holding Space (0.5 s). Undo (Z) until you act, are seen or move a body.
-- Your legend (0–100) grows from kills only: stealth kill +10, rail grab +25, brutal kill +30. It is also a shield: hits drain it before health.
+- Your legend (0–100) grows from kills only: stealth kill +10, brutal kill +20, rail grab +30 (Tuning "Quiet Legend", "Brutal Gain", "Rail Gain"). It is also a shield: hits drain it before health.
 - Thresholds every 10, notched on the bar at 10–90: brutal unlock 10, hop Bloodied 20, rail unlock 30, stealth Bloodied 40, brutal Bloodied 50, rail Bloodied 60, leap Bloodied 70, demon throw 80, dread 90. Above 90 is overspill: still capped at 100 and still a shield, so it protects dread.
 - Health 30. A hit does 15.
 
@@ -298,6 +299,14 @@ In the game too, finisher blood now comes from the victim's chest bone (where th
   - Each entry can be tagged Guard / Heavy / Any (all Any for now).
 - **Turn count** (top left): "TURN 5" and under it "Target 11", the car's target turns (CarDef.targetTurns: the level solver's best on seed 1, kept in Train.cs Targets: 11, 7, 11, 9, 24; rerun the solver after changing a car). The count goes red once you pass the target. No target in endless; nothing in the walk-through car.
 - **Drag box:** while you hold a body it goes red and reads "Drop" in white.
+- **Sketch-style HUD (Update 19, branch ui/sketch-hud only):** Alex's hand-drawn look from the mockup ("Game layout - sketch style", the third board of the HUD canvas); same layout, logic, words and numbers. Kalam (Google Fonts, OFL: `Fonts/Kalam-*.ttf`, built into `Resources/Fonts/Kalam SDF` and `Kalam-Bold SDF` by Editor/FontSetup, menu Rail Tracer > Set Up Sketch Font) on the turn counter, tickets, tooltip, status row, skill tiles, legend bar, health, legend number and key hints; menus, pause, cards, chips, the log, the controls panel and the targeting banner keep Anton / Barlow. The bottom-left stack keeps its 0.8 scale (Hud StackScale).
+  - Skill tiles: 80 x 76 octagons (10 px cut corners), 6 px apart, each with its own fixed tilt (-1.2, 0.8, -0.5, 1, -0.8, 0.6, -1, 0.7 degrees); hotkey top left, icon, name tilted -2 degrees, all in the tile's ink. Ready: bone card, black ink, black frame. No target: black card, bone ink, bone frame dashed 7 on / 5 off (red card ink and frame once Bloodied). Bloodied: red card, bone ink. Locked: grey #3A3536, ink #9A9093. Hovered: bone frame, solid, lifted 4 px; selected or holding a body (red DROP): red frame, lifted 10 px. Fills rise from the bottom as before (0.9 opacity locked, 0.85 toward Bloodied). Cooldown: black at 72%, 4 px in, the turns left in 40 px.
+  - Icons: `Resources/UI/Icons/skill_*.png`, white, tinted with the ink; rendered from the mockup's SVGs, placeholders until Alex draws his own.
+  - Tooltip: a parallelogram slanted 14 px, 364 wide, tilted -1 degree; the outline keeps the game's state colour (grey locked, red Bloodied, bone); title bone / red #E0202F / grey #8A8285; the Bloodied line #7A1424 until reached. Hover only.
+  - Status row: moves and action pips skewed 12 degrees, bone outline, filled while unspent, hollow when spent; C key box, stance, sight (UNSEEN #B4AEAF, SEEN red); Dragging and Undo as before.
+  - Legend bar 652 x 20 and health 318 x 18: wedges (30% / 60% high at the left), 2 px bone outline round #1A1416; notches every 10, bone once reached, #6E6466 ahead, red where a targeted kill crosses. The legend number keeps the game's rule (32-72 px, bone to dark red), now at (740, 60) tilted -2 degrees.
+  - Turn counter (30, 22 in, -1.5 degrees), tickets (24 x 34, 5 apart, alternately +-1.5 degrees, the group +1; the win card keeps the classic tickets), key hints (bottom right: ESC MENU, H CONTROLS, L LOG; under them SPACE HOLD: END TURN, still filling while held).
+  - Switching: `git checkout main` for the classic HUD, `git checkout ui/sketch-hud` for this one. The gitignored Asset Store folders stay in place across branches.
 - **Legend readout** (only while a kill is targeted; gone when you cancel or pick another skill): the hover label says "Locked" on a heavy that isn't Shaken yet; the gain itself is in the skill's tooltip, small and red beside its name ("Brutal kill +20 legend", always shown for the three kills); the big number reads "42 +30"; the legend bar shows the gain hatched (#E0202F stripes on #4A0C15) from your legend to where the kill lands; notches it crosses turn red (no line of notch names: dropped in 18.36). Gains: stealth +10, brutal +20, rail grab +30 (Tuning "Quiet Legend", "Brutal Gain", "Rail Gain"). Skill boxes unchanged.
 - Move and leap previews: each tile that draws a shot shows its hit chance on the floor; a leap's says "LEAP -25", and the shooter's label "Hit 55% · leap -25".
 - The walk-through car has every legend effect off (demon aura, blood overlay); an aura starting at nothing clears what its systems played on awake.

@@ -17,7 +17,21 @@ namespace RailTracer
         {
             if (!AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(Dst + "Anton SDF.asset") || !AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(Dst + "BarlowCondensed SDF.asset"))
                 Build();
+            if (!AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(Dst + "Kalam SDF.asset")) BuildSketch();
         };
+
+        // The sketch HUD's hand-lettered Kalam (Update 19): "Kalam SDF" (Regular) with "Kalam-Bold SDF" as its Bold.
+        [MenuItem("Rail Tracer/Set Up Sketch Font")]
+        static void BuildSketch()
+        {
+            var bold = Make("Kalam-Bold", "Kalam-Bold SDF");
+            var regular = Make("Kalam-Regular", "Kalam SDF");
+            if (!bold || !regular) return;
+            regular.fontWeightTable[7].regularTypeface = bold;
+            EditorUtility.SetDirty(regular);
+            AssetDatabase.SaveAssets();
+            Debug.Log("Rail Tracer: Kalam fonts built in " + Dst);
+        }
 
         [MenuItem("Rail Tracer/Set Up Fonts")]
         static void Build()
