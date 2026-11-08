@@ -24,11 +24,11 @@ namespace RailTracer
     {
         public const int DemoCars = 5;
 
-        // The hand-made first carriage.
+        // The hand-made first carriage. The gramophone ('G') takes the aisle place of a seat bank (a single seat beside it).
         static readonly string[] FirstMap =
         {
             "..S..S..S..S.WS..SL.S..SL.",
-            "..S..S..S..S.WS..S..S..S..",
+            "..S..S..G..S.WS..S..S..S..",
             "P.........................",
             "..S..S..S..S.WS..S..S..S..",
             "..S..S.LS..S.WS..S.LS..S..",
@@ -38,7 +38,7 @@ namespace RailTracer
         // 2x2), each a tile clear of the next; a dining cart ('D') in the aisle; an L-shaped bar at the far end.
         // Long sightlines, half cover only. Plain wall ('_') between some of the window tables and behind the bar.
         // The bar stands in the room (row 1), its short leg back to the wall, the bartender behind it. A gramophone
-        // ('G', half cover) against the wall just short of the bar plays the music; a death next to it stops it.
+        // ('G', half cover) against the wall just short of the bar plays the music.
         static readonly string[] DiningMap =
         {
             "..TT...OO___TT...__G_B___.",
@@ -52,7 +52,7 @@ namespace RailTracer
         // cage you can see through, and only a few windows ('_' and 'x' have plain wall behind them).
         static readonly string[] BaggageMap =
         {
-            "__xx___..._xx__CCC__.._xx_",
+            "__xx_G_..._xx__CCC__.._xx_",
             "..XX..M...MXX..CCC.M...XX.",
             "P...........X.............",
             "..M..XX...M.....XX..M..X..",

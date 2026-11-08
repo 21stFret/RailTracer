@@ -161,8 +161,8 @@ namespace RailTracer
         public readonly List<string> log = new List<string>();
         public readonly List<Enemy> shotsFired = new List<Enemy>(); // every shot at you, in order, for the view to play (it clears them)
         int round;                                                  // player turns started, so "spotted you" logs once a round
-        public Cell? gramophone;                                    // the dining car's gramophone, if this car has one
-        public bool musicStopped;                                   // someone died next to it: the record's stopped
+        public Cell? gramophone;                                    // the car's gramophone (every car has one)
+        public bool musicStopped;                                   // someone was shoved onto it: the record's stopped
 
         // Map: '.' floor, 'S' seat (half cover), 'L' luggage / 'W' wall (full cover), 'P' player start.
         // Edge rows are windows, middle-row ends are doors; on the edge rows '_' (floor) and 'l' (luggage) have a
@@ -1239,18 +1239,17 @@ namespace RailTracer
                 : $"You butcher {Name(e)}.");
             var b = new Body { who = e, pos = e.pos, kind = a == Act.QuietKill ? BodyKind.Stealth : a == Act.RailGrab ? BodyKind.Rail : BodyKind.Brutal };
             bodies.Add(b);
-            StopMusicNear(e.pos);
             return b;
         }
 
-        // A death on a tile next to the gramophone (diagonals too) knocks the needle off: the music stops for the car.
-        void StopMusicNear(Cell at)
+        // A victim shoved onto the gramophone (Shove to Table, chosen by the view) knocks the needle off: the music
+        // stops for the rest of the car. The view sends it as the "needle" command, so a save replays it.
+        bool StopMusic()
         {
-            if (musicStopped || !gramophone.HasValue) return;
-            var g = gramophone.Value;
-            if (Math.Max(Math.Abs(at.x - g.x), Math.Abs(at.y - g.y)) > 1) return;
+            if (musicStopped || !gramophone.HasValue) return false;
             musicStopped = true;
             Log("The needle skids off the record. The music stops.");
+            return true;
         }
 
         public void EndPlayerTurn() => turnOver = true;
@@ -1263,7 +1262,7 @@ namespace RailTracer
 
         public Enemy EnemyById(int id) => enemies.Find(e => e.id == id);
 
-        // "move x y", "leap x y", "hop x y", "throw x y", "act <Act> <enemy id>", "grab", "drop", "crouch", "undo",
+        // "move x y", "leap x y", "hop x y", "throw x y", "act <Act> <enemy id>", "grab", "drop", "crouch", "undo", "needle",
         // "end" (your turn), "enemy <id>" (its turn), "start" (your next turn). False if it did nothing.
         public bool Do(string cmd)
         {
@@ -1281,6 +1280,7 @@ namespace RailTracer
                 case "drop": ok = held != null; Drop(); break;
                 case "crouch": ToggleCrouch(); break;
                 case "undo": ok = CanReset; ResetTurn(); break;
+                case "needle": ok = StopMusic(); break;
                 case "end": EndPlayerTurn(); break;
                 case "enemy": EnemyAct(EnemyById(int.Parse(w[1]))); break;
                 case "start": StartPlayerTurn(); break;
@@ -1699,7 +1699,6 @@ namespace RailTracer
                         var v = EnemyAt(hit);
                         v.state = EnemyState.Dead;
                         bodies.Add(new Body { who = v, pos = v.pos, kind = BodyKind.Shot });
-                        StopMusicNear(v.pos);
                         Bleed(v.pos, false);
                         Log($"{Name(e)} fires wildly and kills {Name(v)}!");
                     }

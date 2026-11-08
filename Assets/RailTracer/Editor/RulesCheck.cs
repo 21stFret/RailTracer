@@ -218,17 +218,21 @@ namespace RailTracer
             Check(c.Perform(Act.QuietKill, victim), "standing stealth kill");
             Check(witness.awareness == Awareness.Combat && witness.terror == t.mediumTerror && witness.hasSeen, "witness sees you do it");
 
-            // The gramophone: half cover; a death on a tile next to it (diagonals too) stops the music, further away doesn't.
-            c = new Carriage(new[] { "P..G..", "......" }, t, 1);
-            Check(c.IsSeat(new Cell(3, 0)) && !c.Reachable().Contains(new Cell(3, 0)) && c.gramophone == new Cell(3, 0), "gramophone: seat rules");
-            victim = c.Spawn(1, 0, -1, 0, 0);
-            victim.facing = new Cell(1, 0);
-            Check(c.Perform(Act.QuietKill, victim) && !c.musicStopped, "a kill two tiles from it: still playing");
+            // The gramophone: half cover; kills beside it don't stop the music, only the view's "needle" (a Shove to Table
+            // onto it) does, once.
             c = new Carriage(new[] { ".....", "P.G..", "....." }, t, 1);
-            victim = c.Spawn(1, 0, 1, 0, 0); // diagonal to the gramophone at (2, 1)
+            Check(c.IsSeat(new Cell(2, 1)) && !c.Reachable().Contains(new Cell(2, 1)) && c.gramophone == new Cell(2, 1), "gramophone: seat rules");
+            victim = c.Spawn(1, 0, 1, 0, 0);
             victim.facing = new Cell(0, -1);
             c.legend = Unlock(t, SkillId.Brutal);
-            Check(c.Perform(Act.BrutalKill, victim) && c.musicStopped, "a kill next to it (diagonal): the music stops");
+            Check(c.Do($"act BrutalKill {victim.id}") && !c.musicStopped, "a kill beside it: still playing");
+            Check(c.Do("needle") && c.musicStopped && !c.Do("needle"), "shoved onto it: the music stops, once");
+            Check(!new Carriage(new[] { "P...." }, t, 1).Do("needle"), "no gramophone, no needle");
+            foreach (int seed in new[] { 2002, 5005, 7, 99 })
+            {
+                var (gm, _, _) = TrainGen.Make(new Random(seed));
+                Check(string.Concat(gm).Count(ch => ch == 'G') == 1, "every generated car has one gramophone");
+            }
 
             // Brutal kill locked at 0, unlocked by the first stealth kill (legend 10); rail grab at 30.
             c = new Carriage(new[] { "P.....", "......" }, t, 1);

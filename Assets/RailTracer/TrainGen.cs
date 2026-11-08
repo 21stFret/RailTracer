@@ -7,7 +7,8 @@ namespace RailTracer
     // A new carriage and its passengers, laid out the way the hand-made one is (and the train kit expects):
     // 26 x 5, windows on rows 0 and 4, the aisle on row 2 kept clear, seat banks two rows deep every third column,
     // one partition wall with a door in the aisle, a few luggage stacks on the window rows (never in a booth
-    // between two seats facing each other), and some stretches of outer wall with no windows. No UnityEngine, so
+    // between two seats facing each other), some stretches of outer wall with no windows, and a gramophone in one
+    // seat bank's aisle place. No UnityEngine, so
     // Editor/RulesCheck.cs can test it.
     public static class TrainGen
     {
@@ -85,6 +86,11 @@ namespace RailTracer
                 placed.Add((x, y));
             }
             foreach (int i in Enumerable.Range(0, spawns.Count).OrderBy(_ => rng.Next()).Take(toughs)) spawns[i][5] = 1; // the tough ones
+
+            // The gramophone: the aisle place of one seat bank (the window place keeps a single seat).
+            var aisleSeats = Enumerable.Range(0, W).SelectMany(x => new[] { (x, y: 1, win: 0), (x, y: H - 2, win: H - 1) })
+                .Where(s => g[s.x, s.y] == 'S' && g[s.x, s.win] == 'S').ToList();
+            if (aisleSeats.Count > 0) { var s = aisleSeats[rng.Next(aisleSeats.Count)]; g[s.x, s.y] = 'G'; }
 
             var map = new string[H];
             for (int y = 0; y < H; y++)

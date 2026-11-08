@@ -590,9 +590,21 @@ namespace RailTracer
                 if (pair < 0) continue;
                 // Seat banks two rows wide, facing each other in pairs of columns (back at the FBX's local +Z).
                 float rot = pair % 2 == 0 ? 180f : 0f;
+                // A window seat on its own (its aisle place taken by a 1x1 prop): Seat_Single. Only doubles get clutter.
                 if (At(x, 0) == 'S' && At(x, 1) == 'S') { seats.Add(Place("Seat_Double", -1.45f, z, rot).transform); Lamp(x, true); }
+                else if (At(x, 0) == 'S' && kit.Get("Seat_Single")) { Place("Seat_Single", -1.95f, z, rot); Lamp(x, true); }
                 if (At(x, car.H - 2) == 'S' && At(x, car.H - 1) == 'S') { seats.Add(Place("Seat_Double", 1.45f, z, rot).transform); Lamp(x, false); }
+                else if (At(x, car.H - 1) == 'S' && kit.Get("Seat_Single")) { Place("Seat_Single", 1.95f, z, rot); Lamp(x, false); }
             }
+            // The gramophone ('G', one per car), its back (local +Z) to the nearer side wall: against the wall, or beside
+            // the window seat it shares a bank with. The live car's plays the music.
+            for (int x = 0; x < car.W; x++)
+                for (int y = 0; y < car.H; y++)
+                    if (At(x, y) == 'G' && kit.Get("Prop_Gramophone"))
+                    {
+                        var g = Place("Prop_Gramophone", y - 2f, x + 1f, y < car.H / 2 ? -90f : 90f);
+                        if (live) SetGramophone(g.transform);
+                    }
             if (kind == CarKind.Dining || kind == CarKind.Baggage)
             {
                 var bulbs = new List<Transform>();
@@ -1532,6 +1544,7 @@ namespace RailTracer
                 playerFacing = dir.normalized;
                 // A cover finisher (shoved over a seat): the pair turns to face the seat and moves towards it.
                 bool useCover = entry != null && entry.needsCover && coverDir.HasValue;
+                if (useCover && c.gramophone == coverCell) c.Do("needle"); // shoved onto the gramophone: the music stops
                 if (useCover)
                 {
                     playerFacing = coverDir.Value;

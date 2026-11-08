@@ -742,7 +742,6 @@ namespace RailTracer
                             break;
                         case 'B': Box(at + Vector3.up * 0.53f, new Vector3(0.96f, 1.06f, 0.7f), wood, solid: true, parent: parent); break;
                         case 'M': Box(at + Vector3.up * 0.3f, new Vector3(0.75f, 0.6f, 0.7f), sack, solid: true, parent: parent); break;
-                        case 'G': Box(at + Vector3.up * 0.35f, new Vector3(0.6f, 0.7f, 0.58f), wood, solid: true, parent: parent); break; // no music without the model
                         case 'X':
                         case 'x':
                             Box(at + Vector3.up * 0.45f, new Vector3(0.94f, 0.9f, 0.94f), crate, solid: true, parent: parent);
@@ -779,8 +778,8 @@ namespace RailTracer
                 {
                     char ch = map[y][x];
                     var start = new Cell(x, y);
-                    if ("TOBDXxMCG".IndexOf(ch) < 0 || seen.Contains(start)) continue;
-                    bool single = "XxMG".IndexOf(ch) >= 0; // one model per tile
+                    if ("TOBDXxMC".IndexOf(ch) < 0 || seen.Contains(start)) continue;
+                    bool single = "XxM".IndexOf(ch) >= 0; // one model per tile
                     var group = single ? new HashSet<Cell> { start } : TileGroup(map, start, ch);
                     seen.UnionWith(group);
                     string model = null;
@@ -788,12 +787,7 @@ namespace RailTracer
                     var rot = Quaternion.identity;
                     bool mirror = false;
                     int hash = (x * 73856093) ^ (y * 19349663);
-                    if (ch == 'G')
-                    {
-                        model = "Prop_Gramophone";
-                        rot = y == 0 ? Quaternion.identity : Quaternion.Euler(0f, 180f, 0f); // back (local +Z) to its wall
-                    }
-                    else if (single)
+                    if (single)
                     {
                         model = ch == 'M' ? (hash & 1) == 0 ? "Mail_Sacks_A" : "Mail_Sacks_B" : "Crate_Stack_" + "ABC"[(hash & 0x7fffffff) % 3];
                         rot = Quaternion.Euler(0f, 90f * ((hash >> 3) & 3), 0f);
@@ -856,7 +850,6 @@ namespace RailTracer
                     go.transform.localPosition = pos;
                     go.transform.localRotation = rot;
                     if (mirror) go.transform.localScale = new Vector3(-1f, 1f, 1f);
-                    if (model == "Prop_Gramophone" && parent == root) SetGramophone(go.transform); // the live car's plays
                     // A table's lamp bulb, in the model's own space (the FBX's anchor empties don't get the meshes' axis
                     // conversion, so they're not used): 1.01 m up in the lamp's shade, over the pivot tile (the 2-tile
                     // table: between its tiles).
