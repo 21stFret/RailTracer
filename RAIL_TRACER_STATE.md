@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 19.20 (9 Nov 2026).
+Last updated: Update 19.21 (9 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -105,13 +105,16 @@ Inspector; the saved scene matches these.
 | 19.18 (kill cam slow motion on by default, 0.25x) | Done. The default for new settings (was 1x, off); a save that already has settings keeps its own, change it in Options. Game "Kill Cam Slow Mo" and the scene match. Scripts compile (checked outside Unity) |
 | 19.19 (kill cam chance 75% by default) | Done. What a first player starts with (was 100%); a save that already has settings keeps its own. Scripts compile (checked outside Unity) |
 | 19.20 (startles show once the act is done) | Done, not yet seen in Play mode. The rules still startle the instant you act (leap or hop landing, a brutal kill seen by someone who has never seen you); the view now holds it until the act has played out (landed, takedown done, nothing busy): until then the newly startled keep their old chip, gun holstered if they were unaware, no recoil, no eye. The log line still appears at once. Scripts compile (checked outside Unity) |
+| 19.21 (three Journey trains) | Done, not yet seen in Play mode. Journey is now 3 trains of 5 cars, unlocked one car after the next across all 15 (clearing car 5 of a train opens the next). Train 1 unchanged; train 2 (The Supper Express) and train 3 (The Night Freight) are 10 new hand-made cars, see The train. Saves grow from 5 to 15 entries (old progress kept). Journey menu: a line to step between trains (locked ones shown, not playable). Rules check covers all 15 (new piece-shape check), solver targets set for the new cars. Scripts compile (checked outside Unity) |
 | Next | Full audio pass |
 
 ## The train
 
 "Red Line" (working title) is shown only as the start screen's title; the product name, repo, folders and namespaces stay RailTracer.
 
-- **Demo:** five fixed cars, played in order, the same every playthrough (`Train.cs`). All 26 x 5, you start at the left door.
+- **Journey:** three trains of five fixed cars, played in order, the same every playthrough (`Train.cs`; car index 0-14, `Train.TrainCars` / `Trains` / `Cars`). All 26 x 5, you start at the left door. Each car unlocks when the one before it is cleared, so clearing car 5 of a train opens the next train. Every car has a target turn count from the level solver (seed 1).
+
+**Train 1, The Red Line**
 
 | Car | Name | Layout | Enemies |
 | --- | --- | --- | --- |
@@ -121,6 +124,26 @@ Inspector; the saved scene matches these.
 | 4 | Baggage hold | Hand-made greybox: crate maze, mail sacks, the safe's cage, a few windows | 7 guards, 2 heavies |
 | 5 | First class | Generated (seed 5005), the passenger layout | 8 guards, 3 heavies |
 
+**Train 2, The Supper Express** (more dining, no baggage hold; all hand-made)
+
+| Car | Name | Layout | Enemies | Target |
+| --- | --- | --- | --- | --- |
+| 1 | Pullman car | Passenger: the partition far down (column 19), a bank missing on each side for open floor, the gramophone in a bank's aisle place | 9 guards, 1 heavy (by the partition) | 10 |
+| 2 | Restaurant car | Dining: tables of every shape down both sides, no bar, the gramophone between two window tables, a cart in the aisle, waiters patrolling | 8 guards, 2 heavies | 9 |
+| 3 | Smoking car | Passenger: the partition two banks in (column 7), then six close-packed banks, luggage in the gaps | 8 guards, 2 heavies | 9 |
+| 4 | Lounge car | Dining: the L bar in the middle of the car (bartender behind), the gramophone just past it, two carts in the aisle | 8 guards, 2 heavies | 12 |
+| 5 | Grand saloon | Dining: round tables, the bar at the far end on the near side (mirrored), a cart mid-aisle | 8 guards, 3 heavies | 10 |
+
+**Train 3, The Night Freight** (more baggage holds, no dining car; all hand-made)
+
+| Car | Name | Layout | Enemies | Target |
+| --- | --- | --- | --- | --- |
+| 1 | Night coach | Passenger: the partition halfway (column 16), banks missing here and there | 9 guards, 2 heavies | 9 |
+| 2 | Mail van | Baggage: mail sacks everywhere (half cover), a few crates, short runs of window | 8 guards, 3 heavies | 8 |
+| 3 | Guards' coach | Passenger: the partition early (column 10), every bank but two filled | 9 guards, 3 heavies | 10 |
+| 4 | Bullion van | Baggage: the safe's cage against the far wall, crates and sacks in a loose maze | 8 guards, 4 heavies | 11 |
+| 5 | Guard's van | Baggage: crates and sacks staggered down both sides | 9 guards, 4 heavies | 14 |
+
 - **Sun:** the directional light stays on over the kit carriage, with no shadows and very dim (Game "Sun Dim", 0.01); the lamps light the car.
 - **Map tiles:** '.' floor, '_' floor with plain wall (plain wall also behind 'l', 'x' and 'B'), 'S' seat, 'L' / 'l' luggage, 'W' wall, 'P' start. New: 'T' dining table (straight or L groups), 'O' round table (2x2), 'D' dining cart, 'B' bar, 'M' mail sack, 'G' gramophone, one per car (seat rules: no walking through, leap over, half cover crouched; on a window row it has plain wall behind it, like 'B'); 'X' / 'x' crate (luggage rules: blocks walking and sight; leapt over); 'C' the safe's cage (blocks walking, leaps and snatches like a wall, but you can see through it). Chairs sit tucked under the tables and block nothing.
 - **Dining car furniture (models):** `Assets/KitScripts/railtracer_dining.py` (stylized-blender-assets, RailTracer profile) exports to `Train Assets/Dining`: Dining_Table_1, Dining_Table_2 (straight), Dining_Table_L (3 tiles), Dining_Table_Round (2x2), Dining_Cart, Bar_L (4 + 1). Linen cloths (Trn_Linen: a warm oatmeal, about #B8A88C, fully matt, so the white plates stand out), dark wood pedestals, velvet chairs pulled in, seats 24 cm under the table edge (0.42 m from a square tile's centre, 0.66 m from the round table's; reaching ~0.2 m into the open tiles around), brass table lamps (solid dark green shades in Trn_Shade, smooth and matt, no texture; the game puts the bulb 1.01 m up over the lamp, Game "Table Lamp Height", since FBX anchor empties miss the axis conversion) and place settings (a rimmed plate, an ornate brass fork and knife either side (teardrop handle ends with a raised boss, waisted handles, collars), the cup and saucer up to the right, clear of the plate); the bar's panels and brass foot rail face the room, taps and a register on top, a cupboard and one shelf of bottles on the wall behind the bartender (under 1.8 m, clear of the wall lamps). New materials Trn_Linen, Trn_Porcelain. The game fits each model to its group of tiles (GameFlow DiningModels: turned to the group, the bar mirrored if needed); any other shape falls back to the greybox.
@@ -129,7 +152,8 @@ Inspector; the saved scene matches these.
 - **Wall lamps** (every car): spots, Game "Wall Lamp Intensity" 2, Range 4.5, Angle 120, Inner Angle 0 (renamed from Lamp Intensity / Range / Angle, so the scene's old 3 / 80 no longer apply). Both are the maximum: the legend's lamp levels (1 at legend 0, down to 0.85) only dim them.
 - **Every car** starts at legend 0 with cooldowns clear and the lamps warm. You get half your health back (15) at the start of each car, up to 30.
 - **Clearing a car:** the win card shows the tickets and "Hold Space / click to walk on" with a bar that fills over the hold (empties if you let go early), or R to ride again. Walking on: you stand up first if crouched (Game "Stand Up Time" 0.4 s), then walk out of the far door: the walk clip, at Game "Walk Out Pace" (1.25) x its own speed (a confident walk clip could replace it later). Then the **walk-through car**: the first carriage's seats, nobody in it, no turns, no move costs, no skills. A glowing tile by the far door asks "Board / Not yet" (Space or Enter boards).
-- **After car 5:** you walk out into the quiet carriage (no board tile), then a card like the tutorial's: "Thanks for playing the demo! If you enjoyed it, please leave a review and join our Discord. Try the Endless mode for more fun!"; any key or click, then "Demo complete": Restart from car 1, Try Endless mode, Main menu.
+- **After car 5 of train 1 or 2:** the walk-through car's card names the next train and its board panel reads e.g. "The Supper Express · car 1: Pullman car".
+- **After car 5 of train 3:** you walk out into the quiet carriage (no board tile), then a card like the tutorial's: "Thanks for playing the demo! If you enjoyed it, please leave a review and join our Discord. Try the Endless mode for more fun!"; any key or click, then "Demo complete": Restart from The Red Line, Try Endless mode, Main menu.
 - **Fleeing enemies** jump off the train: broken, gone, never in the next car.
 - **Endless mode:** generated cars without end (TrainGen), the same rules; each car 7 to 9 guards and 0 to 2 heavies, rolled from its seed (no climb), and at least 8 seat banks (of about 16 places; `Train.EndlessMinBanks`, missing banks added at random).
 - R restarts the current car from its start (the health you came in with; an endless car keeps its layout). N on a won car's card: straight out (debug).
@@ -138,16 +162,16 @@ Inspector; the saved scene matches these.
 
 - One slot, `save.json` in Unity's persistent data folder, overwritten automatically: at the start of every player turn (after the enemy turn's results, so reloading never rerolls a shot), when a car or walk-through car starts, and when settings change.
 - The run is saved as its car, the car's seed, your health coming in and every command since (`Carriage.Do`: moves, leaps, hops, kills, throws, grabs, crouches, undos, each enemy's turn). Continue replays them onto a fresh copy of the car, which lands exactly where you were at the start of that turn: enemies (position, facing, awareness, terror, panic rolls, has-seen), bodies, blood, your stance, health, legend, cooldowns, held body, the turn number and the log. Checked in RulesCheck against 40 random games.
-- Also saved: which demo cars are cleared, the best ticket per car (most killed plus broken, then fewest turns) and the settings.
+- Also saved: which Journey cars are cleared (15 entries; a save from before 19.21 has 5 and is grown to 15 on load, its progress kept), the best ticket per car (most killed plus broken, then fewest turns) and the settings. The run's car is 0-14 across the trains; Continue reads "train 2, car 3, turn 4".
 
 ## Menus
 
-Every menu is over the real carriages: the live (saved) car plus the other demo cars built beside it, empty and without props. Menu train lamps: red for a cleared car, white for the next to play, dark for cars ahead.
+Every menu is over the real carriages: the live (saved) car plus the other cars of its train built beside it, empty and without props (Journey: the picked train's five; the live car sits just before them when it's on another train). Menu train lamps: red for a cleared car, white for the next to play, dark for cars ahead.
 
 - **Layout:** the middle stays clear for the train: the title (or the screen's heading) top left, the menu lines bottom left with any text beside them; no panel behind, the text has a dark glow. No floor overlays behind the menus (reaction zone, routes, arrows, "?" markers, walk range, blood outlines).
 - **Start:** "RED LINE" ("Red" #C8102E, "Line" bone), the saved game behind it, loaded and paused. With no save, an empty car 1 and "Board the train". Lines: Continue (car and turn) or Board the train, Journey, Endless, Options, Quit.
 - **Camera:** each screen is a zoomed-out view of a real car (Start over your car, Options over the next one along); it glides sideways between them. Journey pulls out side-on to the whole train. Continue (or boarding) dives straight down into the car and play resumes, no loading screen.
-- **Journey:** the five cars side-on, names under them (red cleared, white next, grey ahead) with short links between; click one for its name, description and best ticket, and Replay (cleared), Continue or Board (next); clicking the picked car again plays it, like a double click. No confirm: progress (cleared cars, best tickets) is kept whatever you replay, and play goes on in order from the car you jump into. The camera closes in side-on on the picked car (Game "Journey Zoom", 55 m), its neighbours still in view. Playing a car from Journey dives straight down into that car (the menu train is laid out again round it as it is built). Cars ahead can't be played. Replaying a car carries on through the rest of the train.
+- **Journey:** one train at a time; the second line ("Train 2 of 3: The Supper Express", "(locked)" until its first car is open) steps to the next train, wrapping round, and the menu train shows that train's cars. A locked train's cars are shown dark and can't be played ("Clear The Red Line to board this train."). The five cars side-on, names under them (red cleared, white next, grey ahead) with short links between; click one for its name, description and best ticket, and Replay (cleared), Continue or Board (next); clicking the picked car again plays it, like a double click. No confirm: progress (cleared cars, best tickets) is kept whatever you replay, and play goes on in order from the car you jump into. The camera closes in side-on on the picked car (Game "Journey Zoom", 55 m), its neighbours still in view. Playing a car from Journey dives straight down into that car (the menu train is laid out again round it as it is built). Cars ahead can't be played. Replaying a car carries on through the rest of the train.
 - **Options:** Master volume and Music volume (0-100% in 10% steps: click up, right-click down, wrapping round; master is AudioListener.volume, music multiplies the music source on top), Kill cam On/Off, kill cam chance (100, 75, 50, 25%, default 75% since 19.19: how often a kill gets it, takedowns, rail grabs and throws alike), kill cam slow motion (1, 0.75, 0.5, 0.25x, default 0.25x since 19.18: the one slow motion for every kill cam, only on its hits, see Camera), enemy turn speed (Slow, Normal, Fast: 0.6, 1, 1.8x; the pauses between enemies shorter and their walks quicker), window mode (Fullscreen or Windowed: fullscreen is always a borderless window at the desktop's own resolution, never exclusive, so alt-tab and Print Screen don't change the display mode; old saves on exclusive move to it), resolution (the windowed size, smaller than the desktop; shown as the screen's own in fullscreen; the first switch to windowed takes the biggest that fits), Controls (view only). No volume settings yet (the music's level is Game "Music Volume"). The car behind has a lamp per setting, in menu order: off when the setting is off, a slider's value as its brightness (slow motion now, the volumes later); its progress lamps go out while you're there.
 - **Reset data** (Options, on its own in the bottom-right corner, in red): a warning screen ("Reset data?": the saved run, cleared cars, best tickets, settings and tutorial tips all go, for good), then "Reset everything" (red) or Cancel / Esc. Reset: a fresh save, the tutorial forgotten, back to the start screen over an empty car 1.
 - **Pause (Esc):** Resume, Tutorial tips, Kill cam, Restart car, Main menu. Esc backs out of every submenu.
@@ -253,7 +277,7 @@ Hover label: name, role, one state line ("Searching · Shaken", "Panicked · Fre
 
 ## Level solver
 
-`Assets/RailTracer/Editor/LevelSolver.cs`, menu **Rail Tracer > Solve Demo Cars** (results in the Console; about 20 s). For each demo car it searches for a win with the real rules: each turn every plan (stand or crouch; walk to any reachable tile or leap anywhere legal; then any kill on someone within 2 tiles), the enemy turn played as the game does, the 10 most promising lines kept (enemies still fighting, health, legend, closeness). It prints whether the car was cleared, in how many turns, with how much health, killed / broken, and the winning line turn by turn. The dice are the car's seed (1), so a result is for that seed; the count is an upper bound (a cleverer line can only be quicker). It doesn't try throws, drags, window hops or windows. First run (18.39): car 1 in 11 turns, 2 in 13, 3 in 10, 4 in 9, 5 in 12, all at full health.
+`Assets/RailTracer/Editor/LevelSolver.cs`, menu **Rail Tracer > Solve Journey Cars** (results in the Console; about a minute). For each Journey car (all 15) it searches for a win with the real rules: each turn every plan (stand or crouch; walk to any reachable tile or leap anywhere legal; then any kill on someone within 2 tiles), the enemy turn played as the game does, the 10 most promising lines kept (enemies still fighting, health, legend, closeness). It prints whether the car was cleared, in how many turns, with how much health, killed / broken, and the winning line turn by turn. The dice are the car's seed (1), so a result is for that seed; the count is an upper bound (a cleverer line can only be quicker). It doesn't try throws, drags, window hops or windows. First run (18.39): car 1 in 11 turns, 2 in 13, 3 in 10, 4 in 9, 5 in 12, all at full health. Trains 2 and 3 (19.21): 10, 9, 9, 12, 10 and 9, 8, 10, 11, 14 turns, all cleared (the Grand saloon at 15 health, the Guard's van at 10); these are their targets. Train 1's targets (11, 7, 11, 9, 24, from 18.40) were left as they were; with today's rules the solver finds 9, 6, 8, 10 and doesn't clear First class within the search. RulesCheck also checks every Journey map's pieces as the kit builds them (aisle clear, one gramophone, seat banks, partitions, table / bar / cage shapes, tables a tile apart, only its kind's pieces).
 
 ## Animation test
 

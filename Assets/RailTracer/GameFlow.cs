@@ -13,8 +13,8 @@ namespace RailTracer
     {
         public RunSave run;                                  // null: nothing to continue
         public bool hasRun;                                  // JsonUtility never writes null, so this says whether `run` is real
-        public bool[] cleared = new bool[Train.DemoCars];    // demo cars cleared at least once
-        public BestTicket[] best = new BestTicket[Train.DemoCars];
+        public bool[] cleared = new bool[Train.Cars];        // Journey cars (all three trains) cleared at least once
+        public BestTicket[] best = new BestTicket[Train.Cars];
         public Settings settings = new Settings();
     }
 
@@ -24,7 +24,7 @@ namespace RailTracer
     public class RunSave
     {
         public bool endless, walk;  // walk: in the walk-through car before car `car`
-        public int car;             // demo: 0-4; endless: car number from 1
+        public int car;             // Journey: 0-14 (train 1 is 0-4); endless: car number from 1
         public int carSeed;         // endless: the layout's seed
         public int seed, startHp, turn;
         public List<string> history = new List<string>();
@@ -36,7 +36,7 @@ namespace RailTracer
     {
         public bool set;
         public int killed, broken, turns;
-        public bool Beats(BestTicket o) => !o.set || killed + broken > o.killed + o.broken || (killed + broken == o.killed + o.broken && turns < o.turns);
+        public bool Beats(BestTicket o) => o == null || !o.set || killed + broken > o.killed + o.broken || (killed + broken == o.killed + o.broken && turns < o.turns);
     }
 
     [System.Serializable]
@@ -63,7 +63,7 @@ namespace RailTracer
         MenuScreen screen = MenuScreen.Start;
         CarDef car = Train.Demo(0);
         bool endless, walking;
-        int carIndex;          // demo: 0-4; endless: car number from 1 (in the walk-through car: the car ahead)
+        int carIndex;          // Journey: 0-14 across the three trains; endless: car number from 1 (in the walk-through car: the car ahead)
         int carSeed;           // endless: the car's layout
         int rulesSeed = 1, startHp = 30;
         List<string> replay;   // a save's commands, replayed by the next Build
@@ -95,12 +95,13 @@ namespace RailTracer
         {
             try { if (File.Exists(SavePath)) save = JsonUtility.FromJson<SaveData>(File.ReadAllText(SavePath)) ?? new SaveData(); }
             catch (System.Exception ex) { Debug.LogWarning("Rail Tracer: couldn't read the save (" + ex.Message + "); starting fresh."); save = new SaveData(); }
-            if (save.cleared == null || save.cleared.Length != Train.DemoCars) save.cleared = new bool[Train.DemoCars];
-            if (save.best == null || save.best.Length != Train.DemoCars) save.best = Enumerable.Range(0, Train.DemoCars).Select(_ => new BestTicket()).ToArray();
+            // Saves from before trains 2 and 3 have 5 entries: grown to 15, train 1's progress kept.
+            System.Array.Resize(ref save.cleared, Train.Cars);
+            System.Array.Resize(ref save.best, Train.Cars);
             for (int i = 0; i < save.best.Length; i++) save.best[i] ??= new BestTicket();
             save.settings ??= new Settings();
             if (!save.hasRun) save.run = null;
-            if (save.run != null && (save.run.history == null || (!save.run.endless && (save.run.car < 0 || save.run.car >= Train.DemoCars)))) save.run = null;
+            if (save.run != null && (save.run.history == null || (!save.run.endless && (save.run.car < 0 || save.run.car >= Train.Cars)))) save.run = null;
         }
 
         void WriteSave()
@@ -145,7 +146,15 @@ namespace RailTracer
 
         CarDef CurrentDef() => walking ? Train.WalkThrough() : endless ? Train.Endless(carIndex, carSeed) : Train.Demo(carIndex);
 
-        string CarLabel() => walking ? "Between cars" : endless ? $"Endless · car {carIndex}" : $"Car {carIndex + 1} of {Train.DemoCars}";
+        string CarLabel() => walking ? "Between cars" : endless ? $"Endless · car {carIndex}" : $"{Train.TrainNames[Train.TrainOf(carIndex)]} · car {carIndex % Train.TrainCars + 1} of {Train.TrainCars}";
+
+        // The walk-through car's card: after a train's last car, the next train named.
+        void WalkCard()
+        {
+            if (demoOver) return;
+            bool newTrain = !endless && carIndex % Train.TrainCars == 0 && carIndex < Train.Cars;
+            hud.ShowCard("Between cars", "A quiet carriage.", newTrain ? $"Next: {Train.TrainNames[Train.TrainOf(carIndex)]}." : "Walk on to the far door.", null, 2.5f, true);
+        }
 
         // A car from scratch: legend 0, cooldowns clear, lamps warm, `hp` health.
         void StartCar(bool endlessRun, int index, int hp, bool newLayout = true)
@@ -261,8 +270,9 @@ namespace RailTracer
             hopMoving = false;
             hopRunning = exiting = false;
             busy = false;
-            // After the last car: on into the quiet carriage all the same (no next car to board), then the thank-you card.
-            bool last = !endless && carIndex == Train.DemoCars - 1;
+            // After the last car of train 3: on into the quiet carriage all the same (no next car to board), then the
+            // thank-you card. After the last car of train 1 or 2 the walk-through car boards the next train.
+            bool last = !endless && carIndex == Train.Cars - 1;
             if (last)
             {
                 save.run = null; // the demo is done: nothing to continue
@@ -388,10 +398,12 @@ namespace RailTracer
             hud.ShowPause(false);
         }
 
-        string NextName() => endless ? $"Endless car {carIndex}" : $"Car {carIndex + 1}: {Train.Demo(carIndex).name}";
+        string NextName() => endless ? $"Endless car {carIndex}"
+            : carIndex % Train.TrainCars == 0 ? $"{Train.TrainNames[Train.TrainOf(carIndex)]} · car 1: {Train.Demo(carIndex).name}"
+            : $"Car {carIndex % Train.TrainCars + 1}: {Train.Demo(carIndex).name}";
 
         string[] ChoiceItems() => choice == "board" ? new[] { "Board", "Not yet" }
-            : choice == "done" ? new[] { "Restart from car 1", "Try Endless mode", "Main menu" }
+            : choice == "done" ? new[] { $"Restart from {Train.TrainNames[0]}", "Try Endless mode", "Main menu" }
             : new[] { "Resume", $"Tutorial tips: {(tut.Skipped ? "Off" : "On")}", $"Kill cam: {(KillCamOn ? "On" : "Off")}", "Restart car", "Main menu" };
 
         // True while the panel is open (it takes the input).
@@ -436,13 +448,17 @@ namespace RailTracer
         readonly List<List<Light>> statusLamps = new List<List<Light>>();
         readonly List<Light> settingLamps = new List<Light>();
 
-        // Which demo slot the live carriage sits in (the menu train is laid out round it); -1 = none of them.
-        int LiveSlot => walking || endless ? -1 : carIndex;
+        // The train the menu train shows (Journey picks it; otherwise the live car's).
+        int shownTrain;
+        // Which slot of the shown train the live carriage sits in (the menu train is laid out round it); -1 = none of
+        // them (an endless or walk-through car, or a car of another train: it sits just before the shown train).
+        int LiveSlot => walking || endless || Train.TrainOf(carIndex) != shownTrain ? -1 : carIndex % Train.TrainCars;
         float SlotX(int k) => (k - LiveSlot) * Pitch;
-        int NextDemo => System.Array.IndexOf(save.cleared, false) is int i && i >= 0 ? i : Train.DemoCars;
+        int NextDemo => System.Array.IndexOf(save.cleared, false) is int i && i >= 0 ? i : Train.Cars; // across all three trains
+        bool TrainOpen(int t) => t * Train.TrainCars <= NextDemo; // its first car cleared or next to play
 
-        // The five demo cars side by side, empty (no people, no props), the live car's slot left to the live car.
-        // Lit by progress: red lamps cleared, white the next to play, dark the cars ahead.
+        // The shown train's five cars side by side, empty (no people, no props), the live car's slot left to the live
+        // car. Lit by progress: red lamps cleared, white the next to play, dark the cars ahead.
         void BuildMenuTrain()
         {
             if (menuTrain) Destroy(menuTrain);
@@ -451,8 +467,9 @@ namespace RailTracer
             settingLamps.Clear();
             menuTrain = new GameObject("Menu Train");
             var kit = useTrainKit ? Resources.Load<TrainKit>("Kit/TrainKit") : null;
-            for (int k = 0; k < Train.DemoCars; k++)
+            for (int k = 0; k < Train.TrainCars; k++)
             {
+                int g = shownTrain * Train.TrainCars + k;
                 var t = new GameObject("Car " + (k + 1)).transform;
                 t.SetParent(menuTrain.transform, false);
                 t.localPosition = new Vector3(SlotX(k), 0f, 0f);
@@ -461,10 +478,10 @@ namespace RailTracer
                 statusLamps.Add(lit);
                 if (k != LiveSlot && kit)
                 {
-                    var def = Train.Demo(k);
+                    var def = Train.Demo(g);
                     BuildKitCarriage(kit, new Carriage(def.map, tuning, 1), def.map, def.kind, t, false);
                 }
-                bool cleared = save.cleared[k], next = k == NextDemo;
+                bool cleared = save.cleared[g], next = g == NextDemo;
                 if (!cleared && !next) continue;
                 foreach (float x in new[] { 4f, 12.5f, 21f })
                 {
@@ -493,8 +510,16 @@ namespace RailTracer
             }
         }
 
+        // The menu train shows train `t` (rebuilt if it was showing another).
+        void ShowTrain(int t)
+        {
+            if (t == shownTrain && menuTrain) return;
+            shownTrain = t;
+            BuildMenuTrain();
+        }
+
         // Where the Options screen looks: the car after the live one (before it, from the last).
-        float OptionsX => (LiveSlot >= 0 ? SlotX(LiveSlot) : 0f) + (LiveSlot == Train.DemoCars - 1 ? -Pitch : Pitch);
+        float OptionsX => (LiveSlot >= 0 ? SlotX(LiveSlot) : 0f) + (LiveSlot == Train.TrainCars - 1 ? -Pitch : Pitch);
 
         // On the Options screens the car's lamps are the settings: off when a setting is off, a slider's value as
         // the brightness (the volumes, kill cam chance and slow motion, enemy speed). Its progress lamps go out.
@@ -518,6 +543,7 @@ namespace RailTracer
             screen = MenuScreen.Start;
             hud.SetVisible(false);
             hud.ShowMenu(true);
+            if (!endless) shownTrain = Train.TrainOf(Mathf.Min(carIndex, Train.Cars - 1));
             BuildMenuTrain();
             menuCamPos = cam.transform.position;
             menuCamRot = cam.transform.rotation;
@@ -531,7 +557,7 @@ namespace RailTracer
             if (screen == MenuScreen.Journey)
             {
                 // Side-on, closed in on the picked car (its neighbours still in view, to pick them).
-                float mid = (journeyPick >= 0 ? SlotX(journeyPick) : (SlotX(0) + SlotX(Train.DemoCars - 1)) / 2f) + (Map[0].Length - 1) / 2f;
+                float mid = (journeyPick >= 0 ? SlotX(journeyPick) : (SlotX(0) + SlotX(Train.TrainCars - 1)) / 2f) + (Map[0].Length - 1) / 2f;
                 float back = journeyPick >= 0 ? journeyZoom : 95f;
                 var look = new Vector3(mid, 0.6f, -2f);
                 var pos = new Vector3(mid + drift * back / 95f, 7f * back / 95f + 1f, -2f - back);
@@ -578,7 +604,7 @@ namespace RailTracer
             hud.SetVisible(true);
             if (c.Round <= 1 && c.history.Count == 0)
             {
-                if (walking && !demoOver) hud.ShowCard("Between cars", "A quiet carriage.", "Walk on to the far door.", null, 2.5f, true);
+                if (walking) WalkCard();
                 else hud.ShowCard(CarLabel(), car.name, "Time to collect.", null, 3f, true);
             }
         }
@@ -603,8 +629,9 @@ namespace RailTracer
         string ContinueText()
         {
             var r = save.run;
-            if (r.walk) return r.endless ? $"Continue · before endless car {r.car}" : $"Continue · before car {r.car + 1}";
-            return r.endless ? $"Continue · endless car {r.car}, turn {r.turn}" : $"Continue · car {r.car + 1}, turn {r.turn}";
+            string where = $"train {Train.TrainOf(r.car) + 1}, car {r.car % Train.TrainCars + 1}";
+            if (r.walk) return r.endless ? $"Continue · before endless car {r.car}" : $"Continue · before {where}";
+            return r.endless ? $"Continue · endless car {r.car}, turn {r.turn}" : $"Continue · {where}, turn {r.turn}";
         }
 
         void MenuStep(Keyboard kb, Mouse mouse)
@@ -624,7 +651,13 @@ namespace RailTracer
                     int hit = hud.RefreshMenu(true, null, items, null, null, at);
                     if (!click) break;
                     if (hit == 0) Dive(BackdropIsEmpty ? () => StartCar(false, 0, MaxHpCarry) : (System.Action)null);
-                    else if (hit == 1) { screen = MenuScreen.Journey; journeyPick = Mathf.Min(NextDemo, Train.DemoCars - 1); }
+                    else if (hit == 1)
+                    {
+                        screen = MenuScreen.Journey;
+                        int at0 = Mathf.Min(NextDemo, Train.Cars - 1);
+                        ShowTrain(Train.TrainOf(at0));
+                        journeyPick = at0 % Train.TrainCars;
+                    }
                     else if (hit == 2) Dive(() => StartCar(true, 1, MaxHpCarry));
                     else if (hit == 3) screen = MenuScreen.Options;
                     else if (hit == 4) Quit();
@@ -632,10 +665,12 @@ namespace RailTracer
                 }
                 case MenuScreen.Journey:
                 {
-                    int next = NextDemo;
-                    var states = Enumerable.Range(0, Train.DemoCars).Select(k => save.cleared[k] ? 2 : k == next ? 1 : 0).ToArray();
-                    var names = Enumerable.Range(0, Train.DemoCars).Select(k => $"{k + 1}  {Train.Demo(k).name}").ToArray();
-                    var screenAt = Enumerable.Range(0, Train.DemoCars).Select(k =>
+                    // The shown train's five cars (journeyPick: the slot in it); the second line steps to the next train.
+                    int next = NextDemo, first = shownTrain * Train.TrainCars;
+                    bool open = TrainOpen(shownTrain);
+                    var states = Enumerable.Range(0, Train.TrainCars).Select(k => save.cleared[first + k] ? 2 : first + k == next ? 1 : 0).ToArray();
+                    var names = Enumerable.Range(0, Train.TrainCars).Select(k => $"{k + 1}  {Train.Demo(first + k).name}").ToArray();
+                    var screenAt = Enumerable.Range(0, Train.TrainCars).Select(k =>
                     {
                         var p = cam.WorldToScreenPoint(new Vector3(SlotX(k) + 12.5f, -0.6f, -4.6f));
                         return new Vector2(p.x, p.y);
@@ -643,17 +678,27 @@ namespace RailTracer
                     int over = hud.RefreshJourney(screenAt, names, states, journeyPick, at);
                     bool again = click && over >= 0 && over == journeyPick; // clicking the picked car plays it, like a double click
                     if (click && over >= 0) journeyPick = over;
-                    var pick = Train.Demo(journeyPick);
-                    bool cleared = save.cleared[journeyPick], isNext = journeyPick == next;
-                    bool resumable = isNext && save.run != null && !save.run.endless && save.run.car == journeyPick;
+                    int pickAt = first + journeyPick;
+                    var pick = Train.Demo(pickAt);
+                    bool cleared = save.cleared[pickAt], isNext = pickAt == next;
+                    bool resumable = isNext && save.run != null && !save.run.endless && save.run.car == pickAt;
                     string action = cleared ? "Replay" : isNext ? (resumable ? "Continue" : "Board") : "Not yet";
-                    var info = $"<b>{journeyPick + 1}. {pick.name}</b>\n{pick.blurb}\n\nBest ticket: {Ticket(save.best[journeyPick])}";
-                    int hit = hud.RefreshMenu(false, "Journey", new[] { action, "Back" }, new[] { cleared || isNext, true }, info, at, held);
-                    if (back || (click && (hit == 1 || hit == -2))) { screen = MenuScreen.Start; break; }
+                    string trainLine = $"Train {shownTrain + 1} of {Train.Trains}: {Train.TrainNames[shownTrain]}{(open ? "" : " (locked)")}";
+                    var info = $"<b>{journeyPick + 1}. {pick.name}</b>\n{pick.blurb}\n\nBest ticket: {Ticket(save.best[pickAt])}" +
+                               (open ? "" : $"\n\nClear {Train.TrainNames[shownTrain - 1]} to board this train.");
+                    int hit = hud.RefreshMenu(false, "Journey", new[] { action, trainLine, "Back" }, new[] { cleared || isNext, true, true }, info, at, held);
+                    if (back || (click && (hit == 2 || hit == -2))) { screen = MenuScreen.Start; break; }
+                    if (click && hit == 1) // the next train along (wrapping round); a locked one shown dark, not playable
+                    {
+                        int t = (shownTrain + 1) % Train.Trains;
+                        ShowTrain(t);
+                        journeyPick = TrainOpen(t) ? Mathf.Clamp(next - t * Train.TrainCars, 0, Train.TrainCars - 1) : 0;
+                        break;
+                    }
                     if ((again || (click && hit == 0)) && (cleared || isNext))
                     {
                         int k = journeyPick;
-                        Dive(resumable ? (System.Action)null : () => StartCar(false, k, MaxHpCarry), k);
+                        Dive(resumable ? (System.Action)null : () => StartCar(false, pickAt, MaxHpCarry), k);
                     }
                     break;
                 }

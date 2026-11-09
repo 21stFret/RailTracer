@@ -601,14 +601,89 @@ namespace RailTracer
             Scenarios(t);
         }
 
+        // A Journey car's map, as the kit builds it (Game.BuildKitCarriage, GameFlow.DiningModels): the aisle clear but for
+        // dining carts; one gramophone; partitions full columns but for the aisle; seat banks two rows deep from a side
+        // wall (or a window seat beside the gramophone), every third column on each side of a partition; luggage and
+        // plain wall on the window rows, never luggage between two seat columns facing each other; tables of 1, 2
+        // (straight) or 3 (L) tiles and 2x2 round tables, a tile apart; the bar an L of 4 + 1 against a wall; the cage a
+        // 3 x 2 block against a wall; each kind of car only its own pieces.
+        static void Pieces(CarDef car, int i)
+        {
+            var m = car.map;
+            int W = m[0].Length, H = m.Length;
+            char At(int x, int y) => x < 0 || y < 0 || x >= W || y >= H ? '#' : m[y][x];
+            string where = $"car {i + 1} ({car.name})";
+            Check(m.All(r => r.Length == W) && m.SelectMany(r => r).All(ch => "._PSLlWGTODBMXxC".IndexOf(ch) >= 0), where + ": a known piece on every tile");
+            Check(Enumerable.Range(1, W - 1).All(x => At(x, 2) == '.' || At(x, 2) == 'D' || (i == 3 && At(x, 2) == 'X')), where + ": the aisle clear"); // the baggage hold's one crate in the aisle
+            Check(m.SelectMany(r => r).Count(ch => ch == 'G') == 1, where + ": one gramophone");
+            string allowed = car.kind == CarKind.Passenger ? "SLlWG" : car.kind == CarKind.Dining ? "TODBG" : "MXxCG";
+            Check(m.SelectMany(r => r).All(ch => ch == '.' || ch == '_' || ch == 'P' || allowed.IndexOf(ch) >= 0), where + ": only its kind's pieces");
+            for (int x = 0; x < W; x++)
+            {
+                if (Enumerable.Range(0, H).Any(y => At(x, y) == 'W'))
+                    Check(Enumerable.Range(0, H).All(y => y == 2 ? At(x, y) == '.' : At(x, y) == 'W'), where + $": partition at {x} a full column");
+                for (int y = 0; y < H; y++)
+                {
+                    char ch = At(x, y);
+                    if ("_lxL".IndexOf(ch) >= 0) Check(y == 0 || y == H - 1, where + $": {ch} at {x},{y} on a window row");
+                    if (ch == 'S') Check(y == 0 ? At(x, 1) == 'S' || At(x, 1) == 'G' : y == 1 ? At(x, 0) == 'S' : y == 3 ? At(x, 4) == 'S' : At(x, 3) == 'S' || At(x, 3) == 'G', where + $": seat {x},{y} in a bank");
+                    if (ch == 'G') Check(y == 0 || y == H - 1 || At(x, y == 1 ? 0 : H - 1) == 'S', where + ": the gramophone against a wall or beside a window seat");
+                }
+            }
+            // Seat columns every third column on each side of the partition; luggage never between two that face each other.
+            var seatCols = Enumerable.Range(0, W).Where(x => Enumerable.Range(0, H).Any(y => At(x, y) == 'S')).ToList();
+            var parts = Enumerable.Range(0, W).Where(x => At(x, 0) == 'W').ToList();
+            if (i != 1 && i != 4) // the generated cars may skip a bank column
+                for (int k = 0; k + 1 < seatCols.Count; k++)
+                    Check(seatCols[k + 1] - seatCols[k] == 3 || parts.Any(p => seatCols[k] < p && p < seatCols[k + 1]), where + $": seat banks every third column ({seatCols[k]}, {seatCols[k + 1]})");
+            for (int k = 0; k + 1 < seatCols.Count; k += 2)
+                for (int x = seatCols[k] + 1; x < seatCols[k + 1]; x++)
+                    Check("Ll".IndexOf(At(x, 0)) < 0 && "Ll".IndexOf(At(x, H - 1)) < 0, where + $": no luggage in the booth at {x}");
+            // Multi-tile pieces.
+            var seen = new HashSet<Cell>();
+            var tables = new List<HashSet<Cell>>();
+            for (int y = 0; y < H; y++)
+                for (int x = 0; x < W; x++)
+                {
+                    char ch = At(x, y);
+                    if ("TOBC".IndexOf(ch) < 0 || seen.Contains(new Cell(x, y))) continue;
+                    var g = new HashSet<Cell> { new Cell(x, y) };
+                    var q = new Queue<Cell>(g);
+                    while (q.Count > 0)
+                    {
+                        var p = q.Dequeue();
+                        foreach (var n in new[] { new Cell(p.x + 1, p.y), new Cell(p.x - 1, p.y), new Cell(p.x, p.y + 1), new Cell(p.x, p.y - 1) })
+                            if (At(n.x, n.y) == ch && g.Add(n)) q.Enqueue(n);
+                    }
+                    seen.UnionWith(g);
+                    int x0 = g.Min(c => c.x), x1 = g.Max(c => c.x), y0 = g.Min(c => c.y), y1 = g.Max(c => c.y), bw = x1 - x0 + 1, bh = y1 - y0 + 1;
+                    // An L: one full row and one full column of its bounding box, meeting at a corner.
+                    bool lShape = g.Count == bw + bh - 1 && g.Any(c => (c.x == x0 || c.x == x1) && (c.y == y0 || c.y == y1) && g.Count(o => o.x == c.x) == bh && g.Count(o => o.y == c.y) == bw);
+                    if (ch == 'T')
+                    {
+                        Check(g.Count == 1 || (g.Count == 2 && (bw == 1 || bh == 1)) || (g.Count == 3 && bw == 2 && bh == 2 && lShape), where + $": table at {x},{y} 1, 2 or an L of 3");
+                        tables.Add(g);
+                    }
+                    if (ch == 'O') { Check(g.Count == 4 && bw == 2 && bh == 2, where + $": round table at {x},{y} 2 x 2"); tables.Add(g); }
+                    if (ch == 'B') Check(g.Count == 5 && lShape && bw == 4 && bh == 2 && (y0 == 0 || y1 == H - 1), where + ": the bar an L of 4 + 1 against a wall");
+                    if (ch == 'C') Check(g.Count == 6 && bw == 3 && bh == 2 && (y0 == 0 || y1 == H - 1), where + ": the cage 3 x 2 against a wall");
+                }
+            Check(tables.All(a => tables.All(b => a == b || a.All(p => b.All(o => Math.Max(Math.Abs(p.x - o.x), Math.Abs(p.y - o.y)) >= 2)))), where + ": tables a tile apart");
+        }
+
         // The demo train, the safe's cage, free walking, and a save replayed from its command history.
         static void Update17(Tuning t)
         {
-            // Guards and heavies per car (18.40): third class 8 / 0, second 7 / 1, dining 8 / 1, baggage 7 / 2, first 8 / 3.
-            int[] guards = { 8, 7, 8, 7, 8 }, heavies = { 0, 1, 1, 2, 3 };
-            for (int i = 0; i < Train.DemoCars; i++)
+            // Guards and heavies per car. Train 1 (18.40): third class 8 / 0, second 7 / 1, dining 8 / 1, baggage 7 / 2,
+            // first 8 / 3. Trains 2 and 3 (19.21): busier each car.
+            int[] guards = { 8, 7, 8, 7, 8, 9, 8, 8, 8, 8, 9, 8, 9, 8, 9 }, heavies = { 0, 1, 1, 2, 3, 1, 2, 2, 2, 3, 2, 3, 3, 4, 4 };
+            for (int i = 0; i < Train.Cars; i++)
             {
                 var car = Train.Demo(i);
+                Pieces(car, i);
+                Check(car.patrols.All(p => p.Key < car.spawns.Length && p.Value[0] == new Cell(car.spawns[p.Key][0], car.spawns[p.Key][1])), $"car {i + 1}: patrols start where their guard does");
+                Check(car.kind != CarKind.Baggage || Train.TrainOf(i) != 1, $"car {i + 1}: no baggage hold on train 2");
+                Check(car.kind != CarKind.Dining || Train.TrainOf(i) != 2, $"car {i + 1}: no dining car on train 3");
                 var c = Train.Make(car, t, 1, t.maxHp);
                 Check(c.W == 26 && c.H == 5 && c.player == new Cell(0, 2), $"car {i + 1}: 26 x 5, you start at the door");
                 Check(c.enemies.Count(e => !e.tough) == guards[i] && c.enemies.Count(e => e.tough) == heavies[i], $"car {i + 1}: {guards[i]} guards, {heavies[i]} heavies");
@@ -744,7 +819,7 @@ namespace RailTracer
             // included), whatever was done.
             for (int seed = 1; seed <= 40; seed++)
             {
-                var car = Train.Demo(seed % Train.DemoCars);
+                var car = Train.Demo(seed % Train.Cars);
                 var tt = new Tuning();
                 var live = Train.Make(car, tt, seed, 25);
                 var rng = new Random(seed);

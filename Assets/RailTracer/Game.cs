@@ -367,7 +367,7 @@ namespace RailTracer
             replay = null;
             if (phase == Phase.Play && !resumed)
             {
-                if (car.kind == CarKind.WalkThrough) { if (!demoOver) hud.ShowCard("Between cars", "A quiet carriage.", "Walk on to the far door.", null, 2.5f, true); }
+                if (car.kind == CarKind.WalkThrough) WalkCard();
                 else hud.ShowCard(CarLabel(), car.name, "Time to collect.", null, 3f, true);
             }
             endShown = false;

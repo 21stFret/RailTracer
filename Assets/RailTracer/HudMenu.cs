@@ -67,7 +67,7 @@ namespace RailTracer
             var screenRect = Rect("Screen", root, Vector2.zero, Vector2.zero, Vector2.zero);
             Stretch(screenRect, 0f);
             (menuClose, menuCloseX) = CloseX(screenRect, 32f); // a submenu's way back
-            for (int i = 0; i < Train.DemoCars; i++)
+            for (int i = 0; i < Train.TrainCars; i++)
             {
                 var n = Text(root, title, 22, TextAlignmentOptions.Center, Vector2.zero, new Vector2(220, 30));
                 n.fontStyle = FontStyles.UpperCase;

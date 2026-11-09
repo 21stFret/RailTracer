@@ -10,7 +10,7 @@ namespace RailTracer
     // States are copied by replaying their command history onto a fresh car (as saves are), so nothing drifts from the
     // rules. The dice are the car's seed: a result is for that seed. Not exhaustive: the turn count it finds is an upper
     // bound (a cleverer line can only be quicker). Doesn't try throws, drags, window hops or opening windows.
-    //   Unity: Rail Tracer > Solve Demo Cars (results in the Console).   Harness: dotnet run -- solve
+    //   Unity: Rail Tracer > Solve Journey Cars (results in the Console).   Harness: dotnet run -- solve
     public static class LevelSolver
     {
         public class Result
@@ -140,11 +140,11 @@ namespace RailTracer
             return r;
         }
 
-        // Every demo car with your full health and the given seed; one line each, plus the winning line.
+        // Every Journey car (all three trains) with your full health and the given seed; one line each, plus the winning line.
         public static List<string> SolveDemo(Tuning t, int seed = 1)
         {
             var report = new List<string>();
-            for (int i = 0; i < Train.DemoCars; i++)
+            for (int i = 0; i < Train.Cars; i++)
             {
                 var car = Train.Demo(i);
                 var r = Solve(car, t, seed, t.maxHp);
@@ -155,7 +155,7 @@ namespace RailTracer
         }
 
 #if UNITY_EDITOR
-        [UnityEditor.MenuItem("Rail Tracer/Solve Demo Cars")]
+        [UnityEditor.MenuItem("Rail Tracer/Solve Journey Cars")]
         static void Menu()
         {
             var t = new Tuning();
@@ -163,7 +163,7 @@ namespace RailTracer
             if (table && table.skills.Length == 8) t.skills = table.skills;
             var game = UnityEngine.Object.FindAnyObjectByType<Game>();
             if (game != null) { t = game.tuning; if (table && table.skills.Length == 8) t.skills = table.skills; }
-            UnityEditor.EditorUtility.DisplayProgressBar("Rail Tracer", "Solving the demo cars (this can take a minute)...", 0.5f);
+            UnityEditor.EditorUtility.DisplayProgressBar("Rail Tracer", "Solving the Journey cars (this can take a minute)...", 0.5f);
             try { UnityEngine.Debug.Log("Rail Tracer, level solver (seed 1):\n" + string.Join("\n", SolveDemo(t))); }
             finally { UnityEditor.EditorUtility.ClearProgressBar(); }
         }
