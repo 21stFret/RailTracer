@@ -358,6 +358,22 @@ namespace RailTracer
             c.Grab();
             Check(!c.CanHopTo(new Cell(3, 0)), "bodies don't go through windows");
 
+            // A hop landing startles, like a leap's: someone who has never seen you loses the turn, no reaction shot; someone
+            // who has (and is ready) fires as before.
+            c = new Carriage(new[] { "..S..S..", "........" }, t, 1);
+            var fresh = c.Spawn(7, 1, -1, 0, 0);
+            c.player = new Cell(1, 0);
+            int hp = c.hp;
+            Check(c.Hop(new Cell(3, 0)) && fresh.awareness == Awareness.Startled && c.hp == hp, "hop landing startles the unaware, no shot");
+            c = new Carriage(new[] { "..S..S..", "........" }, t, 1);
+            var ready = c.Spawn(7, 1, -1, 0, 0);
+            ready.hasSeen = true;
+            ready.awareness = Awareness.Combat;
+            ready.reactionReady = true;
+            c.player = new Cell(1, 0);
+            hp = c.hp;
+            Check(c.Hop(new Cell(3, 0)) && ready.awareness == Awareness.Combat && c.hp < hp, "one who's seen you still fires at the landing");
+
             // Demon throw at 80: blood where it lands, big terror for those who see it.
             c = new Carriage(new[] { "P.......", "........" }, t, 1);
             PlaceBody(c, 1, 0);

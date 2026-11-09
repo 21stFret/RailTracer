@@ -29,7 +29,7 @@ MonoBehaviour:
     cooldown: 3
   - name: 'Window hop'
     shortName: 'Hop'
-    description: 'Out one window, in through the next. Unseen outside.'
+    description: 'Out one window, in through the next. Unseen outside. Startles anyone who has never seen you.'
     upgrade: 'Hop without using your move.'
     unlock: 0
     bloodied: 20

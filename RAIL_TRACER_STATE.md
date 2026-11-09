@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 19.16 (9 Nov 2026).
+Last updated: Update 19.17 (9 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -101,6 +101,7 @@ Inspector; the saved scene matches these.
 | 19.14 (two hop vaults, picked at random) | Done, not yet seen in Play mode. Every climb out and every climb in picks "Vault" (Jump Over) or "Vault2" (Jumping) at random (looks only, not the rules dice). AnimationSetup adds "Vault2" to Player.controller when Unity next reloads scripts. Scripts compile (checked outside Unity) |
 | 19.15 (footprints on the walk out of a cleared car) | Done, not yet seen in Play mode. The walk out (ExitCar) moves you with the hop flag set, which kept footprints off; it now lays them itself (from Footprints From, as anywhere). Scripts compile (checked outside Unity) |
 | 19.16 (footprints where the feet land) | Done, not yet seen in Play mode. Alex: the prints did not land right (they were on a fixed 0.42 m rhythm either side of your line, not where the animated feet stepped). Now each time the other foot becomes the lower one, a print goes under it (between its ankle and toes bones), pointing the way that foot points; Footprint Stride and Gap only apply without foot bones. Scripts compile (checked outside Unity) |
+| 19.17 (the hop landing startles) | Done, not yet seen in Play mode. Like a leap landing: anyone who has never seen you and sees you come in through the window is startled (loses their next turn, no reaction shot); anyone who has seen you reacts as before. No leap-style terror. A rules change: RulesCheck passes (run outside Unity); the level solver doesn't try hops, so its results are unchanged |
 | Next | Full audio pass |
 
 ## The train

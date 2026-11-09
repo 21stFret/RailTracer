@@ -32,7 +32,7 @@ namespace RailTracer
         {
             new SkillDef { name = "Grab and drag", shortName = "Drag", description = "Grab a body for free. Drag it at half speed." },
             new SkillDef { name = "Leap", shortName = "Leap", bloodied = 70, cooldown = 3, description = "Leap 3 tiles over anything but walls. Startles anyone who has never seen you. 3-turn cooldown.", upgrade = "Double leap range." },
-            new SkillDef { name = "Window hop", shortName = "Hop", bloodied = 20, description = "Out one window, in through the next. Unseen outside.", upgrade = "Hop without using your move." },
+            new SkillDef { name = "Window hop", shortName = "Hop", bloodied = 20, description = "Out one window, in through the next. Unseen outside. Startles anyone who has never seen you.", upgrade = "Hop without using your move." },
             new SkillDef { name = "Stealth kill", shortName = "Stealth", bloodied = 40, description = "Kill anyone who can't see you: pulled onto your tile, you stay in cover.", upgrade = "Snatch: yank an enemy 2 tiles away onto your tile, over seats." },
             new SkillDef { name = "Brutal kill", shortName = "Brutal", unlock = 10, bloodied = 50, cooldown = 2, description = "Butcher them where everyone can see. Uses up your moves.", upgrade = "A brutal kill refreshes your leap." },
             new SkillDef { name = "Rail grab", shortName = "Rail", unlock = 30, bloodied = 60, cooldown = 2, description = "Hold an enemy against the passing track.", upgrade = "Bigger terror, more blood." },
@@ -953,7 +953,8 @@ namespace RailTracer
         }
 
         // Window hop: out of a booth's window, in through the next booth's on the same side. Unseen outside; the
-        // landing is seen like any step. Costs your whole move until the legend upgrade. Bodies don't fit.
+        // landing is seen like any step, and startles anyone who has never seen you (as a leap's does). Costs your
+        // whole move until the legend upgrade. Bodies don't fit.
         public bool CanHopTo(Cell c)
         {
             if (!CanMove || hopped || held != null || !IsWindow(player) || !IsWindow(c) || c.y != player.y || Occupied(c)) return false; // once a turn
@@ -984,7 +985,16 @@ namespace RailTracer
             hopped = true;
             if (!Bloodied(SkillId.Hop)) movesLeft = 0;
             Log("You slip out of the window and in through the next.");
-            StepInto(c, enemies.FindAll(WillReact), crouched);
+            // Like a leap landing: anyone who has never seen you and sees you come in is startled (no reaction shot).
+            var watching = enemies.FindAll(WillReact);
+            foreach (var e in enemies)
+                if (!e.hasSeen && Sees(e, c, crouched))
+                {
+                    spotted = true;
+                    Startle(e);
+                    watching.Remove(e);
+                }
+            StepInto(c, watching, crouched);
             return true;
         }
 
