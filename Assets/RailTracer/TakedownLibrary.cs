@@ -7,6 +7,9 @@ namespace RailTracer
     public enum KillKind { Stealth, Brutal }
     public enum TakedownFor { Any, Guard, Heavy }
     public enum TakedownStance { Any, Crouched, Standing } // your stance when you strike (stealth kills keep it)
+    // Which side of the victim a takedown is for: in front of them or behind them. Coming from the side (square to
+    // their facing), it picks from both.
+    public enum TakedownFacing { Front, Back }
 
     // One paired finisher: the attacker's clip (played by you), the victim's, and how they stand together.
     [Serializable]
@@ -16,6 +19,8 @@ namespace RailTracer
         public KillKind kind;
         public TakedownFor target;
         public TakedownStance stance;
+        [Tooltip("Front: when you come at the victim from in front of them; Back: from behind. From the side: either.")]
+        public TakedownFacing facing;
         public AnimationClip attacker, victim;
         public AnimationClip attacker2, victim2;                 // a follow-up played straight after (a combo); empty = none
         [Range(0f, 1f)] public float comboFrom = 0.85f;          // combo: the point in the first clip where the second blends in
@@ -66,17 +71,20 @@ namespace RailTracer
         [Range(0f, 1f)] public float coverChance = 0.5f; // how often a kill beside half cover uses a cover finisher
         [NonSerialized] readonly Dictionary<KillKind, Takedown> last = new Dictionary<KillKind, Takedown>();
 
-        // A takedown of this kind for a guard or a heavy (entries tagged Any suit both) and your stance. With half cover
-        // beside the victim, one that uses it if there is one; otherwise at random, not the one just used when there's a
-        // choice. Null if none fit.
-        public Takedown Pick(KillKind kind, bool heavy, bool crouched, bool cover)
+        // A takedown of this kind for a guard or a heavy (entries tagged Any suit both), your stance and where you come
+        // from (`from`: Front or Back of the victim, null from the side: both). With half cover beside the victim, one that
+        // uses it if there is one; otherwise at random, not the one just used when there's a choice. Nothing tagged for
+        // your side: any side, then any stance too. Null if none fit.
+        public Takedown Pick(KillKind kind, bool heavy, bool crouched, bool cover, TakedownFacing? from = null)
         {
             var want = heavy ? TakedownFor.Heavy : TakedownFor.Guard;
             var stance = crouched ? TakedownStance.Crouched : TakedownStance.Standing;
-            bool Fits(Takedown t, bool anyStance) => t.kind == kind && t.attacker && t.victim && (t.target == want || t.target == TakedownFor.Any)
-                && (anyStance || t.stance == stance || t.stance == TakedownStance.Any) && (!t.needsCover || cover);
-            var set = takedowns.FindAll(t => Fits(t, false));
-            if (set.Count == 0) set = takedowns.FindAll(t => Fits(t, true)); // nothing for this stance: any of its kind
+            bool Fits(Takedown t, bool anySide, bool anyStance) => t.kind == kind && t.attacker && t.victim && (t.target == want || t.target == TakedownFor.Any)
+                && (anyStance || t.stance == stance || t.stance == TakedownStance.Any) && (!t.needsCover || cover)
+                && (anySide || from == null || t.facing == from);
+            var set = takedowns.FindAll(t => Fits(t, false, false));
+            if (set.Count == 0) set = takedowns.FindAll(t => Fits(t, true, false)); // nothing for this side: any side
+            if (set.Count == 0) set = takedowns.FindAll(t => Fits(t, true, true)); // nothing for this stance: any of its kind
             // Beside half cover: a cover finisher (Shove to Table) half the time, the others the rest.
             if (set.Exists(t => t.needsCover) && set.Exists(t => !t.needsCover))
             {

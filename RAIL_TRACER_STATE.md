@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 19.4 (8 Nov 2026).
+Last updated: Update 19.5 (8 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -89,6 +89,7 @@ Inspector; the saved scene matches these.
 | 19.2 (a hop's hit flash with its shot; footprints over the aisle runner; merged into main) | Done, not yet seen in Play mode. The red flash came as the hop started (the hit was counted at once); the footprints lay at 4 mm, under the 1.5 cm velvet aisle runner |
 | 19.3 (characters stand on the aisle runner) | Done, not yet seen in Play mode: feet sank 1.5 cm into the velvet runner |
 | 19.4 (new skill icons, smooth bar edges) | Done, not yet seen in Play mode (Alex checks the bars at 1280x720, 1920x1080, 2560x1440). Watch at game size: the dashed lines on Drag and Throw are about 1 px and may not read; the knife's pins and the track's sleepers are thin too (flag, don't thicken) |
+| 19.5 (takedowns tagged Front or Back) | Done, not yet tried in Unity. Every entry starts as Front until Alex tags it (Resources/Takedowns, "Facing") |
 | Next | Full audio pass |
 
 ## The train
@@ -304,6 +305,7 @@ In the game too, finisher blood now comes from the victim's chest bone (where th
   - Brutal with half cover (a seat) straight out from the victim's tile: Shove to Table half the time (Takedown Library "Cover Chance", 0.5), the pair turned to face that seat; the other brutal finishers the rest.
   - The clips keep their own travel in the pose (imported with root XZ baked from the original position), so a pair lines up through the whole clip once its start offset is right. The exported clips start with both characters on the same spot; each pair has its own starting distance (as set up in Unreal), facing you: Victim Offset Z 1.5 (Shove Neck Slice 1.3), Victim Yaw 180.
   - Each entry can be tagged Guard / Heavy / Any (all Any for now).
+  - **Facing** (19.5): each entry is tagged Front or Back, the side of the victim it's for. The game works out where you come from by the victim's facing: in front of them (straight on or diagonally ahead) picks from the Front takedowns, behind them (straight or diagonally) from the Back ones, square to the side from both. If none of that side fit (kind, guard or heavy, stance, cover), any side does, then any stance. Victim Yaw and Offset still set how each pair stands. The animation test shows the tag.
 - **Turn count** (top left): "TURN 5" and under it "Target 11", the car's target turns (CarDef.targetTurns: the level solver's best on seed 1, kept in Train.cs Targets: 11, 7, 11, 9, 24; rerun the solver after changing a car). The count goes red once you pass the target. No target in endless; nothing in the walk-through car.
 - **Drag box:** while you hold a body it goes red and reads "Drop" in white.
 - **Sketch-style HUD (Update 19):** Alex's hand-drawn look from the mockup ("Game layout - sketch style", the third board of the HUD canvas); same layout, logic, words and numbers. Kalam (Google Fonts, OFL: `Fonts/Kalam-*.ttf`, built into `Resources/Fonts/Kalam SDF` and `Kalam-Bold SDF` by Editor/FontSetup, menu Rail Tracer > Set Up Sketch Font) on the turn counter, tickets, tooltip, status row, skill tiles, legend bar, health, legend number and key hints; menus, pause, cards, chips, the log, the controls panel and the targeting banner keep Anton / Barlow. The bottom-left stack keeps its 0.8 scale (Hud StackScale).

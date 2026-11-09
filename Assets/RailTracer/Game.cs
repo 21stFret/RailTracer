@@ -1573,7 +1573,11 @@ namespace RailTracer
                 }
             }
             // A finisher from the library (guard or heavy set, your stance), played on the "Finisher" states; else the old pair.
-            var entry = takedowns ? takedowns.Pick(brutal ? KillKind.Brutal : KillKind.Stealth, victim.tough, c.crouched, coverDir.HasValue) : null;
+            // In front of the victim or behind them (by the way they face); square to it, from the side: both pools.
+            var victimFacing = new Vector3(victim.facing.x, 0f, -victim.facing.y);
+            float ahead = Vector3.Dot(victimFacing, -new Vector3(away.x, 0f, away.z).normalized);
+            TakedownFacing? approach = ahead > 0.2f ? TakedownFacing.Front : ahead < -0.2f ? TakedownFacing.Back : (TakedownFacing?)null;
+            var entry = takedowns ? takedowns.Pick(brutal ? KillKind.Brutal : KillKind.Stealth, victim.tough, c.crouched, coverDir.HasValue, approach) : null;
             string state = entry != null ? "Finisher" : brutal ? "Takedown" : "StealthKill";
             int hash = Animator.StringToHash(state);
             if (playerAnim && anims.TryGetValue(victim, out var va) && playerAnim.HasState(0, hash) && va.HasState(0, hash))

@@ -272,7 +272,7 @@ namespace RailTracer
 
         void Label(Takedown t, bool chained)
         {
-            label = $"{index + 1}/{library.takedowns.Count}  {t.name}  ({t.kind}, {t.stance}{(t.needsCover ? ", cover" : "")})   " +
+            label = $"{index + 1}/{library.takedowns.Count}  {t.name}  ({t.kind}, {t.stance}, {t.facing}{(t.needsCover ? ", cover" : "")})   " +
                     $"offset {t.victimOffset}  yaw {t.victimYaw}  speed {t.speed:0.##}  blood at {t.bloodAt:0.00}" +
                     (chained ? $"  combo from {t.comboFrom:0.00} start {t.comboStart:0.00} blend {t.comboBlend:0.00}  (blood: of the second clip)" : "") +
                     $"   cam offset {t.camOffset}";
