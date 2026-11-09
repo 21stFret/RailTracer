@@ -3440,7 +3440,9 @@ namespace RailTracer
         // blood casts and clicks pass through). A body goes limp and falls; once it has settled (ragdollSettle) it
         // freezes in that pose and slides so its hips sit over the centre of its tile.
         public float ragdollSettle = 1.6f, ragdollSlide = 0.15f; // the quick slide over its tile before it falls
-        internal static bool HasRagdoll(Animator a) => a && a.GetComponentInChildren<Rigidbody>(true);
+        // Off for now (19.22): bodies topple as before the ragdoll. Set true to bring it back (the bones are still on the prefabs).
+        internal const bool RagdollOn = false;
+        internal static bool HasRagdoll(Animator a) => RagdollOn && a && a.GetComponentInChildren<Rigidbody>(true);
 
         internal static void SetLimp(Animator a, bool limp)
         {
