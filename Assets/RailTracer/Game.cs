@@ -59,7 +59,7 @@ namespace RailTracer
         // as the blood's own decals (a copy of its material with a shoe-print texture in the blood texture's red,
         // Footprint Color), projected Footprint Depth deep onto whatever is there: floor, aisle runner, a body.
         public int footprintsFrom = 50;
-        public float footprintStride = 0.42f, footprintGap = 0.09f, footprintLength = 0.26f, footprintDepth = 0.5f;
+        public float footprintStride = 0.42f, footprintGap = 0.09f, footprintLength = 0.32f, footprintWidth = 0.095f, footprintDepth = 0.5f;
         public Color footprintColor = new Color(0.45f, 0.12f, 0.12f, 0.9f);
         Material[] footprintMats; // left foot, right foot (mirrored)
         float strideLeft;
@@ -463,6 +463,7 @@ namespace RailTracer
             if (!HasModels) return;
             playerBody.enabled = false;
             playerAnim = Character(characterModel, new AnimatorOverrideController(playerController)); // its "Finisher" takes each takedown's clip
+            playerAnim.cullingMode = AnimatorCullingMode.AlwaysAnimate; // keeps going while hidden outside on a window hop
             Colour(playerAnim, tintedParts, conductorSuitColor);
             AddBloodOverlay(playerAnim);
             var knifeKit = Resources.Load<TrainKit>("Kit/TrainKit");
@@ -2083,7 +2084,7 @@ namespace RailTracer
             projector.transform.localRotation = Quaternion.identity;
             projector.transform.localScale = Vector3.one;
             projector.material = footprintMats[leftFoot ? 0 : 1];
-            projector.size = new Vector3(footprintLength * 0.42f, footprintLength, footprintDepth);
+            projector.size = new Vector3(footprintWidth, footprintLength, footprintDepth);
             projector.pivot = Vector3.zero; // the box centred on the floor, reaching up over the runner
             projector.startAngleFade = 50f; projector.endAngleFade = 80f; // floors and what lies on them, not up the walls
             go.transform.localScale = Vector3.one;
@@ -2103,8 +2104,11 @@ namespace RailTracer
                 {
                     float u = (x + 0.5f) / w, v = (y + 0.5f) / h;
                     if (mirror) u = 1f - u;
-                    float sole = 1f - (Sq((u - 0.52f) / 0.46f) + Sq((v - 0.68f) / 0.3f)); // toes up (v = 1), a touch to the inside
-                    float heel = 1f - (Sq((u - 0.5f) / 0.4f) + Sq((v - 0.17f) / 0.15f));
+                    // A shoe, not a blob: the sole long and tapering to the arch (toes up, v = 1, a touch to the inside),
+                    // squarer than an ellipse (4th powers); a short gap; the heel.
+                    float soleHalfW = Mathf.Lerp(0.3f, 0.46f, Mathf.InverseLerp(0.36f, 0.8f, v));
+                    float sole = 1f - (Sq(Sq((u - 0.53f) / soleHalfW)) + Sq(Sq((v - 0.67f) / 0.31f)));
+                    float heel = 1f - (Sq(Sq((u - 0.5f) / 0.38f)) + Sq(Sq((v - 0.16f) / 0.14f)));
                     float k = (float)rng.NextDouble();
                     float a = Mathf.Clamp01(Mathf.Max(sole, heel) * 6f) * (0.55f + 0.45f * k) * col.a;
                     tex.SetPixel(x, y, new Color(col.r * (0.8f + 0.4f * k), col.g * (0.8f + 0.4f * k), col.b * (0.8f + 0.4f * k), a));
@@ -3107,10 +3111,16 @@ namespace RailTracer
             if (playerAnim && playerAnim.HasState(0, vault))
             {
                 playerAnim.speed = hopVaultSpeed;
-                playerAnim.CrossFade(vault, 0.1f, 0, 0f);
-                yield return null; // the cross-fade starts next frame; then the vault's length is known
-                var next = playerAnim.GetNextAnimatorStateInfo(0);
-                if (next.shortNameHash == vault) climbTime = next.length / hopVaultSpeed;
+                // Climbing back in, the animator can still be on (or leaving) the climb-out's vault, where a cross-fade
+                // to it does nothing: restart it outright.
+                bool inVault = playerAnim.GetCurrentAnimatorStateInfo(0).shortNameHash == vault
+                    || playerAnim.GetNextAnimatorStateInfo(0).shortNameHash == vault;
+                if (inVault) playerAnim.Play(vault, 0, 0f);
+                else playerAnim.CrossFade(vault, 0.1f, 0, 0f);
+                yield return null; // it starts next frame; then the vault's length is known
+                var info = playerAnim.GetNextAnimatorStateInfo(0);
+                if (info.shortNameHash != vault) info = playerAnim.GetCurrentAnimatorStateInfo(0);
+                if (info.shortNameHash == vault) climbTime = info.length / hopVaultSpeed;
                 lift = 0f;
             }
             for (float time = 0f; time < climbTime; time += Time.deltaTime)
