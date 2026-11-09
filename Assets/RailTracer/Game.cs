@@ -348,6 +348,7 @@ namespace RailTracer
             marks.Clear();
             sashes.Clear();
             hopRunning = hopMoving = false;
+            KeepTurnPrints();
             if (playerAnim) playerAnim.speed = 1f; // a vault cut short by the car ending
             armed.Clear();
             guns.Clear(); // they went with the old car
@@ -1153,12 +1154,7 @@ namespace RailTracer
                 if (kb.lKey.wasPressedThisFrame) { hud.ShowLog(c.log); Time.timeScale = 0f; }
                 if (kb.gKey.wasPressedThisFrame && !busy && !walking) c.Do(c.held != null ? "drop" : "grab");
                 showAllSenses = kb.vKey.isPressed;
-                if (kb.zKey.wasPressedThisFrame && !busy && c.CanReset)
-                {
-                    c.Do("undo");
-                    playerRoute.Clear();
-                    playerShown = World(c.player); // undo snaps back rather than walking
-                }
+                if (kb.zKey.wasPressedThisFrame) Undo();
                 if (kb.cKey.wasPressedThisFrame && !busy) c.Do("crouch");
                 if (kb.bKey.wasPressedThisFrame) bloodOutlines = !bloodOutlines;
                 if (kb.oKey.wasPressedThisFrame && mouse != null) WindowUnderMouse(mouse.position.ReadValue())?.Toggle();
@@ -1190,14 +1186,7 @@ namespace RailTracer
             {
                 case "end": if (!busy && !c.Over && !walking) { spaceHeld = 0f; endByMouse = true; } break; // hold the button, like Space
                 case "crouch": if (!busy) c.Do("crouch"); break;
-                case "undo":
-                    if (!busy && c.CanReset)
-                    {
-                        c.Do("undo");
-                        playerRoute.Clear();
-                        playerShown = World(c.player);
-                    }
-                    break;
+                case "undo": Undo(); break;
                 case "cancel": selected = null; break;
                 case "pause": if (!busy) OpenChoice("pause"); break;
                 case "controls": hud.ToggleControls(); break;
@@ -2057,6 +2046,31 @@ namespace RailTracer
         }
 
         // One bloody print each stride walked: a blood decal projected down, toes along the walk, alternate feet.
+        // Undo the turn's moves: snaps back rather than walking, and the walk's footprints go with it.
+        void Undo()
+        {
+            if (busy || !c.CanReset) return;
+            c.Do("undo");
+            playerRoute.Clear();
+            playerShown = World(c.player);
+            foreach (var p in turnPrints) if (p) Destroy(p);
+            turnPrints.Clear();
+            strideLeft = strideAtTurnStart;
+            leftFoot = leftFootAtTurnStart;
+        }
+
+        // Prints laid this turn (Undo removes them) and the stride as the turn began; reset when a turn ends.
+        readonly List<GameObject> turnPrints = new List<GameObject>();
+        float strideAtTurnStart;
+        bool leftFootAtTurnStart;
+
+        void KeepTurnPrints()
+        {
+            turnPrints.Clear();
+            strideAtTurnStart = strideLeft;
+            leftFootAtTurnStart = leftFoot;
+        }
+
         void Footprints(Vector3 step)
         {
             strideLeft -= step.magnitude;
@@ -2079,6 +2093,7 @@ namespace RailTracer
             var dir = new Vector3(step.x, 0f, step.z).normalized;
             var go = Instantiate(blood.decals[0], root);
             go.name = "Footprint";
+            turnPrints.Add(go);
             var projector = go.GetComponentInChildren<UnityEngine.Rendering.Universal.DecalProjector>();
             projector.transform.localPosition = Vector3.zero;
             projector.transform.localRotation = Quaternion.identity;
@@ -2134,6 +2149,7 @@ namespace RailTracer
             Poll(); // cards from the player's move first
             while (tut.Active) yield return null;
             c.Do("end");
+            KeepTurnPrints(); // the turn's walk is final now
             foreach (var e in c.enemies)
             {
                 if (c.Over) break;
