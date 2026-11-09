@@ -59,7 +59,7 @@ namespace RailTracer
         // as the blood's own decals (a copy of its material with a shoe-print texture in the blood texture's red,
         // Footprint Color), projected Footprint Depth deep onto whatever is there: floor, aisle runner, a body.
         public int footprintsFrom = 50;
-        public float footprintStride = 0.42f, footprintGap = 0.09f, footprintLength = 0.32f, footprintWidth = 0.095f, footprintDepth = 0.5f;
+        public float footprintStride = 0.42f, footprintGap = 0.09f, footprintLength = 0.32f, footprintWidth = 0.115f, footprintDepth = 0.5f;
         public Color footprintColor = new Color(0.45f, 0.12f, 0.12f, 0.9f);
         Material[] footprintMats; // left foot, right foot (mirrored)
         float strideLeft;
@@ -2111,7 +2111,7 @@ namespace RailTracer
         // mirror: the other foot.
         static Texture2D FootprintTexture(bool mirror, Color col)
         {
-            const int w = 32, h = 80;
+            const int w = 64, h = 192;
             var tex = new Texture2D(w, h, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
             var rng = new System.Random(mirror ? 11 : 7);
             for (int y = 0; y < h; y++)
@@ -2119,11 +2119,15 @@ namespace RailTracer
                 {
                     float u = (x + 0.5f) / w, v = (y + 0.5f) / h;
                     if (mirror) u = 1f - u;
-                    // A shoe, not a blob: the sole long and tapering to the arch (toes up, v = 1, a touch to the inside),
-                    // squarer than an ellipse (4th powers); a short gap; the heel.
-                    float soleHalfW = Mathf.Lerp(0.3f, 0.46f, Mathf.InverseLerp(0.36f, 0.8f, v));
-                    float sole = 1f - (Sq(Sq((u - 0.53f) / soleHalfW)) + Sq(Sq((v - 0.67f) / 0.31f)));
-                    float heel = 1f - (Sq(Sq((u - 0.5f) / 0.38f)) + Sq(Sq((v - 0.16f) / 0.14f)));
+                    // A classic shoe print (toes up, v = 1; the inside is +u). The sole: an egg, widest above its middle,
+                    // leaning so its waist sits to the inside. The gap: a band tilted up to the inside, sagging a little in
+                    // the middle; it cuts the sole's bottom and the heel's top. The heel: rounded below, set to the inside.
+                    float sy = (v - 0.58f) / 0.42f;
+                    float sole = 1f - (Sq((u - (0.5f - 0.05f * sy)) / (0.47f * (1f + 0.2f * sy))) + sy * sy);
+                    float gap = 0.255f + 0.052f * u - 0.015f * Mathf.Sin(Mathf.PI * u);
+                    sole = Mathf.Min(sole, (v - (gap + 0.055f)) * 12f);
+                    float heel = 1f - (Sq((u - 0.56f) / 0.34f) + Sq((v - 0.12f) / 0.13f));
+                    heel = Mathf.Min(heel, (gap - 0.055f - v) * 12f);
                     float k = (float)rng.NextDouble();
                     float a = Mathf.Clamp01(Mathf.Max(sole, heel) * 6f) * (0.55f + 0.45f * k) * col.a;
                     tex.SetPixel(x, y, new Color(col.r * (0.8f + 0.4f * k), col.g * (0.8f + 0.4f * k), col.b * (0.8f + 0.4f * k), a));
