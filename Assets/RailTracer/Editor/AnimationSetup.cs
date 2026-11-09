@@ -75,14 +75,16 @@ namespace RailTracer
                 AssetDatabase.SaveAssets();
                 Debug.Log("Rail Tracer: player \"StylishFlip\" state added.");
             }
-            // The window hop climbs out and back in with "Vault" (Jump Over, else Jumping). In place: the clips travel far
-            // too much, so their root motion is dropped and Game moves you through the window itself.
-            var vaultPath = File.Exists(Mixamo + "Jump Over.fbx") ? Mixamo + "Jump Over.fbx" : Mixamo + "Jumping.fbx";
-            var vault = File.Exists(vaultPath) ? MixamoClip(vaultPath, false) : null;
-            if (vault && AddTakedown(Dir + "Player.controller", vault, "Vault", "Idle", "CrouchIdle"))
+            // The window hop climbs out and back in with "Vault" (Jump Over) or "Vault2" (Jumping), picked at random each
+            // climb. In place: the clips travel far too much, so their root motion is dropped and Game moves you itself.
+            foreach (var (state, file) in new[] { ("Vault", "Jump Over.fbx"), ("Vault2", "Jumping.fbx") })
             {
-                AssetDatabase.SaveAssets();
-                Debug.Log($"Rail Tracer: player \"Vault\" state added ({Path.GetFileName(vaultPath)}).");
+                var vault = File.Exists(Mixamo + file) ? MixamoClip(Mixamo + file, false) : null;
+                if (vault && AddTakedown(Dir + "Player.controller", vault, state, "Idle", "CrouchIdle"))
+                {
+                    AssetDatabase.SaveAssets();
+                    Debug.Log($"Rail Tracer: player \"{state}\" state added ({file}).");
+                }
             }
             // Broken enemies kneel ("BegStart", Praying) then beg ("Beg", PrayingLoop); Game plays it instead of the cower.
             var pray = MixamoClip(Mixamo + "Praying.fbx", false);

@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 19.13 (8 Nov 2026).
+Last updated: Update 19.14 (8 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -98,6 +98,7 @@ Inspector; the saved scene matches these.
 | 19.11 (both hop vaults play; longer, thinner footprints) | Done, not yet seen in Play mode. Alex saw only one vault per hop: climbing back in, the animator could still be on the climb-out vault (a cross-fade to the current state does nothing), so it now restarts it, and the player animator always animates (it kept going hidden outside). Footprints 0.32 x 0.095 m (were 0.26 x 0.11, Game "Footprint Width" new) and shoe-shaped: a squarer sole tapering to the arch, a short gap, the heel. Scripts compile (checked outside Unity) |
 | 19.12 (undo takes back the footprints) | Done, not yet seen in Play mode. Undo (Z or the button) removes the prints laid this turn and puts the stride back as the turn began; prints are final once the turn ends. Scripts compile (checked outside Unity) |
 | 19.13 (classic shoe-print footprints) | Done, not yet seen in Play mode. Drawn to Alex's reference: an egg-shaped sole widest above its middle, leaning so the waist sits to the inside; a gap tilted up to the inside and sagging a little; a heel rounded below, set to the inside. Texture 64 x 192 (was 32 x 80); Footprint Width 0.115 m (the reference's proportions). Scripts compile (checked outside Unity) |
+| 19.14 (two hop vaults, picked at random) | Done, not yet seen in Play mode. Every climb out and every climb in picks "Vault" (Jump Over) or "Vault2" (Jumping) at random (looks only, not the rules dice). AnimationSetup adds "Vault2" to Player.controller when Unity next reloads scripts. Scripts compile (checked outside Unity) |
 | Next | Full audio pass |
 
 ## The train

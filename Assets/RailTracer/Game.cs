@@ -3124,15 +3124,16 @@ namespace RailTracer
             flat.y = 0f;
             if (flat.sqrMagnitude > 1e-6f) playerFacing = flat.normalized;
             hopMoving = true;
-            // With a "Vault" state the clip does the jump (its height is in the pose) and lasts as long as the climb;
-            // without one, a little code hop over the sill.
+            // With a vault state ("Vault" or "Vault2", picked at random each climb) the clip does the jump (its height is
+            // in the pose) and lasts as long as the climb; without one, a little code hop over the sill.
             float climbTime = hopClimbTime, lift = 0.7f;
-            int vault = Animator.StringToHash("Vault");
-            if (playerAnim && playerAnim.HasState(0, vault))
+            var vaults = playerAnim ? VaultStates.Where(h => playerAnim.HasState(0, h)).ToArray() : new int[0];
+            if (vaults.Length > 0)
             {
+                int vault = vaults[Random.Range(0, vaults.Length)];
                 playerAnim.speed = hopVaultSpeed;
-                // Climbing back in, the animator can still be on (or leaving) the climb-out's vault, where a cross-fade
-                // to it does nothing: restart it outright.
+                // The animator can still be on (or leaving) the same vault from the last climb, where a cross-fade to it
+                // does nothing: restart it outright.
                 bool inVault = playerAnim.GetCurrentAnimatorStateInfo(0).shortNameHash == vault
                     || playerAnim.GetNextAnimatorStateInfo(0).shortNameHash == vault;
                 if (inVault) playerAnim.Play(vault, 0, 0f);
@@ -3154,6 +3155,8 @@ namespace RailTracer
             hopMoving = false;
             if (window) window.open = false;
         }
+
+        static readonly int[] VaultStates = { Animator.StringToHash("Vault"), Animator.StringToHash("Vault2") };
 
         void ShowPlayer(bool on)
         {
