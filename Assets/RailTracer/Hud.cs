@@ -26,28 +26,11 @@ namespace RailTracer
         }
     }
 
-    // A bar's wedge: `start` of the full height at the left end, full height at the right, bottom flat.
-    public class UITaper : BaseMeshEffect
-    {
-        public float start = 0.28f;
-
-        public override void ModifyMesh(VertexHelper vh)
-        {
-            if (!IsActive()) return;
-            var r = ((RectTransform)transform).rect;
-            var v = new UIVertex();
-            for (int i = 0; i < vh.currentVertCount; i++)
-            {
-                vh.PopulateUIVertex(ref v, i);
-                v.position.y = r.yMin + (v.position.y - r.yMin) * Mathf.Lerp(start, 1f, (v.position.x - r.xMin) / r.width);
-                vh.SetUIVertex(v, i);
-            }
-        }
-    }
-
     // A custom shape drawn through an Image: the effect replaces the Image's quad with its own triangles. (Custom
     // Graphic subclasses drew nothing in this project; Images with mesh effects, like UISkew, do.) Add it before
     // UISkew so the shape is drawn, then slanted.
+    // Edges are feathered (Update 19.4): an overlay canvas gets no MSAA, so a hard polygon edge on a long shallow slope
+    // or a tilted card stair-steps. FanAA / RingAA fade each outline over one screen pixel, half in, half out.
     [RequireComponent(typeof(Image))]
     public abstract class UIShape : BaseMeshEffect
     {
@@ -56,12 +39,27 @@ namespace RailTracer
         public bool shown { set => graphic.enabled = value; }
         public RectTransform rectTransform => (RectTransform)transform;
         public void Redraw() => graphic.SetVerticesDirty();
+        // > 0: the Image's sprite tiles every 1 / uvPerUnit units, fixed to the rect (the hatch's stripes).
+        public float uvPerUnit;
+        // One screen pixel in this rect's units (overlay canvas: world units are screen pixels).
+        // ponytail: worked out when the mesh is built; a resolution change keeps the old width until the next redraw.
+        protected float px = 1f;
 
         public override void ModifyMesh(VertexHelper vh)
         {
             if (!IsActive()) return;
             vh.Clear();
-            Build(vh, rectTransform.rect, graphic.color);
+            px = 1f / Mathf.Max(1e-4f, Mathf.Abs(transform.lossyScale.x));
+            var r = rectTransform.rect;
+            Build(vh, r, graphic.color);
+            if (uvPerUnit <= 0f) return;
+            var v = new UIVertex();
+            for (int i = 0; i < vh.currentVertCount; i++)
+            {
+                vh.PopulateUIVertex(ref v, i);
+                v.uv0 = (Vector2)(v.position - (Vector3)r.min) * uvPerUnit;
+                vh.SetUIVertex(v, i);
+            }
         }
 
         protected abstract void Build(VertexHelper vh, Rect r, Color32 col);
@@ -79,14 +77,105 @@ namespace RailTracer
             vh.AddTriangle(i + 2, i + 3, i);
         }
 
-        // A convex outline, fanned from its first point.
-        protected static void Fan(VertexHelper vh, Color32 col, IList<Vector2> pts)
+        // A convex outline, fanned from its first point (or from `hub`, for a star-shaped one).
+        protected static void Fan(VertexHelper vh, Color32 col, IList<Vector2> pts, Vector2? hub = null)
         {
             int i0 = vh.currentVertCount;
             var v = UIVertex.simpleVert;
             v.color = col;
+            if (hub.HasValue) { v.position = hub.Value; vh.AddVert(v); }
             foreach (var p in pts) { v.position = p; vh.AddVert(v); }
-            for (int i = 1; i + 1 < pts.Count; i++) vh.AddTriangle(i0, i0 + i, i0 + i + 1);
+            if (hub.HasValue) for (int i = 0; i < pts.Count; i++) vh.AddTriangle(i0, i0 + 1 + i, i0 + 1 + (i + 1) % pts.Count);
+            else for (int i = 1; i + 1 < pts.Count; i++) vh.AddTriangle(i0, i0 + i, i0 + i + 1);
+        }
+
+        // The band between two closed outlines of the same length, `ca` along the first, `cb` along the second.
+        static void Band(VertexHelper vh, IList<Vector2> a, IList<Vector2> b, Color32 ca, Color32 cb)
+        {
+            int n = a.Count;
+            for (int i = 0; i < n; i++)
+            {
+                int j = (i + 1) % n, i0 = vh.currentVertCount;
+                var v = UIVertex.simpleVert;
+                v.color = ca; v.position = a[i]; vh.AddVert(v); v.position = a[j]; vh.AddVert(v);
+                v.color = cb; v.position = b[j]; vh.AddVert(v); v.position = b[i]; vh.AddVert(v);
+                vh.AddTriangle(i0, i0 + 1, i0 + 2);
+                vh.AddTriangle(i0 + 2, i0 + 3, i0);
+            }
+        }
+
+        // The outline moved `d` outward (inward if negative), each edge parallel to itself (mitred corners, capped
+        // at sharp ones). Consecutive repeated points are dropped first.
+        protected static List<Vector2> Offset(IList<Vector2> pts, float d)
+        {
+            var p = Clean(pts);
+            int n = p.Count;
+            float area = 0f;
+            for (int i = 0; i < n; i++) area += p[i].x * p[(i + 1) % n].y - p[(i + 1) % n].x * p[i].y;
+            if (area < 0f) d = -d; // clockwise: outward is the other side
+            var o = new List<Vector2>(n);
+            for (int i = 0; i < n; i++)
+            {
+                Vector2 a = p[(i + n - 1) % n], b = p[i], c = p[(i + 1) % n];
+                Vector2 n1 = Out(b - a), n2 = Out(c - b);
+                float k = 1f + Vector2.Dot(n1, n2);
+                o.Add(b + (k > 0.25f ? (n1 + n2) / k : (n1 + n2).normalized * 2f) * d);
+            }
+            return o;
+        }
+
+        static Vector2 Out(Vector2 e) => new Vector2(e.y, -e.x).normalized;
+
+        protected static List<Vector2> Clean(IList<Vector2> pts)
+        {
+            var p = new List<Vector2>(pts.Count);
+            foreach (var q in pts)
+                if (p.Count == 0 || (q - p[p.Count - 1]).sqrMagnitude > 1e-4f) p.Add(q);
+            while (p.Count > 1 && (p[0] - p[p.Count - 1]).sqrMagnitude <= 1e-4f) p.RemoveAt(p.Count - 1);
+            return p;
+        }
+
+        // A filled outline with its edge faded over one screen pixel.
+        protected void FanAA(VertexHelper vh, Color32 col, IList<Vector2> pts, Vector2? hub = null)
+        {
+            var p = Clean(pts);
+            if (p.Count < 3) return;
+            var inner = Offset(p, -px / 2f);
+            Fan(vh, col, inner, hub);
+            Band(vh, inner, Offset(p, px / 2f), col, new Color32(col.r, col.g, col.b, 0));
+        }
+
+        // The ring between two outlines (`inner` inside `outer`, same number of points), both edges faded.
+        protected void RingAA(VertexHelper vh, Color32 col, IList<Vector2> outer, IList<Vector2> inner)
+        {
+            var clear = new Color32(col.r, col.g, col.b, 0);
+            var oIn = Offset(outer, -px / 2f);
+            var iOut = Offset(inner, px / 2f);
+            Band(vh, oIn, iOut, col, col);
+            Band(vh, oIn, Offset(outer, px / 2f), col, clear);
+            Band(vh, iOut, Offset(inner, -px / 2f), col, clear);
+        }
+    }
+
+    // A bar's wedge (the legend and health bars): `taper` of the full height at the left end, full height at the right,
+    // bottom flat; drawn only between `from` and `to` (0..1 along it), so it is also the bar's fill and its hatched gain.
+    public class Wedge : UIShape
+    {
+        public float taper = 0.3f;
+        float a, b = 1f;
+
+        public void Span(float from, float to)
+        {
+            from = Mathf.Clamp01(from); to = Mathf.Clamp01(to);
+            if (from != a || to != b) { a = from; b = to; Redraw(); }
+        }
+
+        protected override void Build(VertexHelper vh, Rect r, Color32 col)
+        {
+            float x0 = Mathf.Lerp(r.xMin, r.xMax, a), x1 = Mathf.Lerp(r.xMin, r.xMax, b);
+            if (x1 - x0 < 0.01f) return;
+            float Top(float x) => r.yMin + r.height * Mathf.Lerp(taper, 1f, (x - r.xMin) / r.width);
+            FanAA(vh, col, new[] { new Vector2(x0, r.yMin), new Vector2(x1, r.yMin), new Vector2(x1, Top(x1)), new Vector2(x0, Top(x0)) });
         }
     }
 
@@ -131,7 +220,7 @@ namespace RailTracer
                     float t = (ac.x * e.y - ac.y * e.x) / den, u = (ac.x * dir.y - ac.y * dir.x) / den;
                     if (t > 0f && u >= 0f && u <= 1f) { arc.Add(c + dir * t); break; }
                 }
-                Fan(vh, col, arc);
+                Fan(vh, col, arc); // inside the tile: no edge to smooth
                 return;
             }
             float top = r.yMin + Mathf.Clamp01(fillTo) * r.height;
@@ -143,7 +232,7 @@ namespace RailTracer
                 if (a.y <= top) pts.Add(a);
                 if ((a.y < top) != (b.y < top)) pts.Add(Vector2.Lerp(a, b, (top - a.y) / (b.y - a.y)));
             }
-            Fan(vh, col, pts);
+            FanAA(vh, col, pts);
         }
     }
 
@@ -163,7 +252,7 @@ namespace RailTracer
             {
                 var outer = Octagon.Points(r, cut);
                 var inner = Octagon.Points(Inset(r, thickness), Mathf.Max(0f, cut - thickness * Tan22));
-                for (int i = 0; i < 8; i++) Fan(vh, col, new[] { outer[i], outer[(i + 1) % 8], inner[(i + 1) % 8], inner[i] });
+                RingAA(vh, col, outer, inner);
                 return;
             }
             float h = thickness / 2f, along = 0f;
@@ -180,7 +269,7 @@ namespace RailTracer
                     float phase = along % (dash + gapLen);
                     bool on = phase < dash;
                     float e = Mathf.Min(len, s + Mathf.Max(0.01f, on ? dash - phase : dash + gapLen - phase));
-                    if (on) Fan(vh, col, new[] { a + dir * s - n, a + dir * e - n, a + dir * e + n, a + dir * s + n });
+                    if (on) FanAA(vh, col, new[] { a + dir * s - n, a + dir * e - n, a + dir * e + n, a + dir * s + n });
                     along += e - s;
                     s = e;
                 }
@@ -193,7 +282,7 @@ namespace RailTracer
     {
         public float slant = 14f;
 
-        protected override void Build(VertexHelper vh, Rect r, Color32 col) => Fan(vh, col, new[]
+        protected override void Build(VertexHelper vh, Rect r, Color32 col) => FanAA(vh, col, new[]
         {
             new Vector2(r.xMin, r.yMin), new Vector2(r.xMax - slant, r.yMin), new Vector2(r.xMax, r.yMax), new Vector2(r.xMin + slant, r.yMax),
         });
@@ -209,16 +298,19 @@ namespace RailTracer
             for (float s = 0; s < r.width; s += dash + gap)
             {
                 float e = Mathf.Min(s + dash, r.width);
-                Quad(vh, col, r.xMin + s, r.yMin, r.xMin + e, r.yMin + thickness);
-                Quad(vh, col, r.xMin + s, r.yMax - thickness, r.xMin + e, r.yMax);
+                Box(vh, col, r.xMin + s, r.yMin, r.xMin + e, r.yMin + thickness);
+                Box(vh, col, r.xMin + s, r.yMax - thickness, r.xMin + e, r.yMax);
             }
             for (float s = 0; s < r.height; s += dash + gap)
             {
                 float e = Mathf.Min(s + dash, r.height);
-                Quad(vh, col, r.xMin, r.yMin + s, r.xMin + thickness, r.yMin + e);
-                Quad(vh, col, r.xMax - thickness, r.yMin + s, r.xMax, r.yMin + e);
+                Box(vh, col, r.xMin, r.yMin + s, r.xMin + thickness, r.yMin + e);
+                Box(vh, col, r.xMax - thickness, r.yMin + s, r.xMax, r.yMin + e);
             }
         }
+
+        void Box(VertexHelper vh, Color32 col, float x0, float y0, float x1, float y1) =>
+            FanAA(vh, col, new[] { new Vector2(x0, y0), new Vector2(x1, y0), new Vector2(x1, y1), new Vector2(x0, y1) });
     }
 
     // The whole HUD (the Rail Tracer HUD mockup, rebuilt in Unity UI at 1280x720). Bottom-left, bottom up: health,
@@ -248,19 +340,20 @@ namespace RailTracer
         SkillDef[] skills;
         int maxLegend;
         int[] notchAt;
-        Image legendFill, hpFill;
-        RectTransform hatchMask, hatch;
+        Wedge legendFill, hpFill, hatch;
         // The legend the targeted kill would give (0 = no kill targeted): shown hatched on the bar, beside the big
         // number, and as the notches it crosses. Game sets it each frame before Refresh.
         public int legendGain;
         public int shownHp = -1; // health to show instead of the rules' (-1: the rules')
-        Image[] notches, movePips;
+        Image[] notches;
+        Octagon[] movePips;
         TMP_Text[] notchLabels;
         TMP_Text legendNum, hpNum, hpWord, log;
         RectTransform bar, tip, legendGroup;
         Slant tipBorder;
         TMP_Text tipName, tipStatus, tipDesc, tipUp;
-        Image actionPip, stanceIcon, sightIcon;
+        Octagon actionPip;
+        Image stanceIcon, sightIcon;
         TMP_Text stanceWord, sightWord;
         GameObject undo, undoKey, dragging;
         Image endFill;
@@ -378,14 +471,11 @@ namespace RailTracer
             bar.localRotation = Quaternion.Euler(0f, 0f, -0.4f);
             legendFill = OutlinedWedge(bar, BarHeight, Taper, Blood);
             // A targeted kill's legend, not happened yet: hatched from your legend to where the kill lands.
-            hatchMask = Rect("Gain", bar, Vector2.zero, Vector2.zero, new Vector2(0f, BarHeight - 4f));
-            hatchMask.gameObject.AddComponent<RectMask2D>();
-            hatch = Rect("Hatch", hatchMask, Vector2.zero, Vector2.zero, new Vector2(BarWidth, BarHeight - 4f));
-            var hatchImg = hatch.gameObject.AddComponent<RawImage>();
-            hatchImg.texture = Stripes();
-            hatchImg.uvRect = new Rect(0f, 0f, BarWidth / 12f, (BarHeight - 4f) / 12f);
-            hatchImg.raycastTarget = false;
-            hatch.gameObject.AddComponent<UITaper>().start = InnerTaper(BarHeight, Taper);
+            hatch = Draw<Wedge>(bar, Color.white, 2f); // the stripes, tiled every 12 px and fixed to the bar
+            hatch.taper = InnerTaper(BarHeight, Taper);
+            hatch.uvPerUnit = 1f / 12f;
+            hatch.GetComponent<Image>().sprite = Sprite.Create(Stripes(), new Rect(0, 0, 12, 12), Vector2.zero);
+            hatch.Span(0f, 0f);
             notchAt = skills.SelectMany(s => new[] { s.unlock, s.bloodied }).Where(v => v > 0).Distinct().OrderBy(v => v).ToArray();
             notches = new Image[notchAt.Length];
             notchLabels = new TMP_Text[notchAt.Length];
@@ -445,7 +535,7 @@ namespace RailTracer
             Fit(line);
             var moves = Row("Moves", line, 6f);
             var pips = Row("Pips", moves, 3f);
-            movePips = new Image[moveRange];
+            movePips = new Octagon[moveRange];
             for (int i = 0; i < moveRange; i++) movePips[i] = Pip(pips, 16f);
             SketchLabel(moves, "Moves", 14, LockedText);
             var action = Row("Action", line, 6f);
@@ -797,12 +887,9 @@ namespace RailTracer
                 b.wait.text = wait.ToString();
             }
 
-            legendFill.fillAmount = L / (float)maxLegend;
+            legendFill.Span(0f, L / (float)maxLegend);
             int to = Mathf.Min(maxLegend, L + legendGain);
-            hatchMask.gameObject.SetActive(to > L);
-            hatchMask.anchoredPosition = new Vector2(L / (float)maxLegend * BarWidth, 2f); // inside the outline
-            hatchMask.sizeDelta = new Vector2((to - L) / (float)maxLegend * BarWidth, BarHeight - 4f);
-            hatch.anchoredPosition = new Vector2(-hatchMask.anchoredPosition.x, 0f); // the stripes and taper stay fixed to the bar
+            hatch.Span(L / (float)maxLegend, to / (float)maxLegend); // nothing when no kill is targeted
             for (int i = 0; i < notchAt.Length; i++)
                 notches[i].color = notchLabels[i].color = L >= notchAt[i] ? Bone : notchAt[i] <= to ? Bright : NotchAhead;
             float k = L / (float)maxLegend;
@@ -832,12 +919,12 @@ namespace RailTracer
             }
 
             int hp = shownHp >= 0 ? shownHp : c.hp; // held back while a heavy's swing is still on its way
-            hpFill.fillAmount = hp / (float)c.t.maxHp;
+            hpFill.Span(0f, hp / (float)c.t.maxHp);
             hpNum.text = hp.ToString();
             hpWord.rectTransform.anchoredPosition = new Vector2(Left + HpWidth + 10f + hpNum.preferredWidth + 10f, HealthY);
 
-            for (int i = 0; i < movePips.Length; i++) movePips[i].enabled = i < c.movesLeft; // filled while unspent, hollow when spent
-            actionPip.enabled = !(c.acted || c.turnOver);
+            for (int i = 0; i < movePips.Length; i++) movePips[i].shown = i < c.movesLeft; // filled while unspent, hollow when spent
+            actionPip.shown = !(c.acted || c.turnOver);
             stanceIcon.sprite = IconSprite(c.crouched ? "crouch" : "stand");
             stanceWord.text = c.crouched ? "Crouched" : "Standing";
             bool seen = c.SeenByAnyone(c.player);
@@ -1100,7 +1187,7 @@ namespace RailTracer
         }
 
         // A pip (moves, action) at w x 9, skewed 12 degrees: a 1.5 px bone outline, and the returned fill (shown while unspent).
-        Image Pip(Transform parent, float w)
+        Octagon Pip(Transform parent, float w)
         {
             var rt = Rect("Pip", parent, Vector2.zero, Vector2.zero, new Vector2(w, 9));
             Size(rt, w, 9);
@@ -1108,9 +1195,10 @@ namespace RailTracer
             edge.thickness = 1.5f;
             edge.dash = 100000f; // one unbroken stroke per side
             edge.gameObject.AddComponent<UISkew>().degrees = 12f;
-            var img = Img(rt, Bone, 0f);
-            img.gameObject.AddComponent<UISkew>().degrees = 12f;
-            return img;
+            var fill = Draw<Octagon>(rt, Bone, 0f);
+            fill.cut = 0f; // a plain rectangle, edges smoothed
+            fill.gameObject.AddComponent<UISkew>().degrees = 12f;
+            return fill;
         }
 
         // A UIShape (Octagon, OctFrame, Slant, ...) filling its parent, `inset` in from the edges.
@@ -1130,14 +1218,13 @@ namespace RailTracer
 
         // A bar (the legend, health): a wedge `taper` high at its left end, a 2 px bone outline round a dark inside;
         // returns the fill (left to right) inside the outline.
-        Image OutlinedWedge(RectTransform bar, float height, float taper, Color fill)
+        Wedge OutlinedWedge(RectTransform bar, float height, float taper, Color fill)
         {
-            Img(bar, Bone, 0f).gameObject.AddComponent<UITaper>().start = taper;
+            Draw<Wedge>(bar, Bone, 0f).taper = taper;
             float inner = InnerTaper(height, taper);
-            Img(bar, BarBack, 2f).gameObject.AddComponent<UITaper>().start = inner;
-            var f = Img(bar, fill, 2f);
-            Filled(f, Image.FillMethod.Horizontal, (int)Image.OriginHorizontal.Left);
-            f.gameObject.AddComponent<UITaper>().start = inner;
+            Draw<Wedge>(bar, BarBack, 2f).taper = inner;
+            var f = Draw<Wedge>(bar, fill, 2f);
+            f.taper = inner;
             return f;
         }
 

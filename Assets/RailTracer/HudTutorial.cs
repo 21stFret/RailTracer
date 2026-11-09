@@ -15,19 +15,8 @@ namespace RailTracer
             new Vector2(1, 1), new Vector2(0, 1), new Vector2(0, 0.6f), new Vector2(0.2f, 0.5f), new Vector2(0, 0.4f),
         };
 
-        protected override void Build(VertexHelper vh, Rect r, Color32 col)
-        {
-            var v = UIVertex.simpleVert;
-            v.color = col;
-            v.position = r.center;
-            vh.AddVert(v); // a fan from the centre: every edge of the notched outline can see it
-            foreach (var p in Outline)
-            {
-                v.position = new Vector3(r.xMin + p.x * r.width, r.yMin + p.y * r.height);
-                vh.AddVert(v);
-            }
-            for (int i = 0; i < Outline.Length; i++) vh.AddTriangle(0, 1 + i, 1 + (i + 1) % Outline.Length);
-        }
+        protected override void Build(VertexHelper vh, Rect r, Color32 col) =>
+            FanAA(vh, col, Outline.Select(p => new Vector2(r.xMin + p.x * r.width, r.yMin + p.y * r.height)).ToList(), r.center); // a fan from the centre: every edge of the notched outline can see it
     }
 
     // Everything but the holes, in this rect's own coordinates (pivot at the bottom left).

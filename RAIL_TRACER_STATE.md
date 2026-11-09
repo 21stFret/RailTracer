@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 19.3 (8 Nov 2026).
+Last updated: Update 19.4 (8 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -88,6 +88,7 @@ Inspector; the saved scene matches these.
 | 19.1 (solid tile fills, the cooldown sweep back, "Swing" on a heavy's melee, bloody footprints from legend 50) | Done |
 | 19.2 (a hop's hit flash with its shot; footprints over the aisle runner; merged into main) | Done, not yet seen in Play mode. The red flash came as the hop started (the hit was counted at once); the footprints lay at 4 mm, under the 1.5 cm velvet aisle runner |
 | 19.3 (characters stand on the aisle runner) | Done, not yet seen in Play mode: feet sank 1.5 cm into the velvet runner |
+| 19.4 (new skill icons, smooth bar edges) | Done, not yet seen in Play mode (Alex checks the bars at 1280x720, 1920x1080, 2560x1440). Watch at game size: the dashed lines on Drag and Throw are about 1 px and may not read; the knife's pins and the track's sleepers are thin too (flag, don't thicken) |
 | Next | Full audio pass |
 
 ## The train
@@ -307,9 +308,10 @@ In the game too, finisher blood now comes from the victim's chest bone (where th
 - **Drag box:** while you hold a body it goes red and reads "Drop" in white.
 - **Sketch-style HUD (Update 19):** Alex's hand-drawn look from the mockup ("Game layout - sketch style", the third board of the HUD canvas); same layout, logic, words and numbers. Kalam (Google Fonts, OFL: `Fonts/Kalam-*.ttf`, built into `Resources/Fonts/Kalam SDF` and `Kalam-Bold SDF` by Editor/FontSetup, menu Rail Tracer > Set Up Sketch Font) on the turn counter, tickets, tooltip, status row, skill tiles, legend bar, health, legend number and key hints; menus, pause, cards, chips, the log, the controls panel and the targeting banner keep Anton / Barlow. The bottom-left stack keeps its 0.8 scale (Hud StackScale).
   - Skill tiles: 80 x 76 octagons (10 px cut corners), 6 px apart, each with its own fixed tilt (-1.2, 0.8, -0.5, 1, -0.8, 0.6, -1, 0.7 degrees); hotkey top left, icon, name tilted -2 degrees, all in the tile's ink. Ready: bone card, black ink, black frame. No target: black card, bone ink, bone frame dashed 7 on / 5 off (red card ink and frame once Bloodied). Bloodied: red card, bone ink. Locked: grey #3A3536, ink #9A9093. Hovered: bone frame, solid, lifted 4 px; selected or holding a body (red DROP): red frame, lifted 10 px. Fills rise from the bottom as before, solid (Alex: see-through red on bone looked faded). Cooldown, 4 px in: a light black tint (18%) and, over it, the dark sweep from 12 o'clock (72%) that loses a step each turn, shaped to the octagon (Alex wanted the radial sweep back), and the turns left in 40 px.
-  - Icons: `Resources/UI/Icons/skill_*.png`, white, tinted with the ink; rendered from the mockup's SVGs, placeholders until Alex draws his own.
+  - Icons: `Resources/UI/Icons/skill_*.png` (152 x 136, square art fitted to the height and centred), white with transparent cut-outs, tinted with the ink. Alex's picked set (19.4, the "Picked" row of the Skill icon options board): Drag a figure dragging a body by its feet, Leap the arc over a seat, Hop an arc between two windows, Stealth the hunting knife blade down, Brutal a cracked skull, Rail a track running away in perspective, Throw a figure throwing a body along a dashed arc, Dread a demon eye with horns and a blood tear.
   - Tooltip: a parallelogram slanted 14 px, 364 wide, tilted -1 degree; the outline keeps the game's state colour (grey locked, red Bloodied, bone); title bone / red #E0202F / grey #8A8285; the Bloodied line #7A1424 until reached. Hover only.
   - Status row: moves and action pips skewed 12 degrees, bone outline, filled while unspent, hollow when spent; C key box, stance, sight (UNSEEN #B4AEAF, SEEN red); Dragging and Undo as before.
+  - Smooth edges (19.4): the overlay canvas gets no MSAA, so hard polygon edges stair-stepped (worst on the bars' long shallow slopes and the tilted tiles). Every sketch shape (UIShape in Hud.cs: tiles, their frames, the tooltip card, tickets, pips, the bars) now fades its outline over one screen pixel, half inside and half out (FanAA / RingAA: a feathered fringe of extra vertices at alpha 0; no shader). The bars are Wedge shapes: the bone outline, the #1A1416 inside, the fill and the hatched gain each a wedge drawn between two points along the bar (the hatch tiles its 12 px stripes across it), replacing the old UITaper images and the hatch's mask. The cooldown sweep stays hard-edged (it's inside the tile).
   - Legend bar 652 x 20 and health 318 x 18: wedges (30% / 60% high at the left), 2 px bone outline round #1A1416; notches every 10, bone once reached, #6E6466 ahead, red where a targeted kill crosses. The legend number keeps the game's rule (32-72 px, bone to dark red), now at (740, 60) tilted -2 degrees.
   - Turn counter (30, 22 in, -1.5 degrees), tickets (24 x 34, 5 apart, alternately +-1.5 degrees, the group +1; the win card keeps the classic tickets), key hints (bottom right: ESC MENU, H CONTROLS, L LOG; under them SPACE HOLD: END TURN, still filling while held).
   - The classic HUD before it: `git checkout hud-classic` (a tag; main has this one).
