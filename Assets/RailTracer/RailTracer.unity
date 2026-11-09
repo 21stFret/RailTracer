@@ -352,7 +352,7 @@ MonoBehaviour:
   killCamFlyIn: 0.45
   killCamPause: 0.2
   killCamFlyOut: 0.35
-  killCamSlowMo: 1
+  killCamSlowMo: 0.25
   throwCamSlowMo: 0.5
   takedownBloodAt: 0.6
   bloodCastStanding: 1.8

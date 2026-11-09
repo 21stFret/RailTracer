@@ -204,7 +204,7 @@ namespace RailTracer
         public float killCamFlyIn = 0.45f, killCamPause = 0.2f, killCamFlyOut = 0.35f; // seconds (real time)
         // Kill cam slow motion (the Options setting): the game slows to this for Hit Slow Time (real seconds) on each hit
         // the kill cam shows (a takedown's Blood At and extra blood points, a rail grab's impact, a thrown body landing).
-        [Range(0.1f, 1f)] public float killCamSlowMo = 1f;
+        [Range(0.1f, 1f)] public float killCamSlowMo = 0.25f;
         public float hitSlowTime = 0.5f;
         // A heavy's melee: the hit (blood, the red screen, your health going down) waits until it has walked up and its
         // "Swing" clip is this far in (seconds), so it lands with the blow.

@@ -43,7 +43,7 @@ namespace RailTracer
     public class Settings
     {
         public bool killCam = true;
-        public float killCamSlowMo = 1f;
+        public float killCamSlowMo = 0.25f; // on by default, at a quarter speed
         public float killCamChance = 1f; // how often a kill gets the kill cam (0-1), when it's on
         public int enemySpeed = 1;       // the enemy turn: 0 slow, 1 normal, 2 fast
         public float masterVolume = 1f;  // everything (AudioListener.volume), 0-1
