@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 19.8 (8 Nov 2026).
+Last updated: Update 19.9 (8 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -93,6 +93,7 @@ Inspector; the saved scene matches these.
 | 19.6 (enemy route arrows show the real move) | Done, not yet seen in Play mode. The arrow sat at the enemy's feet pointing where it would face at the end of its walk (only a look-around drew its route), and the live plan couldn't see what other enemies do first in the turn (gunfire and shouts send searchers looking round where they stand; earlier moves take tiles) |
 | 19.7 (enemy chips, tighter edges) | Done, not yet seen in Play mode. The insets were the Update 19 values (turn counter and tickets 30 / 22 in, the stack 40 / 14, key hints 30 / 14) |
 | 19.8 (calmer searches, fleers run out of the door, blood-decal footprints) | Done, not yet seen in Play mode. A rules change (searching): RulesCheck and the level solver not rerun (Unity was open); the car targets may shift |
+| 19.9 (Dread adds a stage of fear per sighting) | Done, not yet seen in Play mode. Before: anyone who saw you was raised to at least Shaken, which did nothing once most enemies already were. RulesCheck passes (run outside Unity with dotnet, Unity was open); the level solver not rerun |
 | Next | Full audio pass |
 
 ## The train
@@ -160,7 +161,7 @@ Every menu is over the real carriages: the live (saved) car plus the other demo 
 | 5 | Brutal kill | Action; uses all moves | 2 (blocked next turn; the box shows 1) | The 8 tiles round you | 10 | 50: refreshes your leap |
 | 6 | Rail grab | Action | 2 | The 8 tiles round you; you or they at a window | 30 | 60: bigger terror (×1.5) and medium instead of small for those who only hear it |
 | 7 | Demon throw | Action, body held | 3 | 5 tiles, line of sight | 80 | 80 |
-| 8 | Dread | Passive | none | none | 90 | Anyone who sees you is at least Shaken |
+| 8 | Dread | Passive | none | none | 90 | Each fresh sighting of you (when "spotted you" is logged: at most once a round, not while they keep you in view) pushes the enemy up one stage: Calm to Shaken, Shaken to Panicked, Panicked to Broken. Up to the next stage, not a fixed amount (35 goes to 60) |
 
 Kill details:
 

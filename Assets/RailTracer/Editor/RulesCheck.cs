@@ -889,6 +889,21 @@ namespace RailTracer
             c.legend = Unlock(t, SkillId.Dread);
             c.Move(new Cell(1, 0));
             Check(c.StageOf(tough) >= Stage.Shaken && c.CantAct(Act.QuietKill, tough) != "Too tough: shake them first.", "8: dread shakes on sight");
+            // Dread is one stage per fresh sighting: a panicked enemy who spots you breaks; staying in sight adds nothing.
+            c = new Carriage(new[] { "P.....", "......" }, t, 1);
+            var scared = c.Spawn(5, 1, -1, 0, 0);
+            scared.terror = t.panickedAt;
+            c.legend = Unlock(t, SkillId.Dread);
+            c.Move(new Cell(1, 0));
+            Check(c.StageOf(scared) == Stage.Broken, "8: dread breaks a panicked enemy on sight");
+            c = new Carriage(new[] { "P.....", "......" }, t, 1);
+            var shaken = c.Spawn(5, 0, -1, 0, 0);
+            shaken.terror = t.shakenAt + 5;
+            c.legend = Unlock(t, SkillId.Dread);
+            c.Move(new Cell(1, 0));
+            Check(shaken.terror == t.panickedAt, "8: dread takes a shaken enemy to panicked");
+            EnemyTurn(c);
+            Check(c.StageOf(shaken) == Stage.Panicked, "8: still in sight next turn: no extra stage");
 
             // Updates 9-10, check 4: crouched behind a seat, snatch an enemy 2 tiles away who faces elsewhere. You
             // don't move; the body lands on your tile. A second enemy sees the victim yanked through the seat tile but

@@ -64,7 +64,7 @@ MonoBehaviour:
     cooldown: 3
   - name: 'Dread'
     shortName: 'Dread'
-    description: 'Passive. Anyone who sees you is at least Shaken.'
+    description: 'Passive. Anyone who spots you goes up one stage of fear. Panicked enemies break.'
     upgrade: ''
     unlock: 90
     bloodied: 90

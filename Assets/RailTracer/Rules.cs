@@ -37,7 +37,7 @@ namespace RailTracer
             new SkillDef { name = "Brutal kill", shortName = "Brutal", unlock = 10, bloodied = 50, cooldown = 2, description = "Butcher them where everyone can see. Uses up your moves.", upgrade = "A brutal kill refreshes your leap." },
             new SkillDef { name = "Rail grab", shortName = "Rail", unlock = 30, bloodied = 60, cooldown = 2, description = "Hold an enemy against the passing track.", upgrade = "Bigger terror, more blood." },
             new SkillDef { name = "Demon throw", shortName = "Throw", unlock = 80, bloodied = 80, cooldown = 3, description = "Hurl a held body. Blood and terror where it lands." },
-            new SkillDef { name = "Dread", shortName = "Dread", unlock = 90, bloodied = 90, description = "Passive. Anyone who sees you is at least Shaken." },
+            new SkillDef { name = "Dread", shortName = "Dread", unlock = 90, bloodied = 90, description = "Passive. Anyone who spots you goes up one stage of fear. Panicked enemies break." },
         };
     }
     public enum Intent { None, Hold, Return, Patrol, Shoot, Hesitate, Investigate, Follow, Charge, Melee, Search, Startled, Freeze, Flee, WildFire }
@@ -522,16 +522,21 @@ namespace RailTracer
             Log($"{Name(e)} is searching: {clue.ToString().ToLower()}.");
         }
 
-        // Any sighting of you: remembered for good, and with Dread at least Shaken. Logged once a round, unless
-        // they're already fighting you (they had you in sight).
+        // Any sighting of you: remembered for good. Logged once a round, unless they're already fighting you (they
+        // had you in sight). With Dread, each such fresh sighting pushes them up one stage: Calm > Shaken > Panicked > Broken.
         void SawPlayer(Enemy e, Cell at)
         {
-            if (e.awareness != Awareness.Combat && e.spottedRound != round) Log($"{Name(e)} spotted you.");
+            bool fresh = e.awareness != Awareness.Combat && e.spottedRound != round;
+            if (fresh) Log($"{Name(e)} spotted you.");
             e.spottedRound = round;
             e.hasSeen = true;
             e.lastKnown = at;
             e.sawYouAt = lastSeen = at;
-            if (Has(SkillId.Dread) && e.terror < t.shakenAt) AddTerror(e, t.shakenAt - e.terror);
+            if (fresh && Has(SkillId.Dread))
+            {
+                int next = e.terror < t.shakenAt ? t.shakenAt : e.terror < t.panickedAt ? t.panickedAt : t.brokenAt;
+                AddTerror(e, next - e.terror);
+            }
         }
 
         // Anyone who sees you is in combat (the chip turns red), the moment they see you; `at` = where (default: where
