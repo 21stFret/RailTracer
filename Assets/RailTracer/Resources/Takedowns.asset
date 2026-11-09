@@ -17,6 +17,7 @@ MonoBehaviour:
     kind: 0
     target: 0
     stance: 0
+    facing: 0
     attacker: {fileID: 8993902097722301239, guid: 6440dfbf1af408640a3740e671b5e528, type: 3}
     victim: {fileID: 8993902097722301239, guid: c89388cae16cb174da4beff3a98478bc, type: 3}
     attacker2: {fileID: 0}
@@ -42,6 +43,7 @@ MonoBehaviour:
     kind: 1
     target: 1
     stance: 0
+    facing: 0
     attacker: {fileID: 8993902097722301239, guid: d87b0ae9e930fd943818ed1e8a4ddadf, type: 3}
     victim: {fileID: 8993902097722301239, guid: 0a4de35ed7f77ba4face489805193709, type: 3}
     attacker2: {fileID: 0}
@@ -67,6 +69,7 @@ MonoBehaviour:
     kind: 1
     target: 0
     stance: 0
+    facing: 0
     attacker: {fileID: 8993902097722301239, guid: ab83706daf4c86440b7f987699fa6040, type: 3}
     victim: {fileID: 8993902097722301239, guid: 25e4963988ed05e42bcbaa00caf8eb20, type: 3}
     attacker2: {fileID: 0}
@@ -93,6 +96,7 @@ MonoBehaviour:
     kind: 1
     target: 0
     stance: 0
+    facing: 1
     attacker: {fileID: 8993902097722301239, guid: f6afe5cd3e834dfba5414d0e797309b5, type: 3}
     victim: {fileID: 8993902097722301239, guid: 772e450cd4004c5b91de6b214e7861e5, type: 3}
     attacker2: {fileID: 0}
@@ -118,6 +122,7 @@ MonoBehaviour:
     kind: 0
     target: 0
     stance: 2
+    facing: 1
     attacker: {fileID: 8993902097722301239, guid: b5957850e9134dd9a7121c7ba4577e0f, type: 3}
     victim: {fileID: 8993902097722301239, guid: 5355fb24e162427e8517ba6e9c45f07e, type: 3}
     attacker2: {fileID: 0}
@@ -143,6 +148,7 @@ MonoBehaviour:
     kind: 0
     target: 0
     stance: 2
+    facing: 1
     attacker: {fileID: 8993902097722301239, guid: e56459abaf3a4aceb144fac5472865b4, type: 3}
     victim: {fileID: 8993902097722301239, guid: 5e92da9a167c4866a51023fa16083dbc, type: 3}
     attacker2: {fileID: 0}
@@ -168,6 +174,7 @@ MonoBehaviour:
     kind: 1
     target: 0
     stance: 0
+    facing: 1
     attacker: {fileID: 8993902097722301239, guid: 346bb399366246fba6c3f93067e6cf23, type: 3}
     victim: {fileID: 8993902097722301239, guid: b82737ddf6b34a4ba770c5119c893250, type: 3}
     attacker2: {fileID: 0}
@@ -193,6 +200,7 @@ MonoBehaviour:
     kind: 0
     target: 0
     stance: 2
+    facing: 1
     attacker: {fileID: 8993902097722301239, guid: eddaeb6287f44596b66d56d0c0a795b6, type: 3}
     victim: {fileID: 8993902097722301239, guid: 5089f90c31a346ef91c08c6a0d300c46, type: 3}
     attacker2: {fileID: 0}
@@ -219,6 +227,7 @@ MonoBehaviour:
     kind: 0
     target: 0
     stance: 1
+    facing: 1
     attacker: {fileID: 8993902097722301239, guid: 5970b66641c1448d9d2d88e336c4962f, type: 3}
     victim: {fileID: 8993902097722301239, guid: b3c4feb60e6e4704af5a7b0555e7e749, type: 3}
     attacker2: {fileID: 0}
@@ -245,6 +254,7 @@ MonoBehaviour:
     kind: 0
     target: 0
     stance: 1
+    facing: 1
     attacker: {fileID: 8993902097722301239, guid: 2051325a88244a6d8b00818f57fc0389, type: 3}
     victim: {fileID: 8993902097722301239, guid: 9af00dc1245240ea891dac45bf944401, type: 3}
     attacker2: {fileID: 0}
@@ -267,4 +277,4 @@ MonoBehaviour:
     keepTravel: 0
     camOffset: {x: 0.5117213, y: -0.40498307, z: 1.6633775}
     camLook: {x: 0.04975728, y: 0.099454485, z: 0.31946307}
-  coverChance: 0.5
+  coverChance: 0.7

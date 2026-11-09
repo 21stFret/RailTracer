@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 19.5 (8 Nov 2026).
+Last updated: Update 19.6 (8 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -90,6 +90,7 @@ Inspector; the saved scene matches these.
 | 19.3 (characters stand on the aisle runner) | Done, not yet seen in Play mode: feet sank 1.5 cm into the velvet runner |
 | 19.4 (new skill icons, smooth bar edges) | Done, not yet seen in Play mode (Alex checks the bars at 1280x720, 1920x1080, 2560x1440). Watch at game size: the dashed lines on Drag and Throw are about 1 px and may not read; the knife's pins and the track's sleepers are thin too (flag, don't thicken) |
 | 19.5 (takedowns tagged Front or Back) | Done, not yet tried in Unity. Every entry starts as Front until Alex tags it (Resources/Takedowns, "Facing") |
+| 19.6 (enemy route arrows show the real move) | Done, not yet seen in Play mode. The arrow sat at the enemy's feet pointing where it would face at the end of its walk (only a look-around drew its route), and the live plan couldn't see what other enemies do first in the turn (gunfire and shouts send searchers looking round where they stand; earlier moves take tiles) |
 | Next | Full audio pass |
 
 ## The train
@@ -198,7 +199,7 @@ Hover label: name, role, one state line ("Searching · Shaken", "Panicked · Fre
   1. **Go to the spot** (a noise, a body, where it saw you).
   2. **Follow a blood trail** to the newest part it can see right now (the "?" marker moves with it).
   - A "?" on the floor marks where a searcher will go and look; none for looking around in place (shout or gunfire) and none on the last-seen ghost.
-  3. **Look around** for 3 turns: at the spot (moving within 2 tiles of it), or where it stands if it heard a shout or gunfire. A floor line runs from the enemy along the route it will walk next turn, ending in an arrow for the way it will face (looking around where it stands: just the arrow at its feet).
+  3. **Look around** for 3 turns: at the spot (moving within 2 tiles of it), or where it stands if it heard a shout or gunfire. A floor line runs from the enemy along the route it will walk next turn, ending in an arrow for the way it will face (turning where it stands: just the arrow at its feet). Every enemy that will move or turn shows it (patrols, going back to post, investigating, following a trail, charging, looking around, a guard turning on watch). Since 19.6 the routes come from the enemy turn itself: whenever you act, the game replays the car onto a copy (as a save is restored, the same dice) and plays the coming enemy turn there as if you ended your turn where you stand, so the line is where each one will really go, other enemies' shots, shouts and moves included. It updates as you move.
   Then it gives up and walks back.
 - **Shouting:** the first enemy to see you shouts and comes looking itself (it's in combat). Unaware listeners within 6 tiles turn white, face the shout and look around where they stand.
 - **Gunfire:** everyone not in combat turns to face it and looks around where they stand (the carriage doesn't pile in).

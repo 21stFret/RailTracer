@@ -2520,25 +2520,54 @@ namespace RailTracer
             return go;
         }
 
-        // Patrol routes (drawn once at Build) and an arrow for where an enemy will turn or move next turn.
+        // What each enemy will do if you end your turn now: the coming enemy turn played on a copy of the car (its
+        // history replayed onto a fresh one, as a save is: the same dice), recording every enemy's walk and the way it
+        // ends up facing. So the arrows can't disagree with the turn: another enemy's shot or shout, who gets in whose
+        // way, a body found, all play out as they will. Redone whenever a command changes the car.
+        // ponytail: a full replay per command; fine at a few hundred commands a car, cache a copy if it ever shows.
+        readonly Dictionary<int, (List<Cell> walk, Cell facing)> forecast = new Dictionary<int, (List<Cell>, Cell)>();
+        int forecastAt = -1;
+        Carriage forecastFor;
+
+        void Forecast()
+        {
+            if (forecastFor == c && forecastAt == c.history.Count) return;
+            forecastFor = c;
+            forecastAt = c.history.Count;
+            forecast.Clear();
+            if (c.Over || c.freeWalk) return;
+            var sim = Train.Make(car, tuning, rulesSeed, startHp);
+            foreach (var cmd in c.history) sim.Do(cmd);
+            sim.Do("end");
+            foreach (var e in sim.enemies) // as EnemyPhase plays it
+            {
+                if (sim.Over) break;
+                if (!e.InPlay && sim.Decide(e) != Intent.Flee) continue;
+                sim.Do($"enemy {e.id}");
+                forecast[e.id] = (e.walked ?? new List<Cell>(), e.facing);
+            }
+        }
+
+        // Patrol routes (drawn once at Build) and, for whoever will move or turn next turn, the route it will walk and
+        // an arrow for the way it will face at the end (from the forecast).
         void SyncMarks()
         {
+            bool show = !busy && !c.Over && phase == Phase.Play;
+            if (show) Forecast();
             foreach (var kv in marks)
             {
                 var e = kv.Key;
                 var (route, arrow) = kv.Value;
                 route.enabled = e.InPlay && e.route != null && e.awareness == Awareness.Unaware && phase == Phase.Play;
-                // Only on the turn before the enemy actually turns or moves that way (the rules' own plan).
-                var plan = c.PlannedTurn(e);
-                arrow.enabled = e.InPlay && !busy && !c.Over && phase == Phase.Play && plan.HasValue;
+                bool known = forecast.TryGetValue(e.id, out var plan);
+                arrow.enabled = show && e.InPlay && known && (plan.walk.Count > 0 || plan.facing != e.facing);
                 if (!arrow.enabled) continue;
-                var f = plan.Value;
+                var f = plan.facing;
                 var dir = new Vector3(f.x, 0f, -f.y);
                 var side = new Vector3(dir.z, 0f, -dir.x);
-                // A look-around that moves: the route from the enemy to where it'll stand, then the arrow for its facing.
                 var lift = Vector3.up * 0.07f;
                 var pts = new List<Vector3> { World(e.pos) + lift };
-                foreach (var tile in c.PlannedRoute(e)) pts.Add(World(tile) + lift);
+                foreach (var tile in plan.walk) pts.Add(World(tile) + lift);
                 var from = pts[pts.Count - 1] + dir * 0.3f;
                 var tip = from + dir * 0.45f;
                 pts.AddRange(new[] { from, tip, tip - dir * 0.18f + side * 0.14f, tip, tip - dir * 0.18f - side * 0.14f });
