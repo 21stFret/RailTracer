@@ -806,6 +806,15 @@ namespace RailTracer
             return res;
         }
 
+        // A hop's preview: your tile, then the landing (unseen outside). Ready guns that have seen you fire on it;
+        // anyone who never has is startled instead (as in Hop).
+        public List<(Cell tile, bool seen, Enemy shooter)> HopPreview(Cell c)
+        {
+            var res = Preview(new List<Cell> { c }, crouched, enemies.FindAll(e => WillReact(e) && e.reactionReady && e.hasSeen));
+            res.Insert(0, (player, enemies.Exists(e => Sees(e, player, crouched)), null));
+            return res;
+        }
+
         // Overwatch: gun out (searching or fighting), not broken, shot unspent, and not about to freeze in panic.
         public bool WillReact(Enemy e) =>
             e.InPlay && e.reactionReady && (e.awareness == Awareness.Searching || e.awareness == Awareness.Combat)

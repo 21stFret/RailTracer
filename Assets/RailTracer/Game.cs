@@ -2297,8 +2297,9 @@ namespace RailTracer
             // With a kill selected the grid shows its attack range instead of where you can walk.
             var reach = busy || phase != Phase.Play || senses || aiming || kill.HasValue ? new HashSet<Cell>() : c.Reachable();
             // The move or leap under the mouse: per tile, seen or not, and who fires.
-            var preview = busy || c.Over || senses || !hover.HasValue || hopping || throwing ? null
+            var preview = busy || c.Over || senses || !hover.HasValue || throwing ? null
                 : leaping ? (c.CanLeapTo(hover.Value) ? c.LeapPreview(hover.Value) : null)
+                : hopping ? (c.CanHopTo(hover.Value) ? c.HopPreview(hover.Value) : null)
                 : c.MovePreview(hover.Value);
             reactTile = preview?.Where(p => p.shooter != null).Select(p => (Cell?)p.tile).FirstOrDefault();
             // Purple = your kill's noise: only when hovering a target you can act on, centred where it dies.
@@ -2318,7 +2319,7 @@ namespace RailTracer
                         swingThreats.Add(e);
                     }
             SyncShotMarks(preview);
-            SyncPath(preview);
+            SyncPath(hopping ? null : preview); // the hop goes outside: no line through the carriage
             SyncPreviewGhost(preview);
             SyncClues();
             bool targeting = outcome.HasValue;

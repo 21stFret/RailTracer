@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 19.23 (9 Nov 2026).
+Last updated: Update 19.24 (9 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -108,6 +108,7 @@ Inspector; the saved scene matches these.
 | 19.21 (three Journey trains) | Done, not yet seen in Play mode. Journey is now 3 trains of 5 cars, unlocked one car after the next across all 15 (clearing car 5 of a train opens the next). Train 1 unchanged; train 2 (The Supper Express) and train 3 (The Night Freight) are 10 new hand-made cars, see The train. Saves grow from 5 to 15 entries (old progress kept). Journey menu: a line to step between trains (locked ones shown, not playable). Rules check covers all 15 (new piece-shape check), solver targets set for the new cars. Scripts compile (checked outside Unity) |
 | 19.22 (ragdoll off for now) | Done, not yet seen in Play mode. `Game.RagdollOn` (a const, false) switches the ragdoll off: every death and takedown falls back to the old topple (rail grabs and cover finishers unchanged). The bones stay on the prefabs; set it true to bring the ragdoll back. Scripts compile (checked outside Unity) |
 | 19.23 (Dread icon: no tear) | Done. The small teardrop under the Dread eye (`skill_dread.png`) is erased; the eye and horns are unchanged |
+| 19.24 (hop preview: who sees you come in) | Done, not yet seen in Play mode. Aiming a window hop now previews the landing like a move: the see-through you at the landing, a red chip (with its icon) on everyone who would see you come in, and a red tile with the hit chance for each ready gun that has seen you before (anyone who never has is startled instead, no shot). No path line (the hop goes outside). `Carriage.HopPreview`. Scripts compile (checked outside Unity) |
 | Next | Full audio pass |
 
 ## The train
