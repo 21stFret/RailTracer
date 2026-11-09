@@ -55,11 +55,13 @@ namespace RailTracer
         public float bloodPatternScale = 6f, bloodSpreadSpeed = 0.5f;
         Material bloodOverlay;
         // Bloody footprints behind you as you walk once your legend reaches Footprints From (looks only). Left and right
-        // in turn, Footprint Stride apart, Footprint Gap either side of your line, staying for the rest of the car.
+        // in turn, Footprint Stride apart, Footprint Gap either side of your line, staying for the rest of the car. Drawn
+        // as the blood's own decals (a copy of its material with a shoe-print texture in the blood texture's red,
+        // Footprint Color), projected Footprint Depth deep onto whatever is there: floor, aisle runner, a body.
         public int footprintsFrom = 50;
-        public float footprintStride = 0.42f, footprintGap = 0.09f, footprintLength = 0.26f, footprintHeight = 0.02f;
-        public Color footprintColor = new Color(0.42f, 0.02f, 0.04f, 0.85f);
-        Material footprintMat;
+        public float footprintStride = 0.42f, footprintGap = 0.09f, footprintLength = 0.26f, footprintDepth = 0.5f;
+        public Color footprintColor = new Color(0.45f, 0.12f, 0.12f, 0.9f);
+        Material[] footprintMats; // left foot, right foot (mirrored)
         float strideLeft;
         bool leftFoot;
         // The kit floor's velvet aisle runner (1 m wide down the car's middle) stands Runner Height proud of the floor:
@@ -2050,49 +2052,59 @@ namespace RailTracer
             blood.Decal(root, new Vector3(at.x, 0f, at.z), Vector3.down, blood.poolScale);
         }
 
-        // One bloody print each stride walked: a flat quad just over the floor, toes along the walk, alternate feet
-        // (the right one mirrored).
+        // One bloody print each stride walked: a blood decal projected down, toes along the walk, alternate feet.
         void Footprints(Vector3 step)
         {
             strideLeft -= step.magnitude;
             if (strideLeft > 0f || step.sqrMagnitude < 1e-8f) return;
             strideLeft = footprintStride;
             leftFoot = !leftFoot;
-            if (!footprintMat)
+            if (!blood || blood.decals == null || blood.decals.Length == 0 || !blood.decals[0]) return;
+            if (footprintMats == null)
             {
-                footprintMat = new Material(Shader.Find("Sprites/Default")) { mainTexture = FootprintTexture() }; // unlit, no culling
-                footprintMat.renderQueue = (int)RenderQueue.Transparent - 10; // under blood splashes and the overlays
+                var source = blood.decals[0].GetComponentInChildren<UnityEngine.Rendering.Universal.DecalProjector>();
+                if (!source || !source.material) return;
+                footprintMats = new Material[2];
+                for (int i = 0; i < 2; i++)
+                {
+                    footprintMats[i] = new Material(source.material) { name = i == 0 ? "Footprint L" : "Footprint R" };
+                    footprintMats[i].SetTexture("_MainTex", FootprintTexture(i == 1, footprintColor));
+                    footprintMats[i].SetTexture("_NormalTex", Texture2D.normalTexture); // flat: the splat's bumps don't fit a print
+                }
             }
-            footprintMat.color = footprintColor;
             var dir = new Vector3(step.x, 0f, step.z).normalized;
-            var q = GameObject.CreatePrimitive(PrimitiveType.Quad);
-            q.name = "Footprint";
-            Destroy(q.GetComponent<Collider>());
-            var mr = q.GetComponent<MeshRenderer>();
-            mr.sharedMaterial = footprintMat;
-            mr.shadowCastingMode = ShadowCastingMode.Off;
-            mr.receiveShadows = false;
-            q.transform.SetParent(root, false);
-            var at = new Vector3(playerShown.x, 0f, playerShown.z) + Vector3.Cross(Vector3.up, dir) * (leftFoot ? -footprintGap : footprintGap);
-            q.transform.localPosition = at + Vector3.up * footprintHeight; // over the velvet aisle runner (1.5 cm proud of the floor)
-            q.transform.localRotation = Quaternion.LookRotation(Vector3.down, dir); // lying flat, face up, toes forward
-            q.transform.localScale = new Vector3(footprintLength * 0.42f * (leftFoot ? 1f : -1f), footprintLength, 1f);
+            var go = Instantiate(blood.decals[0], root);
+            go.name = "Footprint";
+            var projector = go.GetComponentInChildren<UnityEngine.Rendering.Universal.DecalProjector>();
+            projector.transform.localPosition = Vector3.zero;
+            projector.transform.localRotation = Quaternion.identity;
+            projector.transform.localScale = Vector3.one;
+            projector.material = footprintMats[leftFoot ? 0 : 1];
+            projector.size = new Vector3(footprintLength * 0.42f, footprintLength, footprintDepth);
+            projector.pivot = Vector3.zero; // the box centred on the floor, reaching up over the runner
+            projector.startAngleFade = 50f; projector.endAngleFade = 80f; // floors and what lies on them, not up the walls
+            go.transform.localScale = Vector3.one;
+            go.transform.localPosition = new Vector3(playerShown.x, 0f, playerShown.z) + Vector3.Cross(Vector3.up, dir) * (leftFoot ? -footprintGap : footprintGap);
+            go.transform.localRotation = Quaternion.LookRotation(Vector3.down, dir); // projecting down, toes forward
         }
 
-        // A shoe print, white with alpha (tinted by the material): the sole's ellipse, a gap, the heel; blotchy.
-        static Texture2D FootprintTexture()
+        // A shoe print in the blood decal's red (`col`, varied a little; alpha blotchy): the sole, a gap, the heel.
+        // mirror: the other foot.
+        static Texture2D FootprintTexture(bool mirror, Color col)
         {
             const int w = 32, h = 80;
             var tex = new Texture2D(w, h, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
-            var rng = new System.Random(7);
+            var rng = new System.Random(mirror ? 11 : 7);
             for (int y = 0; y < h; y++)
                 for (int x = 0; x < w; x++)
                 {
                     float u = (x + 0.5f) / w, v = (y + 0.5f) / h;
+                    if (mirror) u = 1f - u;
                     float sole = 1f - (Sq((u - 0.52f) / 0.46f) + Sq((v - 0.68f) / 0.3f)); // toes up (v = 1), a touch to the inside
                     float heel = 1f - (Sq((u - 0.5f) / 0.4f) + Sq((v - 0.17f) / 0.15f));
-                    float a = Mathf.Clamp01(Mathf.Max(sole, heel) * 6f) * (0.65f + 0.35f * (float)rng.NextDouble());
-                    tex.SetPixel(x, y, new Color(1f, 1f, 1f, a));
+                    float k = (float)rng.NextDouble();
+                    float a = Mathf.Clamp01(Mathf.Max(sole, heel) * 6f) * (0.55f + 0.45f * k) * col.a;
+                    tex.SetPixel(x, y, new Color(col.r * (0.8f + 0.4f * k), col.g * (0.8f + 0.4f * k), col.b * (0.8f + 0.4f * k), a));
                 }
             tex.Apply();
             return tex;
@@ -2135,7 +2147,7 @@ namespace RailTracer
                 }
                 // The camera stays on each enemy until it has finished moving (a fleer all the way out of the door).
                 bool walked = route.Count > 0;
-                while (route.Count > 0 || (shown[e] - World(e.pos)).sqrMagnitude > 1e-3f)
+                while (route.Count > 0 || (shown[e] - StandAt(e)).sqrMagnitude > 1e-3f)
                 {
                     if (followCamera) camTarget = shown[e];
                     yield return null;
@@ -2179,7 +2191,7 @@ namespace RailTracer
                     c.Do($"enemy {e.id}");
                     if (!routes.TryGetValue(e, out var route)) routes[e] = route = new Queue<Vector3>();
                     if (e.walked != null) { Follow(route, e.walked); e.walked = null; }
-                    while (route.Count > 0 || (shown[e] - World(e.pos)).sqrMagnitude > 1e-3f)
+                    while (route.Count > 0 || (shown[e] - StandAt(e)).sqrMagnitude > 1e-3f)
                     {
                         if (followCamera) camTarget = shown[e];
                         yield return null;
@@ -3190,6 +3202,12 @@ namespace RailTracer
             return bestGap <= 0.5f ? best : null;
         }
 
+        // Where an enemy's figure stands: its tile, or for one that has fled, out through the end door it reached
+        // (Flee Out Past metres beyond it), so it runs out of the carriage before it's gone.
+        public float fleeOutPast = 2.5f;
+        Vector3 StandAt(Enemy e) => e.state == EnemyState.Fled
+            ? World(e.pos) + Vector3.right * (e.pos.x == 0 ? -fleeOutPast : fleeOutPast) : World(e.pos);
+
         static void Follow(Queue<Vector3> route, List<Cell> walked)
         {
             if (walked == null) return;
@@ -3233,7 +3251,7 @@ namespace RailTracer
             var pos = shown[e];
             var before = pos;
             float pace = unitSpeed * EnemyPace; // the Options enemy turn speed
-            bool moving = Advance(ref pos, route, World(e.pos), pace);
+            bool moving = Advance(ref pos, route, StandAt(e), pace);
             shown[e] = pos;
             a.SetBool("Moving", moving);
             // Broken: down on their knees to beg ("BegStart", then the "Beg" loop), or the old cower without those states.

@@ -77,6 +77,7 @@ namespace RailTracer
         public float panicFreezeChance = 0.5f; // a Panicked guard's panic turn: freeze, else wild fire
         public float brokenFleeChance = 0.5f;  // on breaking: flee to the next carriage, else kneel and beg
         public int searchTurns = 3, searchRadius = 2; // a searcher sweeps the tiles this close to the spot for this long
+        public int sweepStep = 2; // each turn of a sweep it moves at most this far (then looks a new way)
         public int guardTurnInterval = 2; // a stationary guard turns every this many turns
     }
 
@@ -118,7 +119,15 @@ namespace RailTracer
         public bool panicNext; // a Panicked guard: its next turn is a panic turn (they alternate)
         public bool berserk;   // a Panicked heavy: charges you every turn, for good
         public bool fleeing;   // Broken and running for the next carriage (else begging)
-        public Cell sweepLook; public double sweepPick; // a sweep's next look and destination, rolled ahead so the arrow is true
+        public int sweepLookPick; public double sweepPick; // a sweep's next look (one of the three ways it isn't facing) and destination, rolled ahead
+        public Cell sweepLook => Turned(facing, sweepLookPick);
+        // One of the three directions other than `f`, by `pick` (0-2).
+        public static Cell Turned(Cell f, int pick)
+        {
+            var others = new List<Cell>(3);
+            foreach (var d in new[] { new Cell(1, 0), new Cell(-1, 0), new Cell(0, 1), new Cell(0, -1) }) if (d != f) others.Add(d);
+            return others[pick % others.Count];
+        }
         public bool reactionReady; // one reaction shot per player turn
         public int spottedRound = -1; // the round its "spotted you" was last logged
         public List<Cell> walked;  // tiles of the last move, in order, for the view to follow
@@ -1317,7 +1326,7 @@ namespace RailTracer
                 e.panic = rng.NextDouble() < t.panicFreezeChance ? Panic.Freeze : Panic.WildFire;
                 e.hesitate = rng.NextDouble() < t.shakenHesitate;
                 e.reactionReady = true;
-                e.sweepLook = Dirs[rng.Next(4)];
+                e.sweepLookPick = rng.Next(3);
                 e.sweepPick = rng.NextDouble();
             }
             // Anyone who ended the enemy turn looking at you (a searcher that turned your way) is fighting you now.
@@ -1456,12 +1465,13 @@ namespace RailTracer
             return (PathTo(e.pos, to) ?? new List<Cell>()).Take(t.enemyMoveRange).ToList();
         }
 
-        // The tile a sweep walks to: one within searchRadius of the spot, picked by the roll made at your turn's start.
+        // The tile a sweep walks to: a short step (up to sweepStep) to another tile within searchRadius of the spot,
+        // picked by the roll made at your turn's start; the search stays on that small area.
         Cell? SweepTarget(Enemy e)
         {
             var centre = e.lastKnown.Value;
             var options = new List<Cell>();
-            foreach (var c in Bfs(e.pos, t.enemyMoveRange, n => !Blocked(n) && !Occupied(n)).Keys)
+            foreach (var c in Bfs(e.pos, t.sweepStep, n => !Blocked(n) && !Occupied(n)).Keys)
                 if (Cheb(c, centre) <= t.searchRadius && c != e.pos) options.Add(c);
             return options.Count > 0 ? options[(int)(e.sweepPick * options.Count)] : (Cell?)null;
         }
@@ -1662,7 +1672,7 @@ namespace RailTracer
                         }
                     }
                     if (e.awareness != Awareness.Searching || (e.hunt != Hunt.Sweep && e.hunt != Hunt.Look)) break;
-                    e.facing = e.sweepLook; // look around (rolled at the start of your turn, so the arrow showed it)
+                    e.facing = e.sweepLook; // look around: a way it isn't facing after the step (rolled at the start of your turn)
                     Notice(e);
                     if (e.awareness == Awareness.Searching && --e.searchLeft <= 0) StandDown(e);
                     break;
