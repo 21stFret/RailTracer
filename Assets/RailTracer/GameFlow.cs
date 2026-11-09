@@ -253,6 +253,7 @@ namespace RailTracer
                     hopMoving = true;
                     var step = playerShown - before;
                     if (step.sqrMagnitude > 1e-6f) playerFacing = step.normalized;
+                    if (c.legend >= footprintsFrom) Footprints(step); // the hop flag above would keep Sync from laying them
                     camTarget = playerShown;
                     yield return null;
                 }
