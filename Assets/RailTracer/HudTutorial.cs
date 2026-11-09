@@ -140,7 +140,7 @@ namespace RailTracer
 
         void BuildTurnCount(Transform root)
         {
-            turnBox = Rect("Turn Count", root, new Vector2(0f, 1f), new Vector2(30, -22), Vector2.zero);
+            turnBox = Rect("Turn Count", root, new Vector2(0f, 1f), new Vector2(16, -12), Vector2.zero);
             turnBox.localRotation = Quaternion.Euler(0f, 0f, -1.5f);
             var col = Column(turnBox, new RectOffset(0, 0, 0, 0), 0f);
             col.childAlignment = TextAnchor.UpperLeft;
@@ -166,7 +166,7 @@ namespace RailTracer
 
         void BuildTickets(Transform root)
         {
-            ticketBox = Rect("Ticket Counter", root, Vector2.one, new Vector2(-30, -22), Vector2.zero);
+            ticketBox = Rect("Ticket Counter", root, Vector2.one, new Vector2(-16, -12), Vector2.zero);
             ticketBox.localRotation = Quaternion.Euler(0f, 0f, 1f);
             var col = Column(ticketBox, new RectOffset(0, 0, 0, 0), 6f);
             col.childAlignment = TextAnchor.UpperRight;

@@ -1469,21 +1469,17 @@ namespace RailTracer
                     : c.WillShoot(e, at) ? "crosshair" : null;
                 int plate = e.tough && !broken ? (c.StageOf(e) >= Stage.Shaken ? 2 : 1) : 0; // cracked once they can be killed
                 bool notYet = KillMode.HasValue && plate == 1;
-                // Targeting a kill on them: its name and the legend it gives (also shown on the legend bar).
-                string gain = null;
-                if (KillMode.HasValue && hover == e.pos && !busy)
-                {
-                    if (notYet) gain = "Locked";
-                    else if (c.KillOutcome(KillMode.Value, e).HasValue)
-                    {
-                        hud.legendGain = c.LegendGain(KillMode.Value);
-                        // (its "+30 legend" is in the skill's tooltip and on the legend bar)
-                    }
-                }
+                // Targeting a kill on them: the legend it gives, on the legend bar (its "+30 legend" is in the skill's
+                // tooltip; an unshaken tough shows "Not yet" instead).
+                if (KillMode.HasValue && hover == e.pos && !busy && !notYet && c.KillOutcome(KillMode.Value, e).HasValue)
+                    hud.legendGain = c.LegendGain(KillMode.Value);
+                // What they'll do next can hurt you: a shot, a charge or swing, wild fire (the label's line in red).
+                var next = c.Decide(e);
+                bool danger = next == Intent.Shoot || next == Intent.Charge || next == Intent.Melee || next == Intent.WildFire;
                 string shot = threat && swingThreats.Contains(e) ? $"Swing · Hit {pct}%" // a heavy's melee (never halved), not a shot
                     : threat ? $"Hit {pct}%" + (leaping && !(previewLanding.HasValue && c.Swings(e, previewLanding.Value)) ? $" · leap -{Mathf.RoundToInt(100 * c.t.leapHitPenalty)}" : "") : c.IntentText(e);
                 chips[e] = hud.AddTag(sp, k, shownAwareness, e.terror, e.hasSeen, hover == e.pos || threat, c.Name(e), role, c.StatusText(e),
-                    shot, threat, icon, plate, notYet, gain);
+                    shot, threat, icon, plate, notYet, danger, e.id);
             }
             hud.EndTags();
         }

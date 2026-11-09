@@ -325,13 +325,13 @@ namespace RailTracer
             LockedBox = Hex("3A3536"), LockedText = Hex("B4AEAF"), Grey = Hex("8A8A8A"), Burgundy = Hex("6E1A26");
         // The sketch HUD (Update 19): locked ink, the tooltip's locked grey and muted Bloodied line, bar backs, notches ahead.
         static readonly Color LockedInk = Hex("9A9093"), TipGrey = Hex("8A8285"), TipBurgundy = Hex("7A1424"), BarBack = Hex("1A1416"), NotchAhead = Hex("6E6466");
-        const float BarWidth = 652f, BarHeight = 20f, Taper = 0.3f, HpWidth = 318f, HpHeight = 18f, HpTaper = 0.6f, Left = 46f, TileLeft = 42f;
+        const float BarWidth = 652f, BarHeight = 20f, Taper = 0.3f, HpWidth = 318f, HpHeight = 18f, HpTaper = 0.6f, Left = 22f, TileLeft = 18f; // the stack 16 px in (bars and health 6 more, tiles 2)
         const float TileW = 80f, TileH = 76f, TileGap = 6f;
         // Per tile, slots 1-8: fixed, so they read as hand-placed cards.
         static readonly float[] TileTilt = { -1.2f, 0.8f, -0.5f, 1f, -0.8f, 0.6f, -1f, 0.7f };
         // Bottom up from 14, 8 between rows: health row (28), notch labels (18), 2, legend bar (20), 12, tiles (76 and
         // room to lift: 86), status row (18), 12, tooltip.
-        const float HealthY = 14f, LabelsY = HealthY + 28f + 8f, BarY = LabelsY + 18f + 2f, BoxY = BarY + BarHeight + 12f,
+        const float HealthY = 8f, LabelsY = HealthY + 28f + 8f, BarY = LabelsY + 18f + 2f, BoxY = BarY + BarHeight + 12f,
             MovesY = BoxY + 86f + 8f, TipY = MovesY + 18f + 12f;
 
         class Box { public RectTransform rt; public Octagon card, fill, cdTint, cd; public OctFrame frame; public Image icon; public TMP_Text key, name, wait; }
@@ -362,7 +362,7 @@ namespace RailTracer
         // scale, shrinking towards its bottom-left corner; the health row keeps its size.
         const float DragIconLift = 4f; // px: the Dragging icon raised to sit level with its word
         const float StackScale = 0.8f;
-        static readonly Vector2 StackOrigin = new Vector2(40f, LabelsY);
+        static readonly Vector2 StackOrigin = new Vector2(16f, LabelsY);
 
         // Hold Space to end the turn: the key cap fills as it's held. Dim during the enemy turn.
         public void SetEndTurn(float held, bool ready)
@@ -388,8 +388,10 @@ namespace RailTracer
         {
             public RectTransform rt;
             public GameObject label;
-            public TMP_Text name, role, words, intent, gain, glyph;
-            public Image chipBg, chipBorder, icon, eye, labelBorder, plate;
+            public TMP_Text name, words, intent, glyph;
+            public Octagon chipBg, chipBorder;
+            public Slant labelBorder;
+            public Image icon, eye, plate;
             public Image[] segs, segEdges;
             public GameObject notYet;
             public RectTransform chip;
@@ -490,7 +492,7 @@ namespace RailTracer
                 label.text = notchAt[i].ToString();
             }
             // The big number and "LEGEND" under it, right of the skill row, tilted -2 degrees.
-            legendGroup = Rect("Legend Number", root, Vector2.zero, new Vector2(740, 60), Vector2.zero);
+            legendGroup = Rect("Legend Number", root, Vector2.zero, new Vector2(716, 54), Vector2.zero); // moves with the stack
             legendGroup.localRotation = Quaternion.Euler(0f, 0f, -2f);
             var word = legendWord = SketchLabel(legendGroup, "Legend", 15, Bone);
             Place(word.rectTransform, Vector2.zero, Vector2.zero);
@@ -572,7 +574,7 @@ namespace RailTracer
             undo = lockRow.gameObject;
 
             // ---- Tooltip: above the status row, a parallelogram slanted 14 px, sized to its text, tilted -1 degree ----
-            tip = Rect("Tooltip", root, Vector2.zero, new Vector2(40, TipY), new Vector2(364, 100));
+            tip = Rect("Tooltip", root, Vector2.zero, new Vector2(16, TipY), new Vector2(364, 100));
             tip.localRotation = Quaternion.Euler(0f, 0f, -1f);
             tipBorder = Draw<Slant>(tip, Bone, 0f);
             Draw<Slant>(tip, Black, 3f).slant = 13f;
@@ -617,7 +619,7 @@ namespace RailTracer
 
             // ---- Bottom right: the key hints (ESC MENU, H CONTROLS, L LOG; under them SPACE HOLD: END TURN), the log above ----
             var end = Row("End Turn", root, 6f);
-            Place(end, Vector2.right, new Vector2(-30, 14));
+            Place(end, Vector2.right, new Vector2(-16, 8));
             Fit(end);
             var spaceCap = Row("Key Space", end, 0f);
             spaceCap.GetComponent<HorizontalLayoutGroup>().padding = new RectOffset(8, 8, 0, 0);
@@ -632,7 +634,7 @@ namespace RailTracer
             Glow(endWord);
             Button("end", end, spaceBorder, spaceWord, endWord); // a click ends the turn too
             var hint = Row("Controls Hint", root, 16f);
-            Place(hint, Vector2.right, new Vector2(-30, 44));
+            Place(hint, Vector2.right, new Vector2(-16, 38));
             Fit(hint);
             foreach (var (key, caption, id) in new[] { ("Esc", "Menu", "pause"), ("H", "Controls", "controls"), ("L", "Log", "log") })
             {
@@ -643,7 +645,7 @@ namespace RailTracer
                 Button(id, b, cap.border, cap.text, w);
             }
             log = Text(root, body, 14, TextAlignmentOptions.BottomRight, Vector2.right, new Vector2(280, 200)); // clear of the legend number at 72 px
-            Place(log.rectTransform, Vector2.right, new Vector2(-32, 84));
+            Place(log.rectTransform, Vector2.right, new Vector2(-16, 78)); // the same gap above the key hints
             log.textWrappingMode = TextWrappingModes.Normal;
             log.color = Bone;
             Glow(log);
@@ -961,24 +963,25 @@ namespace RailTracer
         }
 
         // One enemy's chip (and, when hovered, its label above it), bottom centre at `screen` (pixels).
-        // awareness: 0 Unaware, 1 Searching, 2 Startled, 3 Combat, 4 Broken.
-        // threat: they'll fire on what you're aiming (a red border, the shot in red). icon: what they'll do if you end
-        // your turn there ("crosshair", "charge", "wildfire" or null). plate: a tough's armour, 1 whole, 2 cracked
-        // (killable). notYet: "Not yet" over a tough you're targeting before it's Shaken. gain: the targeted kill's
-        // line ("Brutal kill +30 legend", or "Locked"), or null.
+        // awareness: 0 Unaware, 1 Searching, 2 Startled, 3 Combat, 4 Broken. id: the enemy's, for its fixed tilt.
+        // threat: they'll fire on what you're aiming (the label's edge red). danger: what they'll do next can hurt you
+        // (a shot, a charge or swing, wild fire: the intent line red). icon: what they'll do if you end your turn there
+        // ("crosshair", "charge", "wildfire" or null). plate: a tough's armour, 1 whole, 2 cracked (killable).
+        // notYet: "Not yet" over a tough you're targeting before it's Shaken.
         public RectTransform AddTag(Vector2 screen, float scale, int awareness, int terrorNow, bool seen, bool hovered, string name, string role, string words, string intent,
-            bool threat = false, string icon = null, int plate = 0, bool notYet = false, string gain = null)
+            bool threat = false, string icon = null, int plate = 0, bool notYet = false, bool danger = false, int id = 0)
         {
             if (tagCount == tags.Count) tags.Add(MakeTag());
             var g = tags[tagCount++];
             g.rt.gameObject.SetActive(true);
             g.rt.position = screen;
             g.rt.localScale = Vector3.one * scale;
-            // What they know, by colour: black (white outline) unaware, white searching or startled, red in combat;
-            // dimmed when broken. The icon is what they'll do.
+            g.chip.localRotation = Quaternion.Euler(0f, 0f, Mathf.Lerp(-1.2f, 1.1f, (id * 7919 % 23) / 22f)); // fixed per enemy
+            // What they know, by colour: black (bone frame) unaware, bone (black frame) searching or startled, red (black
+            // frame) in combat; dimmed when broken. The icon is what they'll do.
             bool combat = awareness == 3, broken = awareness == 4, white = awareness == 1 || awareness == 2;
             g.chipBg.color = combat ? Blood : white ? Bone : broken ? Alpha(Black, 0.7f) : Black;
-            g.chipBorder.color = combat ? Blood : broken ? LockedBox : Bone;
+            g.chipBorder.color = combat || white ? Black : broken ? LockedBox : Bone;
             var ink = white ? Black : broken ? Grey : Bone;
             // Startled: "!". Searching: "?". A panicked freeze turn: the ghost, frozen with fear.
             if (icon == "freeze") icon = "ghost";
@@ -994,7 +997,7 @@ namespace RailTracer
             if (plate > 0) g.plate.sprite = IconSprite(plate == 2 ? "plate_cracked" : "plate");
             g.plate.color = ink;
             g.notYet.SetActive(notYet);
-            // Three segments, one per stage (Shaken, Panicked, Broken), each filling smoothly within its stage.
+            // Three boxes, one per stage (Shaken, Panicked, Broken), each filling smoothly within its stage.
             for (int i = 0; i < 3; i++)
                 g.segs[i].fillAmount = broken ? 1f : Mathf.Clamp01((terrorNow - terror[i]) / (float)(terror[i + 1] - terror[i]));
             g.eye.gameObject.SetActive(seen);
@@ -1002,15 +1005,11 @@ namespace RailTracer
             g.label.SetActive(hovered);
             if (hovered)
             {
-                g.name.text = name;
-                g.role.text = role;
+                g.name.text = $"<b><size=17>{name}</size></b><size=14><color=#B4AEAF> · {role}</color></size>";
                 g.words.text = words;
                 g.intent.text = intent;
                 g.intent.gameObject.SetActive(!string.IsNullOrEmpty(intent));
-                g.intent.color = threat ? Bright : LockedText;
-                g.gain.gameObject.SetActive(gain != null);
-                g.gain.text = gain;
-                g.gain.color = gain == "Locked" ? LockedText : Bright;
+                g.intent.color = danger || threat ? Bright : LockedText;
                 g.labelBorder.color = threat ? Blood : Bone;
             }
             return g.chip;
@@ -1023,51 +1022,52 @@ namespace RailTracer
             g.rt.SetParent(tagRoot, false);
             g.rt.anchorMin = g.rt.anchorMax = Vector2.zero; // positioned in screen pixels
             g.rt.pivot = new Vector2(0.5f, 0f);
-            var stack = Column(g.rt, new RectOffset(0, 0, 0, 0), 4f);
+            var stack = Column(g.rt, new RectOffset(0, 0, 0, 0), 8f);
             stack.childAlignment = TextAnchor.LowerCenter;
             Fit(g.rt);
 
-            // Hover label: role, then awareness and stage, then what they'll do.
+            // Hover label, like the skill tooltip: a card slanted 10 px, tilted -1 degree. Name and role, then the
+            // state line, then what they'll do.
             var label = Rect("Label", g.rt, new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
-            g.labelBorder = Img(label, Bone, 0f, skew: true);
-            Img(label, Black, 2f, skew: true);
+            label.localRotation = Quaternion.Euler(0f, 0f, -1f);
+            g.labelBorder = Draw<Slant>(label, Bone, 0f);
+            g.labelBorder.slant = 10f;
+            Draw<Slant>(label, Black, 2f).slant = 9f;
             IgnoreLayout(label);
-            Column(label, new RectOffset(12, 12, 4, 5), 1f).childAlignment = TextAnchor.UpperCenter;
-            g.name = Text(label, title, 16, TextAlignmentOptions.Center, Vector2.zero, Vector2.zero);
-            g.name.fontStyle = FontStyles.UpperCase;
-            g.name.characterSpacing = 2f;
+            Column(label, new RectOffset(22, 22, 6, 7), 1f).childAlignment = TextAnchor.UpperCenter;
+            g.name = Text(label, sketch, 17, TextAlignmentOptions.Center, Vector2.zero, Vector2.zero); // Kalam; <b> uses its Bold
             g.name.color = Bone;
-            g.role = Label(label, "", 12, LockedText, 1f);
-            g.role.alignment = TextAlignmentOptions.Center;
-            g.words = Label(label, "", 13, LockedText, 1f);
-            g.words.alignment = TextAlignmentOptions.Center;
-            g.intent = Label(label, "", 13, LockedText, 1f);
-            g.intent.alignment = TextAlignmentOptions.Center;
-            g.gain = Label(label, "", 13, Bright, 1f);
-            g.gain.alignment = TextAlignmentOptions.Center;
-            g.gain.fontStyle = FontStyles.Bold;
+            g.words = Text(label, sketchBold, 14, TextAlignmentOptions.Center, Vector2.zero, Vector2.zero);
+            g.words.color = Bone;
+            g.intent = Text(label, sketchBold, 14, TextAlignmentOptions.Center, Vector2.zero, Vector2.zero);
             g.label = label.gameObject;
 
-            // "Not yet": over a tough you're targeting before it's Shaken.
+            // "Not yet": over a tough you're targeting before it's Shaken. A card slanted 6 px, red edge, tilted +1.
             var notYet = Row("Not Yet", g.rt, 0f);
-            notYet.GetComponent<HorizontalLayoutGroup>().padding = new RectOffset(9, 9, 2, 3);
-            Img(notYet, Blood, 0f, skew: true);
-            Img(notYet, Black, 1.5f, skew: true);
+            notYet.localRotation = Quaternion.Euler(0f, 0f, 1f);
+            notYet.GetComponent<HorizontalLayoutGroup>().padding = new RectOffset(14, 14, 2, 3);
+            Draw<Slant>(notYet, Blood, 0f).slant = 6f;
+            Draw<Slant>(notYet, Black, 2f).slant = 5f;
             IgnoreLayout(notYet);
-            Label(notYet, "Not yet", 12, Bone, 2f);
+            var ny = Text(notYet, sketchBold, 14, TextAlignmentOptions.Center, Vector2.zero, Vector2.zero);
+            ny.fontStyle = FontStyles.UpperCase;
+            ny.color = Bone;
+            ny.text = "Not yet";
             g.notYet = notYet.gameObject;
 
-            // Chip: awareness icon, three terror segments, the has-seen eye.
+            // Chip: an octagon (6 px corners) 30 high: the state icon, three fear boxes, the plate (toughs), the eye.
             var chip = g.chip = Row("Chip", g.rt, 6f);
-            chip.GetComponent<HorizontalLayoutGroup>().padding = new RectOffset(7, 7, 3, 3);
-            g.chipBorder = Img(chip, LockedBox, 0f, skew: true);
-            g.chipBg = Img(chip, Black, 2f, skew: true);
+            chip.GetComponent<HorizontalLayoutGroup>().padding = new RectOffset(9, 9, 6, 6);
+            g.chipBorder = Draw<Octagon>(chip, LockedBox, 0f);
+            g.chipBorder.cut = 6f;
+            g.chipBg = Draw<Octagon>(chip, Black, 2f);
+            g.chipBg.cut = 6f - 2f * 0.4142f;
             IgnoreLayout(chip);
             var slot = Rect("Awareness", chip, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(18, 18));
             Size(slot, 18, 18);
-            g.icon = Img(slot, Grey, 2f);
+            g.icon = Img(slot, Grey, 0f);
             g.icon.preserveAspect = true;
-            g.glyph = Text(slot, title, 18, TextAlignmentOptions.Center, Vector2.zero, new Vector2(18, 22));
+            g.glyph = Text(slot, sketchBold, 20, TextAlignmentOptions.Center, Vector2.zero, new Vector2(18, 24));
             var segs = Row("Terror", chip, 3f);
             g.segs = new Image[3];
             g.segEdges = new Image[3];
@@ -1075,13 +1075,13 @@ namespace RailTracer
             {
                 var seg = Rect("Segment", segs, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(14, 9));
                 Size(seg, 14, 9);
-                g.segEdges[i] = Img(seg, Bone, 0f, skew: true);
-                Img(seg, LockedBox, 1.5f, skew: true);
-                g.segs[i] = Img(seg, Blood, 1.5f, skew: true);
+                g.segEdges[i] = Img(seg, Bone, 0f); // straight, not skewed
+                Img(seg, Black, 1.5f);
+                g.segs[i] = Img(seg, Blood, 1.5f);
                 Filled(g.segs[i], Image.FillMethod.Horizontal, (int)Image.OriginHorizontal.Left);
             }
+            g.plate = Icon(chip, "plate", 14, 16);
             g.eye = Icon(chip, "eye", 18, 12);
-            g.plate = Icon(chip, "plate", 14, 14);
             return g;
         }
 
