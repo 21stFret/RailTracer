@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 19.9 (8 Nov 2026).
+Last updated: Update 19.10 (8 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -94,6 +94,7 @@ Inspector; the saved scene matches these.
 | 19.7 (enemy chips, tighter edges) | Done, not yet seen in Play mode. The insets were the Update 19 values (turn counter and tickets 30 / 22 in, the stack 40 / 14, key hints 30 / 14) |
 | 19.8 (calmer searches, fleers run out of the door, blood-decal footprints) | Done, not yet seen in Play mode. A rules change (searching): RulesCheck and the level solver not rerun (Unity was open); the car targets may shift |
 | 19.9 (Dread adds a stage of fear per sighting) | Done, not yet seen in Play mode. Before: anyone who saw you was raised to at least Shaken, which did nothing once most enemies already were. RulesCheck passes (run outside Unity with dotnet, Unity was open); the level solver not rerun |
+| 19.10 (window hop vault animation) | Done, not yet seen in Play mode. Climbing out and back in plays the "Vault" state on Player.controller (Mixamo "Jump Over.fbx", else "Jumping.fbx"; added by AnimationSetup, in place: the clips travel too far, so their root motion is dropped and the game still slides you through the window). The climb lasts the clip at Game "Hop Vault Speed" (1.5x); the old code hop (0.7 m sine arc over "Hop Climb Time") is only the fallback without the state. Scripts compile (checked outside Unity, Unity was open); the state is added when Unity next reloads scripts |
 | Next | Full audio pass |
 
 ## The train

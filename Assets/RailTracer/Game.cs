@@ -181,6 +181,8 @@ namespace RailTracer
         float spaceHeld = -1f;
         bool endByMouse; // the end-turn hold was started on the HUD button (the mouse held, not Space)
         public float hopClimbTime = 0.45f, hopWalkSpeed = 3f;
+        [Tooltip("Playback speed of the Vault clip on a window hop; the climb lasts the clip's length at this speed.")]
+        public float hopVaultSpeed = 1.5f;
         // Brutal kill: player and victim play their "Takedown" states facing each other, locked to the tiles.
         public float takedownHold = 0.5f; // the corpse lingers this long after the clip
         // How far onto the victim's tile the player is (0..1) through the clip (0..1). Shape it in the Inspector:
@@ -346,6 +348,7 @@ namespace RailTracer
             marks.Clear();
             sashes.Clear();
             hopRunning = hopMoving = false;
+            if (playerAnim) playerAnim.speed = 1f; // a vault cut short by the car ending
             armed.Clear();
             guns.Clear(); // they went with the old car
             idleLook.Clear();
@@ -3097,13 +3100,27 @@ namespace RailTracer
             flat.y = 0f;
             if (flat.sqrMagnitude > 1e-6f) playerFacing = flat.normalized;
             hopMoving = true;
-            for (float time = 0f; time < hopClimbTime; time += Time.deltaTime)
+            // With a "Vault" state the clip does the jump (its height is in the pose) and lasts as long as the climb;
+            // without one, a little code hop over the sill.
+            float climbTime = hopClimbTime, lift = 0.7f;
+            int vault = Animator.StringToHash("Vault");
+            if (playerAnim && playerAnim.HasState(0, vault))
             {
-                float k = time / hopClimbTime;
-                playerShown = Vector3.Lerp(a, b, k) + Vector3.up * Mathf.Sin(k * Mathf.PI) * 0.7f;
+                playerAnim.speed = hopVaultSpeed;
+                playerAnim.CrossFade(vault, 0.1f, 0, 0f);
+                yield return null; // the cross-fade starts next frame; then the vault's length is known
+                var next = playerAnim.GetNextAnimatorStateInfo(0);
+                if (next.shortNameHash == vault) climbTime = next.length / hopVaultSpeed;
+                lift = 0f;
+            }
+            for (float time = 0f; time < climbTime; time += Time.deltaTime)
+            {
+                float k = time / climbTime;
+                playerShown = Vector3.Lerp(a, b, k) + Vector3.up * Mathf.Sin(k * Mathf.PI) * lift;
                 yield return null;
             }
             playerShown = b;
+            if (playerAnim) playerAnim.speed = 1f;
             hopMoving = false;
             if (window) window.open = false;
         }
