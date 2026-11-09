@@ -2057,6 +2057,7 @@ namespace RailTracer
             turnPrints.Clear();
             strideLeft = strideAtTurnStart;
             leftFoot = leftFootAtTurnStart;
+            plantedLeft = null; // snapped back: start the feet afresh
         }
 
         // Prints laid this turn (Undo removes them) and the stride as the turn began; reset when a turn ends.
@@ -2071,12 +2072,43 @@ namespace RailTracer
             leftFootAtTurnStart = leftFoot;
         }
 
+        // A print where a foot lands. With the character's foot bones: each time the other foot becomes the lower one
+        // (it has come down, the old one is lifting), a print under that foot (between its ankle and toes), pointing the
+        // way the foot points. Without them: every Footprint Stride, either side of your line.
+        bool? plantedLeft; // the foot that was lowest last time (null: not known yet)
+
         void Footprints(Vector3 step)
         {
-            strideLeft -= step.magnitude;
-            if (strideLeft > 0f || step.sqrMagnitude < 1e-8f) return;
-            strideLeft = footprintStride;
-            leftFoot = !leftFoot;
+            if (step.sqrMagnitude < 1e-8f) return;
+            Vector3 at, dir = new Vector3(step.x, 0f, step.z).normalized;
+            var lf = playerAnim ? playerAnim.GetBoneTransform(HumanBodyBones.LeftFoot) : null;
+            var rf = playerAnim ? playerAnim.GetBoneTransform(HumanBodyBones.RightFoot) : null;
+            if (lf && rf)
+            {
+                float diff = lf.position.y - rf.position.y, settle = 0.015f * characterScale; // ignore the wobble when level
+                bool? lower = diff < -settle ? true : diff > settle ? false : (bool?)null;
+                if (lower == null || lower == plantedLeft) return;
+                bool first = plantedLeft == null;
+                plantedLeft = leftFoot = lower.Value;
+                if (first) return; // the foot already down as you set off: no print yet
+                var foot = leftFoot ? lf : rf;
+                var toes = playerAnim.GetBoneTransform(leftFoot ? HumanBodyBones.LeftToes : HumanBodyBones.RightToes);
+                at = root.InverseTransformPoint(toes ? (foot.position + toes.position) * 0.5f : foot.position);
+                if (toes)
+                {
+                    var along = root.InverseTransformDirection(toes.position - foot.position);
+                    along.y = 0f;
+                    if (along.sqrMagnitude > 1e-6f) dir = along.normalized;
+                }
+            }
+            else
+            {
+                strideLeft -= step.magnitude;
+                if (strideLeft > 0f) return;
+                strideLeft = footprintStride;
+                leftFoot = !leftFoot;
+                at = playerShown + Vector3.Cross(Vector3.up, dir) * (leftFoot ? -footprintGap : footprintGap);
+            }
             if (!blood || blood.decals == null || blood.decals.Length == 0 || !blood.decals[0]) return;
             if (footprintMats == null)
             {
@@ -2090,7 +2122,6 @@ namespace RailTracer
                     footprintMats[i].SetTexture("_NormalTex", Texture2D.normalTexture); // flat: the splat's bumps don't fit a print
                 }
             }
-            var dir = new Vector3(step.x, 0f, step.z).normalized;
             var go = Instantiate(blood.decals[0], root);
             go.name = "Footprint";
             turnPrints.Add(go);
@@ -2103,7 +2134,7 @@ namespace RailTracer
             projector.pivot = Vector3.zero; // the box centred on the floor, reaching up over the runner
             projector.startAngleFade = 50f; projector.endAngleFade = 80f; // floors and what lies on them, not up the walls
             go.transform.localScale = Vector3.one;
-            go.transform.localPosition = new Vector3(playerShown.x, 0f, playerShown.z) + Vector3.Cross(Vector3.up, dir) * (leftFoot ? -footprintGap : footprintGap);
+            go.transform.localPosition = new Vector3(at.x, 0f, at.z);
             go.transform.localRotation = Quaternion.LookRotation(Vector3.down, dir); // projecting down, toes forward
         }
 
