@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 19.19 (9 Nov 2026).
+Last updated: Update 19.20 (9 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -104,6 +104,7 @@ Inspector; the saved scene matches these.
 | 19.17 (the hop landing startles) | Done, not yet seen in Play mode. Like a leap landing: anyone who has never seen you and sees you come in through the window is startled (loses their next turn, no reaction shot); anyone who has seen you reacts as before. No leap-style terror. A rules change: RulesCheck passes (run outside Unity); the level solver doesn't try hops, so its results are unchanged |
 | 19.18 (kill cam slow motion on by default, 0.25x) | Done. The default for new settings (was 1x, off); a save that already has settings keeps its own, change it in Options. Game "Kill Cam Slow Mo" and the scene match. Scripts compile (checked outside Unity) |
 | 19.19 (kill cam chance 75% by default) | Done. What a first player starts with (was 100%); a save that already has settings keeps its own. Scripts compile (checked outside Unity) |
+| 19.20 (startles show once the act is done) | Done, not yet seen in Play mode. The rules still startle the instant you act (leap or hop landing, a brutal kill seen by someone who has never seen you); the view now holds it until the act has played out (landed, takedown done, nothing busy): until then the newly startled keep their old chip, gun holstered if they were unaware, no recoil, no eye. The log line still appears at once. Scripts compile (checked outside Unity) |
 | Next | Full audio pass |
 
 ## The train

@@ -1096,8 +1096,22 @@ namespace RailTracer
             return null;
         }
 
+        // The rules startle the instant you act; the view holds it until the act has played out (you've landed from the
+        // leap or hop, the takedown's done): until then the newly startled show what they were before.
+        readonly Dictionary<Enemy, Awareness> preAct = new Dictionary<Enemy, Awareness>();
+        bool ActPlaying => busy || flipT >= 0f || hopRunning || takedownVictim != null;
+
+        // Startled by an act that's still playing: what to show instead (null: show them as they are).
+        Awareness? HeldStartle(Enemy e) =>
+            e.awareness == Awareness.Startled && ActPlaying && preAct.TryGetValue(e, out var was) && was != Awareness.Startled ? was : (Awareness?)null;
+
         void Update()
         {
+            if (c != null && !ActPlaying) // before this frame's input: the state an act starts from
+            {
+                preAct.Clear();
+                foreach (var e in c.enemies) preAct[e] = e.awareness;
+            }
             MusicStep();
             if (slowUntil >= 0f && Time.unscaledTime >= slowUntil) { slowUntil = -1f; if (camming) Time.timeScale = 1f; } // a hit's slow motion ends
             var kb = Keyboard.current;
@@ -1454,10 +1468,12 @@ namespace RailTracer
                 // Red only while they can see you where you stand now, or where the aimed move ends (anyone not
                 // startled who sees you fights), or a berserk heavy. A fighter you've slipped out of sight of shows
                 // white "?" at once, as it will drop to searching at its turn.
-                bool red = !broken && (e.berserk || (e.InPlay && e.awareness != Awareness.Startled && c.CanSee(e, at)));
-                int shownAwareness = broken ? 4 : red ? (int)Awareness.Combat
+                // Startled by an act still playing: shown as they were until it's done (no "!", no red, no eye yet).
+                var held = HeldStartle(e);
+                bool red = !broken && held == null && (e.berserk || (e.InPlay && e.awareness != Awareness.Startled && c.CanSee(e, at)));
+                int shownAwareness = broken ? 4 : held.HasValue ? (int)held.Value : red ? (int)Awareness.Combat
                     : e.awareness == Awareness.Combat ? (int)Awareness.Searching : (int)e.awareness;
-                string icon = broken || e.awareness == Awareness.Startled ? null
+                string icon = broken || held.HasValue || e.awareness == Awareness.Startled ? null
                     : c.PanicTurn(e) ? (e.panic == Panic.WildFire ? "wildfire" : "freeze") // a freeze shows the ghost
                     : !red ? null // a white chip keeps its "?": icons are for red chips
                     : c.Swings(e, at) ? "charge" // a heavy that will reach you and swing (3 steps to arrive, 1 to swing)
@@ -1473,7 +1489,7 @@ namespace RailTracer
                 bool danger = next == Intent.Shoot || next == Intent.Charge || next == Intent.Melee || next == Intent.WildFire;
                 string shot = threat && swingThreats.Contains(e) ? $"Swing · Hit {pct}%" // a heavy's melee (never halved), not a shot
                     : threat ? $"Hit {pct}%" + (leaping && !(previewLanding.HasValue && c.Swings(e, previewLanding.Value)) ? $" · leap -{Mathf.RoundToInt(100 * c.t.leapHitPenalty)}" : "") : c.IntentText(e);
-                chips[e] = hud.AddTag(sp, k, shownAwareness, e.terror, e.hasSeen, hover == e.pos || threat, c.Name(e), role, c.StatusText(e),
+                chips[e] = hud.AddTag(sp, k, shownAwareness, e.terror, e.hasSeen && held == null, hover == e.pos || threat, c.Name(e), role, c.StatusText(e),
                     shot, threat, icon, plate, notYet, danger, e.id);
             }
             hud.EndTags();
@@ -3339,10 +3355,11 @@ namespace RailTracer
             bool broken = e.state == EnemyState.Broken && !e.fleeing;
             if (!a.HasState(0, Animator.StringToHash("BegStart"))) a.SetBool("Broken", broken);
             else if (broken && begging.Add(e)) a.CrossFade("BegStart", 0.25f, 0, 0f);
-            if (armed.Contains(a)) a.SetBool("Armed", e.awareness != Awareness.Unaware); // holstered only while unaware
+            var aware = HeldStartle(e) ?? e.awareness; // a startle waits for your act to finish
+            if (armed.Contains(a)) a.SetBool("Armed", aware != Awareness.Unaware); // holstered only while unaware
             if (guns.TryGetValue(e, out var held))
             {
-                held.t.gameObject.SetActive(e.state == EnemyState.Active && e.awareness != Awareness.Unaware); // holstered; dropped when broken
+                held.t.gameObject.SetActive(e.state == EnemyState.Active && aware != Awareness.Unaware); // holstered; dropped when broken
                 PoseGun(held);
             }
             Stride(a, moving ? pace : 0f, false);
@@ -3351,8 +3368,8 @@ namespace RailTracer
             // Face where they're walking; once there, face where the rules say they're looking.
             var step = pos - before;
             t.localRotation = Quaternion.LookRotation(moving && step.sqrMagnitude > 1e-8f ? step : new Vector3(e.facing.x, 0, -e.facing.y));
-            if (e.awareness == Awareness.Startled) t.localRotation *= Quaternion.Euler(-14f, 0f, 0f); // recoils
-            else if (!moving && e.awareness == Awareness.Unaware) t.localRotation *= Quaternion.Euler(0f, IdleLook(e), 0f);
+            if (aware == Awareness.Startled) t.localRotation *= Quaternion.Euler(-14f, 0f, 0f); // recoils
+            else if (!moving && aware == Awareness.Unaware) t.localRotation *= Quaternion.Euler(0f, IdleLook(e), 0f);
             t.localScale = Vector3.one * characterScale * (e.tough ? 1.15f : 1f);
             Tint(a, SuitColor(e));
         }
