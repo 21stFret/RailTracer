@@ -1702,6 +1702,7 @@ namespace RailTracer
                     float t = second ? time / length2 : time / length;
                     if ((!chained || second) && !bled && t >= bloodAt)
                     {
+                        Sfx("Whoosh Blade", Chest(va) ?? at);
                         KillBlood(victim, act, playerFacing, Chest(va), entry != null && entry.gore);
                         Soak(va, brutal);
                         if (entry != null && entry.headOff) HeadOff(va);
@@ -1718,6 +1719,7 @@ namespace RailTracer
                                 struck.Add(s);
                                 var chestNow = Chest(va) ?? va.transform.localPosition + Vector3.up * FigureHeight * 0.6f;
                                 blood.Splash(root, chestNow, playerFacing, brutal || entry.gore);
+                                Strike(chestNow);
                                 HitSlowMo();
                             }
                     }
@@ -2013,6 +2015,7 @@ namespace RailTracer
         // chest where a finisher has carried it (root space); else above its tile.
         void KillBlood(Enemy e, Act? how, Vector3 dir, Vector3? chestAt = null, bool gore = false)
         {
+            Sfx("Flesh Hit", chestAt ?? World(e.pos) + Vector3.up * FigureHeight * 0.6f);
             if (!blood) return;
             var at = chestAt.HasValue ? new Vector3(chestAt.Value.x, 0f, chestAt.Value.z) : World(e.pos);
             var chest = chestAt ?? at + Vector3.up * FigureHeight * 0.6f;
@@ -2187,6 +2190,7 @@ namespace RailTracer
 
         void HitBlood()
         {
+            Sfx("Flesh Hit", playerShown + Vector3.up * FigureHeight * 0.6f);
             if (!blood) return;
             var spray = Random.insideUnitCircle.normalized;
             blood.Splash(root, playerShown + Vector3.up * FigureHeight * 0.6f, new Vector3(spray.x, 0, spray.y), false);
@@ -2235,6 +2239,7 @@ namespace RailTracer
                         face.y = 0f;
                         if (face.sqrMagnitude > 1e-4f) ea.transform.localRotation = Quaternion.LookRotation(face);
                         ea.CrossFadeInFixedTime("Swing", 0.1f);
+                        Sfx("Whoosh Blade", shown[e] + Vector3.up * FigureHeight * 0.6f);
                     }
                     for (float time = 0f; time < swingHitAt; time += Time.deltaTime) yield return null;
                 }
@@ -2765,6 +2770,7 @@ namespace RailTracer
                 {
                     // Landed: the gore splash (a short effect) and the pools and spatter that stay.
                     flying.Remove(b);
+                    Sfx("Flesh Hit", World(b.pos));
                     if (!blood) continue;
                     var land = World(b.pos);
                     var dir = goal - before;
@@ -2785,6 +2791,7 @@ namespace RailTracer
             {
                 flipFrom = playerShown;
                 flipT = 0f;
+                Sfx("Whoosh Shadow Teleport", playerShown + Vector3.up * FigureHeight * 0.5f);
                 // Past the normal leap range (only the bloodied leap gets there): the stylish flip, if the controller has it.
                 bool far = (target - flipFrom).magnitude > c.t.leapRange + 0.01f && playerAnim.HasState(0, Animator.StringToHash("StylishFlip"));
                 stylishFlip = far;
