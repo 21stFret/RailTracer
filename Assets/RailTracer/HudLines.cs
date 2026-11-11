@@ -261,6 +261,36 @@ namespace RailTracer
             rt.localRotation = Quaternion.Euler(0f, 0f, -1f);
         }
 
+        const float IconGap = 4f; // px either side of the legend icon
+
+        // The legend icon (19.30): blood red art, never tinted; placed with Pin.
+        Image LegendIcon(TMP_Text text, float size)
+        {
+            var icon = Icon(text.rectTransform, "legend", size, size);
+            icon.rectTransform.pivot = new Vector2(0.5f, 0.5f);
+            icon.GetComponent<LayoutElement>().ignoreLayout = true;
+            icon.enabled = false;
+            return icon;
+        }
+
+        // Puts `icon` (`size` px square) just after character `after` of `t` (its last one when -1), its centre
+        // halfway up the capitals of that character's size, never on the baseline.
+        static void Pin(Image icon, TMP_Text t, float size, int after = -1)
+        {
+            icon.enabled = false;
+            if (!t.gameObject.activeInHierarchy) return;
+            t.ForceMeshUpdate();
+            var info = t.textInfo;
+            if (after < 0) after = info.characterCount - 1;
+            if (after < 0 || after >= info.characterCount) return;
+            var ch = info.characterInfo[after];
+            var face = t.font.faceInfo;
+            float cap = face.capLine * ch.pointSize / face.pointSize;
+            icon.rectTransform.sizeDelta = new Vector2(size, size);
+            icon.rectTransform.localPosition = new Vector3(ch.xAdvance + IconGap + size / 2f, ch.baseLine + cap / 2f, 0f);
+            icon.enabled = true;
+        }
+
         // A key hint: the key in the sketch key box, then what it does.
         RectTransform KeyHint(Transform parent, string key, string what, out TMP_Text words)
         {

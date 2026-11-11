@@ -50,7 +50,7 @@ namespace RailTracer
     {
         static readonly Color Hole = Hex("120D0E");
         RectTransform hpBar, movesLine, sightRow, uiRoot;
-        TMP_Text legendWord;
+        Image tutTitleIcon;
         TicketRow tickets, cardTickets;
         RectTransform ticketBox;
         TMP_Text ticketCount;
@@ -221,7 +221,7 @@ namespace RailTracer
         public Rect MovesRect => ScreenRect(movesLine);
         public Rect SkillRowRect => ScreenRect(boxes[0].rt, boxes[boxes.Length - 1].rt);
         public Rect BoxRect(SkillId s) => ScreenRect(boxes[(int)s].rt);
-        public Rect LegendRect => Union(ScreenRect(bar), TextRect(notchLabels[0]), TextRect(notchLabels[notchLabels.Length - 1]), TextRect(legendNum), TextRect(legendWord));
+        public Rect LegendRect => Union(ScreenRect(bar), TextRect(notchLabels[0]), TextRect(notchLabels[notchLabels.Length - 1]), TextRect(legendNum), ScreenRect(legendIcon.rectTransform));
         public Rect TicketsRect => ScreenRect(ticketBox);
         public Rect TicketRect(int i) => ScreenRect(tickets.tickets[i].rt);
         public Rect BannerRect => ScreenRect(banner);
@@ -279,6 +279,7 @@ namespace RailTracer
             tutTitle.fontStyle = FontStyles.UpperCase;
             tutTitle.characterSpacing = 2f;
             tutTitle.color = Bone;
+            tutTitleIcon = LegendIcon(tutTitle, 28);
             tutUnderline = Rect("Underline", header, new Vector2(0.5f, 0f), Vector2.zero, new Vector2(100, 3));
             var ul = tutUnderline.gameObject.AddComponent<Image>();
             ul.sprite = white;
@@ -342,15 +343,18 @@ namespace RailTracer
         // Shows a tutorial card. number: "5 / 7" or null. The highlight follows SetTutorialTargets.
         public void ShowTutorial(string heading, string number, string text, string tip)
         {
-            tutTitle.text = heading;
+            // The Legend card introduces the legend icon: "LEGEND" and the icon together (19.30).
+            bool legend = string.Equals(heading, "Legend", System.StringComparison.OrdinalIgnoreCase);
+            tutTitle.text = legend ? $"{heading}<space={28f + 2f * IconGap}>" : heading;
             tutNumber.text = number ?? "";
             tutText.text = text;
             tutTip.text = tip ?? "";
             tutTip.gameObject.SetActive(!string.IsNullOrEmpty(tip));
             tut.gameObject.SetActive(true);
-            tutUnderline.sizeDelta = new Vector2(tutTitle.GetPreferredValues(heading).x, 3);
+            tutUnderline.sizeDelta = new Vector2(tutTitle.GetPreferredValues(tutTitle.text).x, 3);
             tutUnderline.anchoredPosition = new Vector2(0, 1);
             LayoutRebuilder.ForceRebuildLayoutImmediate(tutCard);
+            if (legend) Pin(tutTitleIcon, tutTitle, 28f, heading.Length - 1); else tutTitleIcon.enabled = false;
         }
 
         public void HideTutorial() => tut.gameObject.SetActive(false);

@@ -352,6 +352,7 @@ namespace RailTracer
         RectTransform bar, tip, legendGroup;
         Slant tipBorder;
         TMP_Text tipName, tipStatus, tipLegend, tipDesc, tipUp;
+        Image legendIcon, tipStatusIcon, tipLegendIcon, tipUpIcon; // the legend icon (19.30) in place of the word
         Octagon actionPip;
         Image stanceIcon, sightIcon;
         TMP_Text stanceWord, sightWord;
@@ -496,11 +497,10 @@ namespace RailTracer
             // The big number and "LEGEND" under it, right of the skill row, tilted -2 degrees.
             legendGroup = Rect("Legend Number", root, Vector2.zero, new Vector2(716, 54), Vector2.zero); // moves with the stack
             legendGroup.localRotation = Quaternion.Euler(0f, 0f, -2f);
-            var word = legendWord = SketchLabel(legendGroup, "Legend", 15, Bone);
-            Place(word.rectTransform, Vector2.zero, Vector2.zero);
-            word.rectTransform.sizeDelta = new Vector2(90, 18);
+            // 19.30: the legend icon beside it in place of the word "LEGEND" under it (the number drops into its spot).
             legendNum = Text(legendGroup, sketchBold, 32, TextAlignmentOptions.BottomLeft, Vector2.zero, new Vector2(220, 100));
-            Place(legendNum.rectTransform, Vector2.zero, new Vector2(0, 16));
+            Place(legendNum.rectTransform, Vector2.zero, Vector2.zero);
+            legendIcon = LegendIcon(legendNum, 30);
             legendNum.textWrappingMode = TextWrappingModes.NoWrap; // "42 +30" on one line
 
             // ---- Skill tiles: octagon cards, each tilted its own way; the frame is dashed while there's no target ----
@@ -596,9 +596,12 @@ namespace RailTracer
             tipLegend = Text(tip, sketchBold, 15, TextAlignmentOptions.TopLeft, Vector2.zero, Vector2.zero);
             tipLegend.fontStyle = FontStyles.UpperCase;
             tipLegend.color = Bright;
+            tipStatusIcon = LegendIcon(tipStatus, 15);
+            tipLegendIcon = LegendIcon(tipLegend, 16);
             tipDesc = Text(tip, sketch, 16, TextAlignmentOptions.TopLeft, Vector2.zero, Vector2.zero);
             tipUp = Text(tip, sketchBold, 16, TextAlignmentOptions.TopLeft, Vector2.zero, Vector2.zero);
             tipDesc.textWrappingMode = tipUp.textWrappingMode = TextWrappingModes.Normal;
+            tipUpIcon = LegendIcon(tipUp, 16);
 
             // ---- Mode banner, top centre ----
             banner = Row("Mode Banner", root, 16f);
@@ -894,6 +897,7 @@ namespace RailTracer
             legendNum.text = legendGain > 0 ? $"{L}<size=60%><color=#E0202F> +{legendGain}</color></size>" : L.ToString();
             legendNum.fontSize = Mathf.Round(32f + 40f * k);
             legendNum.color = k >= 1f ? Hex("7A0618") : k >= 0.75f ? Hex("9E0B22") : k >= 0.5f ? Blood : k >= 0.25f ? Bright : Bone;
+            Pin(legendIcon, legendNum, legendGain > 0 ? 26f : 30f); // after the number, or after "+30" while a kill is targeted
 
             tip.gameObject.SetActive(hovered >= 0);
             if (hovered >= 0)
@@ -907,15 +911,18 @@ namespace RailTracer
                 Act? kill = id == SkillId.Stealth ? Act.QuietKill : id == SkillId.Rail ? Act.RailGrab : id == SkillId.Brutal ? Act.BrutalKill : (Act?)null;
                 tipName.text = d.name;
                 tipLegend.gameObject.SetActive(kill.HasValue);
-                if (kill.HasValue) tipLegend.text = $"+{c.LegendGain(kill.Value)} legend";
+                if (kill.HasValue) { tipLegend.text = $"+{c.LegendGain(kill.Value)}"; Pin(tipLegendIcon, tipLegend, 16f); }
                 int cool = c.Wait(id);
                 tipStatus.text = locked ? $"Unlocks at {d.unlock}" : cool > 0 ? $"Ready in {cool}" : !usable ? (c.WhyNot(id) ?? "No target") : bloodied ? "Bloodied" : "Ready";
                 tipDesc.text = d.description;
                 tipDesc.color = locked ? TipGrey : Bone;
                 bool upgrade = d.bloodied > d.unlock && !string.IsNullOrEmpty(d.upgrade);
                 tipUp.gameObject.SetActive(upgrade);
-                tipUp.text = upgrade ? $"At {d.bloodied}: {d.upgrade}" : "";
+                string at = $"At {d.bloodied}"; // then the icon, in a gap left for it, then ": ..."
+                tipUp.text = upgrade ? $"{at}<space={16f + 2f * IconGap}>: {d.upgrade}" : "";
                 tipUp.color = bloodied ? Bright : TipBurgundy;
+                if (locked) Pin(tipStatusIcon, tipStatus, 15f); else tipStatusIcon.enabled = false;
+                if (upgrade) Pin(tipUpIcon, tipUp, 16f, at.Length - 1); else tipUpIcon.enabled = false;
             }
 
             int hp = shownHp >= 0 ? shownHp : c.hp; // held back while a heavy's swing is still on its way
