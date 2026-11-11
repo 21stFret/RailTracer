@@ -352,6 +352,7 @@ namespace RailTracer
         RectTransform bar, tip, legendGroup;
         Slant tipBorder;
         TMP_Text tipName, tipStatus, tipDesc, tipUp;
+        LayoutElement tipHeader;
         Octagon actionPip;
         Image stanceIcon, sightIcon;
         TMP_Text stanceWord, sightWord;
@@ -587,7 +588,8 @@ namespace RailTracer
             tip.gameObject.AddComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
             var header = new GameObject("Header", typeof(RectTransform)).GetComponent<RectTransform>();
             header.SetParent(tip, false);
-            header.gameObject.AddComponent<LayoutElement>().preferredHeight = 28;
+            tipHeader = header.gameObject.AddComponent<LayoutElement>();
+            tipHeader.preferredHeight = 28;
             tipName = Text(header, sketchBold, 24, TextAlignmentOptions.BottomLeft, Vector2.zero, Vector2.zero);
             Stretch(tipName.rectTransform, 0f);
             tipName.fontStyle = FontStyles.UpperCase;
@@ -909,6 +911,10 @@ namespace RailTracer
                 tipName.text = kill.HasValue ? $"{d.name} <size=14><color=#E0202F>+{c.LegendGain(kill.Value)} legend</color></size>" : d.name;
                 int cool = c.Wait(id);
                 tipStatus.text = locked ? $"Unlocks at {d.unlock}" : cool > 0 ? $"Ready in {cool}" : !usable ? (c.WhyNot(id) ?? "No target") : bloodied ? "Bloodied" : "Ready";
+                // Name and status side by side when they fit; else the status drops to its own line under the name.
+                bool fits = tipName.GetPreferredValues(tipName.text).x + 12f + tipStatus.GetPreferredValues(tipStatus.text).x <= tipName.rectTransform.rect.width;
+                tipHeader.preferredHeight = fits ? 28 : 48;
+                tipName.alignment = fits ? TextAlignmentOptions.BottomLeft : TextAlignmentOptions.TopLeft;
                 tipDesc.text = d.description;
                 tipDesc.color = locked ? TipGrey : Bone;
                 bool upgrade = d.bloodied > d.unlock && !string.IsNullOrEmpty(d.upgrade);

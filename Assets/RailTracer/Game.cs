@@ -14,6 +14,7 @@ namespace RailTracer
         public SkillTable skillTable; // empty = Resources/SkillTable
         public int seed; // 0 = random each run
         public float enemyStepDelay = 0.4f;
+        public float fleePace = 2f; // a fleeing enemy runs at this many times the walk
         public bool useTrainKit = true;      // off = the white-box carriage
         public bool cutawayNearWall = true;  // camera-side wall casts shadows but isn't drawn
 
@@ -129,7 +130,6 @@ namespace RailTracer
         readonly Dictionary<Body, Cell> bodyCell = new Dictionary<Body, Cell>();
         readonly Dictionary<Enemy, Vector3> bodyOffset = new Dictionary<Enemy, Vector3>();
         readonly HashSet<Enemy> posedBodies = new HashSet<Enemy>(); // left as the clip ended (bent over a table): limp once moved
-        Cell? parkedOn; // a cover finisher left you off your tile's centre: you stay there until you move
         Vector3 focus; // camera looks at this point on the floor
         float camDistance = 12f;
         public float panSpeed = 1.2f, zoomSpeed = 0.001f; // scroll is ~120 per wheel notch on Windows
@@ -357,7 +357,6 @@ namespace RailTracer
             bodyCell.Clear();
             bodyOffset.Clear();
             posedBodies.Clear();
-            parkedOn = null;
             takedownVictim = null;
             selected = null;
             // The car fresh, or a save's turn replayed onto it (the same dice, so nothing rerolls).
@@ -1636,7 +1635,7 @@ namespace RailTracer
                 // step in to the victim (the finisher's own spacing), then onto their tile once it's done (the rules
                 // moved you there). A stealth kill: you never move (the old clip closes in partway and back).
                 var to = brutal ? (entry != null ? at - gap : at) : entry != null ? from : Vector3.Lerp(from, at, quietKillReach);
-                var end = brutal ? World(c.player) : from;
+                var end = World(c.player); // every takedown ends square on your tile (the rules' tile)
                 var move = brutal ? takedownMove : quietKillMove;
                 float bloodAt = entry != null ? entry.bloodAt : brutal ? takedownBloodAt : quietKillBloodAt;
                 va.transform.localPosition = at;
@@ -1761,9 +1760,9 @@ namespace RailTracer
                 // the camera flies out. Without the ragdoll bones: the old topple for a finisher that leaves them up.
                 var bodyTile = c.bodies.Find(b => b.who == victim)?.pos ?? victim.pos;
                 // A cover finisher (Shove to Table) leaves the pair where the clip ends: the victim bent over the seat,
-                // you beside it in your stance (the rules restore it). For the rules the body is on its tile as ever.
+                // you sliding back onto your tile in your stance (the rules restore it). For the rules the body is on its tile as ever.
                 bool stayPut = useCover;
-                if (stayPut) { end = slideFrom; parkedOn = c.player; posedBodies.Add(victim); }
+                if (stayPut) posedBodies.Add(victim);
                 bool limp = !stayPut && HasRagdoll(va);
                 if (limp) StartCoroutine(Ragdoll(victim, va, bodyTile, takedownHold)); // slides with you, then falls
                 else if (!stayPut && entry != null && entry.victimFallsAfter) StartCoroutine(Topple(va.transform, playerFacing)); // still on their feet
@@ -2241,10 +2240,12 @@ namespace RailTracer
                     yield return null;
                 }
                 // Its swing, if it made one: the clip, then the hit as it lands.
+                Animator swinger = null;
                 if (melee && c.log.Skip(logBefore).Any(line => line.Contains("lunges")))
                 {
                     if (anims.TryGetValue(e, out var ea) && ea.HasState(0, Animator.StringToHash("Swing")))
                     {
+                        swinger = ea;
                         var face = World(c.player) - shown[e];
                         face.y = 0f;
                         if (face.sqrMagnitude > 1e-4f) ea.transform.localRotation = Quaternion.LookRotation(face);
@@ -2254,6 +2255,13 @@ namespace RailTracer
                 }
                 holdHit = false;
                 hud.shownHp = -1;
+                // The camera stays until the swing has played out (the hit shows meanwhile).
+                for (float time = 0f; swinger && time < 3f; time += Time.deltaTime)
+                {
+                    var st = swinger.GetCurrentAnimatorStateInfo(0);
+                    if (!swinger.IsInTransition(0) && (!st.IsName("Swing") || st.normalizedTime >= 1f)) break;
+                    yield return null;
+                }
                 if (fleeing && e.state == EnemyState.Fled) { yield return new WaitForSeconds(0.3f / EnemyPace); gone.Add(e); }
                 else if (walked) yield return new WaitForSeconds(0.15f / EnemyPace);
                 Poll(); // a card pauses the turn before the next enemy acts
@@ -2269,23 +2277,24 @@ namespace RailTracer
         IEnumerator FleersOut()
         {
             busy = true;
-            for (int turn = 0; turn < 12; turn++)
+            // One at a time, each runs every turn it needs back to back, as one route: a smooth run out of the door
+            // (turn by turn, the route ran dry every 3 tiles and the run dropped to idle for a frame).
+            foreach (var e in c.enemies.Where(e => e.state == EnemyState.Broken && e.fleeing).ToList())
             {
-                var fleers = c.enemies.Where(e => e.state == EnemyState.Broken && e.fleeing).ToList();
-                if (fleers.Count == 0) break;
-                foreach (var e in fleers)
+                if (!routes.TryGetValue(e, out var route)) routes[e] = route = new Queue<Vector3>();
+                for (int turn = 0; turn < 12 && e.state == EnemyState.Broken && e.fleeing; turn++)
+                {
+                    c.Do($"enemy {e.id}");
+                    if (e.walked == null || e.walked.Count == 0) break; // blocked this turn: no further
+                    Follow(route, e.walked);
+                    e.walked = null;
+                }
+                while (route.Count > 0 || (shown[e] - StandAt(e)).sqrMagnitude > 1e-3f)
                 {
                     if (followCamera) camTarget = shown[e];
-                    c.Do($"enemy {e.id}");
-                    if (!routes.TryGetValue(e, out var route)) routes[e] = route = new Queue<Vector3>();
-                    if (e.walked != null) { Follow(route, e.walked); e.walked = null; }
-                    while (route.Count > 0 || (shown[e] - StandAt(e)).sqrMagnitude > 1e-3f)
-                    {
-                        if (followCamera) camTarget = shown[e];
-                        yield return null;
-                    }
-                    if (e.state == EnemyState.Fled) { yield return new WaitForSeconds(0.3f); gone.Add(e); }
+                    yield return null;
                 }
+                if (e.state == EnemyState.Fled) { yield return new WaitForSeconds(0.3f); gone.Add(e); }
             }
             if (followCamera) camTarget = playerShown;
             busy = false;
@@ -2821,8 +2830,7 @@ namespace RailTracer
             bool moving = false;
             // Crouching or dragging costs double, so it looks slower too.
             float speed = exiting ? WalkOutSpeed : c.crouched || c.held != null ? unitSpeed * 0.5f : unitSpeed;
-            if (parkedOn != c.player || playerRoute.Count > 0) parkedOn = null;
-            if (flipT < 0f && takedownVictim == null && !hopRunning && parkedOn == null) moving = Advance(ref playerShown, playerRoute, target, speed); // else PairedKill() / HopThrough() moves it
+            if (flipT < 0f && takedownVictim == null && !hopRunning) moving = Advance(ref playerShown, playerRoute, target, speed); // else PairedKill() / HopThrough() moves it
             moving |= hopMoving;
             var step = playerShown - before;
             if (step.sqrMagnitude > 1e-6f) playerFacing = step.normalized;
@@ -3363,7 +3371,8 @@ namespace RailTracer
             if (!routes.TryGetValue(e, out var route)) routes[e] = route = new Queue<Vector3>();
             var pos = shown[e];
             var before = pos;
-            float pace = unitSpeed * EnemyPace; // the Options enemy turn speed
+            bool running = e.state == EnemyState.Fled || (e.state == EnemyState.Broken && e.fleeing);
+            float pace = unitSpeed * EnemyPace * (running ? fleePace : 1f); // the Options enemy turn speed; fleers run
             bool moving = Advance(ref pos, route, StandAt(e), pace);
             shown[e] = pos;
             a.SetBool("Moving", moving);
