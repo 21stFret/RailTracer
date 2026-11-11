@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 19.25 (10 Nov 2026).
+Last updated: Update 19.26 (10 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -110,6 +110,7 @@ Inspector; the saved scene matches these.
 | 19.23 (Dread icon: no tear) | Done. The small teardrop under the Dread eye (`skill_dread.png`) is erased; the eye and horns are unchanged |
 | 19.24 (hop preview: who sees you come in) | Done, not yet seen in Play mode. Aiming a window hop now previews the landing like a move: the see-through you at the landing, a red chip (with its icon) on everyone who would see you come in, and a red tile with the hit chance for each ready gun that has seen you before (anyone who never has is startled instead, no shot). No path line (the hop goes outside). `Carriage.HopPreview`. Scripts compile (checked outside Unity) |
 | 19.25 (first sound effects) | Done, not yet heard in Play mode. Alex's 8 clips moved to `Resources/Audio/Sfx` (imported decompress-on-load, not streamed). See Sound effects. Scripts compile (headless Unity 6000.4.11f1) |
+| 19.26 (Alex's new impact sounds) | Done, not yet heard in Play mode. The 19.25 clips removed (Alex didn't like them); his new WAVs in `Resources/Audio/Sfx` (BloosStab.wav renamed BloodStab1.wav so both stabs share a name). See Sound effects. Not compiled: Unity was open, it recompiles and imports on focus |
 | Next | Full audio pass |
 
 ## The train
@@ -324,11 +325,12 @@ In the game too, finisher blood now comes from the victim's chest bone (where th
 
 ## Sound effects
 
-- `GameSfx.cs`: `Sfx(name, at)` plays a random clip from `Resources/Audio/Sfx` whose name starts with `name` (Flesh Hit A/B/C, Whoosh Blade 001-005), 3D at that spot (one-shot, default rolloff), at Game "Sfx Volume" (0.8) under the master volume. New variants are picked up just by dropping in a clip with the same name start.
-- **Whoosh Blade:** a takedown's strike (at Blood At, and with each extra blood point), and a heavy's swing as its clip starts.
-- **Flesh Hit:** every kill's blood (takedowns, rail grabs, someone shot by a gun), each extra blood point, you being hit, a thrown body landing.
-- **Whoosh Shadow Teleport:** a leap as it starts (the normal and the stylish flip).
-- Not yet: gunshots, footsteps, window hop, drag, UI.
+- `GameSfx.cs`: `Sfx(name, at)` plays a random clip from `Resources/Audio/Sfx` whose name starts with `name` (KnifeSlice and KnifeSlice2), 3D at that spot (one-shot, default rolloff), at Game "Sfx Volume" (0.8) under the master volume. New variants are picked up just by dropping in a clip with the same name start.
+- **KnifeSlice** (KnifeSlice, KnifeSlice2): a stealth kill's strike (at Blood At, and each extra blood point).
+- **HeadStomp:** a brutal kill's strike (same points); a thrown body landing.
+- **BloodStab** (BloodStab1, BloodStab2): every kill's blood (takedowns, rail grabs, someone shot by a gun), each extra blood point, you being hit.
+- **MenuSwipe** (MenuSwipe, MenuSwipe2): in the folder, not used yet (for the coming UI update).
+- Not yet: gunshots, footsteps, leap, window hop, drag, a heavy's swing, UI.
 
 ## Characters
 

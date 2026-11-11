@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace RailTracer
 {
-    // Sound effects: every clip in Resources/Audio/Sfx, picked at random by name ("Flesh Hit" plays Flesh Hit A, B or C),
+    // Sound effects: every clip in Resources/Audio/Sfx, picked at random by name ("KnifeSlice" plays KnifeSlice or KnifeSlice2),
     // in 3D where it happens (root space). Master volume covers them (AudioListener.volume).
     public partial class Game
     {
@@ -22,11 +22,11 @@ namespace RailTracer
             AudioSource.PlayClipAtPoint(sfxPick[Random.Range(0, sfxPick.Count)], root.TransformPoint(at), sfxVolume);
         }
 
-        // A blade blow landing: the swish and the hit together.
-        void Strike(Vector3 at)
+        // A blow landing: the knife (a stomp for a brutal kill) and the blood together.
+        void Strike(Vector3 at, bool brutal)
         {
-            Sfx("Whoosh Blade", at);
-            Sfx("Flesh Hit", at);
+            Sfx(brutal ? "HeadStomp" : "KnifeSlice", at);
+            Sfx("BloodStab", at);
         }
     }
 }
