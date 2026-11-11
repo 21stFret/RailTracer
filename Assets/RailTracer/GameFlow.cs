@@ -389,7 +389,8 @@ namespace RailTracer
         void OpenChoice(string which)
         {
             choice = which;
-            hud.ShowPause(true, which == "board" ? NextName() : which == "done" ? "Demo complete" : "Paused", false); // no close X: each panel has its own way out (Resume, Not yet)
+            hud.ShowPause(true, which == "board" ? NextName() : which == "done" ? "Demo complete" : "Paused", false,
+                which == "board" ? "Not yet" : which == "done" ? null : "Resume"); // no close X: each panel has its own way out (Resume, Not yet)
         }
 
         void CloseChoice()
@@ -404,7 +405,7 @@ namespace RailTracer
 
         string[] ChoiceItems() => choice == "board" ? new[] { "Board", "Not yet" }
             : choice == "done" ? new[] { $"Restart from {Train.TrainNames[0]}", "Try Endless mode", "Main menu" }
-            : new[] { "Resume", $"Tutorial tips: {(tut.Skipped ? "Off" : "On")}", $"Kill cam: {(KillCamOn ? "On" : "Off")}", "Restart car", "Main menu" };
+            : new[] { "Resume", $"Tutorial tips\t{(tut.Skipped ? "Off" : "On")}", $"Kill cam\t{(KillCamOn ? "On" : "Off")}", "Restart car", "Main menu" };
 
         // True while the panel is open (it takes the input).
         bool ChoiceStep(Keyboard kb, Mouse mouse)
@@ -630,8 +631,8 @@ namespace RailTracer
         {
             var r = save.run;
             string where = $"train {Train.TrainOf(r.car) + 1}, car {r.car % Train.TrainCars + 1}";
-            if (r.walk) return r.endless ? $"Continue · before endless car {r.car}" : $"Continue · before {where}";
-            return r.endless ? $"Continue · endless car {r.car}, turn {r.turn}" : $"Continue · {where}, turn {r.turn}";
+            if (r.walk) return r.endless ? $"Continue\t· before endless car {r.car}" : $"Continue\t· before {where}";
+            return r.endless ? $"Continue\t· endless car {r.car}, turn {r.turn}" : $"Continue\t· {where}, turn {r.turn}";
         }
 
         void MenuStep(Keyboard kb, Mouse mouse)
@@ -711,10 +712,10 @@ namespace RailTracer
                     if (!windowed) (w, h) = (Display.main.systemWidth, Display.main.systemHeight); // fullscreen: the desktop's own
                     var items = new[]
                     {
-                        $"Master volume: {Mathf.RoundToInt(100 * s.masterVolume)}%", $"Music volume: {Mathf.RoundToInt(100 * s.musicVolume)}%",
-                        $"Kill cam: {(s.killCam ? "On" : "Off")}", $"Kill cam chance: {Mathf.RoundToInt(100 * s.killCamChance)}%",
-                        $"Kill cam slow motion: {s.killCamSlowMo:0.##}x", $"Enemy turn speed: {EnemySpeeds[Mathf.Clamp(s.enemySpeed, 0, 2)]}",
-                        $"Window: {modeName}", windowed ? $"Resolution: {w} x {h}" : $"Resolution: {w} x {h} (screen)", "Controls", "Back",
+                        $"Master volume\t{Mathf.RoundToInt(100 * s.masterVolume)}%", $"Music volume\t{Mathf.RoundToInt(100 * s.musicVolume)}%",
+                        $"Kill cam\t{(s.killCam ? "On" : "Off")}", $"Kill cam chance\t{Mathf.RoundToInt(100 * s.killCamChance)}%",
+                        $"Kill cam slow motion\t{s.killCamSlowMo:0.##}x", $"Enemy turn speed\t{EnemySpeeds[Mathf.Clamp(s.enemySpeed, 0, 2)]}",
+                        $"Window\t{modeName}", windowed ? $"Resolution\t{w} x {h}" : $"Resolution\t{w} x {h} (screen)", "Controls", "Back",
                     };
                     int hit = hud.RefreshMenu(false, "Options", items, null, "Volumes: click to turn up, right-click to turn down.", at, held, -1, "Reset data");
                     if (click && hit == -3) { screen = MenuScreen.ResetData; break; }
@@ -771,8 +772,7 @@ namespace RailTracer
                 }
                 case MenuScreen.Controls:
                 {
-                    var info = string.Join("\n", SkillHud.ControlsList.Select(k => $"<b>{string.Join(" to ", k.keys)}</b>   {k.what}"));
-                    int hit = hud.RefreshMenu(false, "Controls", new[] { "Back" }, null, info, at, held);
+                    int hit = hud.RefreshMenu(false, "Controls", new[] { "Back" }, null, null, at, held); // the key boxes beside it
                     if (back || (click && (hit == 0 || hit == -2))) screen = MenuScreen.Options;
                     break;
                 }

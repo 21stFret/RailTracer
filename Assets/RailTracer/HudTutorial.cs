@@ -241,7 +241,10 @@ namespace RailTracer
         RectTransform pause;
         TMP_Text pauseHead;
         GameObject pauseClose;
-        readonly List<TMP_Text> pauseItems = new List<TMP_Text>();
+        readonly List<MenuLine> pauseItems = new List<MenuLine>();
+        GameObject pauseHint;
+        TMP_Text pauseHintWords;
+        const float BodySpacing = -29f; // Kalam's lines are 1.59 em apart: about 1.3
 
         void BuildOverlays(Transform root)
         {
@@ -260,22 +263,19 @@ namespace RailTracer
             tutDim.color = new Color(0.02f, 0.012f, 0.016f, 0.72f);
             tutDim.raycastTarget = false;
 
-            // The card: 420 wide, slanted, black, an 8 px bone bar down its left edge.
+            // The card (19.27): 420 wide, the centre card's shape (slanted 16 px, bone edge, tilted -1 degree).
             tutCard = Rect("Card", tut, Vector2.zero, Vector2.zero, new Vector2(420, 100));
-            Img(tutCard, Black, 0f, skew: true);
-            var stripe = Img(tutCard, Bone, 0f, skew: true).rectTransform;
-            stripe.anchorMax = new Vector2(0f, 1f);
-            stripe.offsetMax = new Vector2(8f, 0f);
+            CardShape(tutCard);
             IgnoreLayout(tutCard);
-            var col = Column(tutCard, new RectOffset(30, 26, 18, 18), 10f);
+            var col = Column(tutCard, new RectOffset(42, 40, 18, 18), 10f);
             col.childForceExpandWidth = true;
             tutCard.gameObject.AddComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
             var header = new GameObject("Header", typeof(RectTransform)).GetComponent<RectTransform>();
             header.SetParent(tutCard, false);
-            header.gameObject.AddComponent<LayoutElement>().preferredHeight = 42;
-            tutTitle = Text(header, title, 28, TextAlignmentOptions.Bottom, Vector2.zero, Vector2.zero); // centred, underline under it
+            header.gameObject.AddComponent<LayoutElement>().preferredHeight = 46;
+            tutTitle = Text(header, sketchBold, 28, TextAlignmentOptions.Bottom, Vector2.zero, Vector2.zero); // centred, underline under it
             Stretch(tutTitle.rectTransform, 0f);
-            tutTitle.margin = new Vector4(0, 0, 0, 6);
+            tutTitle.margin = new Vector4(0, 0, 0, 4);
             tutTitle.fontStyle = FontStyles.UpperCase;
             tutTitle.characterSpacing = 2f;
             tutTitle.color = Bone;
@@ -283,50 +283,57 @@ namespace RailTracer
             var ul = tutUnderline.gameObject.AddComponent<Image>();
             ul.sprite = white;
             ul.color = Bone;
-            tutNumber = Label(header, "", 15, Grey, 1.5f);
+            tutNumber = SketchLabel(header, "", 15, LockedText);
             Stretch(tutNumber.rectTransform, 0f);
             tutNumber.alignment = TextAlignmentOptions.TopRight;
-            tutText = Text(tutCard, body, 19, TextAlignmentOptions.TopLeft, Vector2.zero, Vector2.zero);
-            tutTip = Text(tutCard, body, 16, TextAlignmentOptions.TopLeft, Vector2.zero, Vector2.zero);
+            tutText = Text(tutCard, sketch, 19, TextAlignmentOptions.TopLeft, Vector2.zero, Vector2.zero);
+            tutTip = Text(tutCard, sketch, 18, TextAlignmentOptions.TopLeft, Vector2.zero, Vector2.zero);
             tutText.textWrappingMode = tutTip.textWrappingMode = TextWrappingModes.Normal;
+            tutText.lineSpacing = tutTip.lineSpacing = BodySpacing;
             tutText.color = Bone;
             tutTip.color = LockedText;
             var buttons = Row("Buttons", tutCard, 0f);
             buttons.gameObject.AddComponent<LayoutElement>().minHeight = 34;
-            var skip = Label(buttons, "Skip tutorial", 15, Grey, 1.5f);
-            tutSkip = skip.rectTransform;
+            var skip = Line(buttons, 18, 14, 3f, 0, idle: LockedText);
+            skip.Set("Skip tutorial");
+            skip.autoHover = true;
+            tutSkip = skip.rt;
             var spacer = new GameObject("Spacer", typeof(RectTransform));
             spacer.transform.SetParent(buttons, false);
             spacer.AddComponent<LayoutElement>().flexibleWidth = 1f; // pushes NEXT to the right
-            tutNext = Row("Next", buttons, 10f);
-            tutNext.GetComponent<HorizontalLayoutGroup>().padding = new RectOffset(18, 18, 6, 7);
-            Img(tutNext, Bone, 0f, skew: true);
-            IgnoreLayout(tutNext);
-            var next = Text(tutNext, title, 20, TextAlignmentOptions.MidlineLeft, Vector2.zero, Vector2.zero);
-            next.fontStyle = FontStyles.UpperCase;
-            next.characterSpacing = 2f;
-            next.color = Black;
-            next.text = "Next";
-            KeyCap(tutNext, "Space", Blood, Bone); // red on white: the card's only red
+            var next = Line(buttons, 22, 14, 3f, 1);
+            next.Set("Next");
+            next.autoHover = true;
+            next.past = 12f; // stays inside the card
+            tutNext = next.rt;
+            var gap = new GameObject("Gap", typeof(RectTransform));
+            gap.transform.SetParent(buttons, false);
+            gap.AddComponent<LayoutElement>().minWidth = 22f; // clear of NEXT as it grows
+            SketchCap(buttons, "Space", 14);
             tut.gameObject.SetActive(false);
 
-            // Pause menu: a slanted panel in the centre.
-            pause = Rect("Pause", root, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(320, 100));
-            Img(pause, Bone, 0f, skew: true);
-            Img(pause, Black, 2f, skew: true);
+            // Pause menu (19.27): a centre card at least 400 wide, PAUSED, the lines, an ESC key hint.
+            pause = Rect("Pause", root, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(400, 100));
+            CardShape(pause);
             IgnoreLayout(pause);
-            var list = Column(pause, new RectOffset(34, 34, 18, 22), 10f);
+            var list = Column(pause, new RectOffset(46, 46, 22, 22), 14f);
             list.childAlignment = TextAnchor.UpperLeft;
+            list.childForceExpandWidth = true;
             Fit(pause);
-            var head = Text(pause, title, 30, TextAlignmentOptions.MidlineLeft, Vector2.zero, Vector2.zero);
+            pause.gameObject.AddComponent<LayoutElement>().minWidth = 400f;
+            var head = Text(pause, sketchBold, 46, TextAlignmentOptions.MidlineLeft, Vector2.zero, Vector2.zero);
             head.fontStyle = FontStyles.UpperCase;
             head.color = Bone;
             head.text = "Paused";
+            head.rectTransform.localRotation = Quaternion.Euler(0f, 0f, -1.5f);
             pauseHead = head;
             var px = CloseX(pause);
             Button("closepause", px.rt, px.x);
             pauseClose = px.rt.gameObject;
-            for (int i = 0; i < 5; i++) pauseItems.Add(Label(pause, "", 18, Bone, 1.5f));
+            var lines = Rect("Lines", pause, Vector2.zero, Vector2.zero, Vector2.zero);
+            Column(lines, new RectOffset(0, 0, 0, 0), 0f).childForceExpandWidth = true;
+            for (int i = 0; i < 5; i++) pauseItems.Add(Line(lines, 26, 20, 5f, i, card: true));
+            pauseHint = KeyHint(pause, "Esc", "Resume", out pauseHintWords).gameObject;
             pause.gameObject.SetActive(false);
         }
 
@@ -402,25 +409,30 @@ namespace RailTracer
 
         public bool PauseOpen => pause.gameObject.activeSelf;
         // The centre panel: the pause menu, or another short choice under its own heading (up to 5 lines).
-        public void ShowPause(bool on, string heading = "Paused", bool closable = true)
+        // escWord: what Esc does here, shown as a key hint (null: none).
+        public void ShowPause(bool on, string heading = "Paused", bool closable = true, string escWord = "Resume")
         {
             pauseHead.text = heading;
+            pauseHint.SetActive(escWord != null);
+            pauseHintWords.text = escWord ?? "";
             pauseClose.SetActive(closable);
             pause.gameObject.SetActive(on);
         }
 
-        // items: the menu's lines; the one under the mouse is bone white, the rest grey. Returns its index, or -1.
+        // items: the menu's lines ("Label	note": a note after a tab), the one under the mouse hovered. Returns its index, or -1.
         public int RefreshPause(string[] items, Vector2 screen)
         {
             int hit = -1;
             for (int i = 0; i < pauseItems.Count; i++)
             {
-                pauseItems[i].gameObject.SetActive(i < items.Length);
+                var line = pauseItems[i];
+                line.gameObject.SetActive(i < items.Length);
                 if (i >= items.Length) continue;
-                pauseItems[i].text = items[i];
-                bool over = RectTransformUtility.RectangleContainsScreenPoint(pauseItems[i].rectTransform, screen, null);
+                var (label, note) = Split(items[i]);
+                line.Set(label, note);
+                bool over = line.Over(screen);
                 if (over) hit = i;
-                pauseItems[i].color = over ? Bone : Grey;
+                line.hot = over;
             }
             return hit;
         }

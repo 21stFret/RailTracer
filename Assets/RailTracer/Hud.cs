@@ -374,12 +374,13 @@ namespace RailTracer
         TMP_Text bannerName, bannerHint;
         GameObject controls;
         CanvasGroup card;
-        TMP_Text cardSmall, cardLine1, cardLine2, cardFoot;
-        GameObject cardHold;
-        Image cardHoldFill;
+        TMP_Text cardSmall, cardLine1, cardLine2;
+        GameObject cardFoot, cardHold;
+        readonly (GameObject row, GameObject cap, TMP_Text key, TMP_Text words)[] cardHints = new (GameObject, GameObject, TMP_Text, TMP_Text)[2];
+        Wedge cardHoldFill;
         float cardShown, cardAuto, cardFading = -1f;
         bool cardDismissable;
-        TMP_FontAsset title, body, sketch, sketchBold; // sketch: Kalam, for the sketch-style HUD (not menus, cards, chips, log)
+        TMP_FontAsset title, body, sketch, sketchBold; // sketch: Kalam, the sketch style (HUD, menus, cards; the log and banner keep Barlow)
         Sprite white;
         readonly Dictionary<string, Sprite> icons = new Dictionary<string, Sprite>();
 
@@ -443,6 +444,7 @@ namespace RailTracer
             // Kalam (Editor/FontSetup builds it from Fonts/Kalam-*.ttf), else the old fonts.
             sketch = Resources.Load<TMP_FontAsset>("Fonts/Kalam SDF") ?? body;
             sketchBold = Resources.Load<TMP_FontAsset>("Fonts/Kalam-Bold SDF") ?? title;
+            if (sketch != body && sketch.fontWeightTable.Length > 7) sketch.fontWeightTable[7].regularTypeface = sketchBold; // <b> in Kalam: Kalam Bold
             white = Sprite.Create(Texture2D.whiteTexture, new Rect(0, 0, 4, 4), new Vector2(0.5f, 0.5f)); // Filled images need a sprite
             foreach (var s in Resources.LoadAll<Sprite>("UI/Icons")) icons[s.name] = s;
 
@@ -650,38 +652,19 @@ namespace RailTracer
             log.color = Bone;
             Glow(log);
 
-            // ---- Controls panel (H) ----
+            // ---- Controls panel (H): the centre card's shape (19.27), key boxes and Kalam ----
             var panel = Rect("Controls", root, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(560, 100));
-            Img(panel, Bone, 0f, skew: true);
-            Img(panel, Black, 2f, skew: true);
+            CardShape(panel);
             IgnoreLayout(panel);
-            var rows = Column(panel, new RectOffset(34, 34, 18, 22), 7f);
+            var rows = Column(panel, new RectOffset(48, 48, 18, 22), 7f);
             rows.childAlignment = TextAnchor.UpperLeft;
             Fit(panel);
-            var head = Text(panel, title, 26, TextAlignmentOptions.MidlineLeft, Vector2.zero, Vector2.zero);
+            var head = Text(panel, sketchBold, 30, TextAlignmentOptions.MidlineLeft, Vector2.zero, Vector2.zero);
             head.fontStyle = FontStyles.UpperCase;
             head.color = Bone;
             head.text = "Controls";
-            foreach (var (keys, what) in ControlsList)
-            {
-                var row = Row("Row", panel, 14f);
-                var caps = Row("Keys", row, 4f);
-                caps.gameObject.AddComponent<LayoutElement>().minWidth = 96;
-                for (int i = 0; i < keys.Length; i++)
-                {
-                    if (i > 0) Label(caps, "to", 13, Grey, 1f);
-                    KeyCap(caps, keys[i]);
-                }
-                var t = Text(row, body, 17, TextAlignmentOptions.MidlineLeft, Vector2.zero, Vector2.zero);
-                t.color = Bone;
-                t.text = what;
-            }
-            // Keep every line clear of the slanted left edge (and the right): the slant shifts the corners by half the
-            // panel's height x tan 10 degrees, so pad by that plus 28 px.
-            LayoutRebuilder.ForceRebuildLayoutImmediate(panel);
-            int lean = Mathf.CeilToInt(panel.rect.height / 2f * Mathf.Tan(10f * Mathf.Deg2Rad));
-            rows.padding = new RectOffset(28 + lean, 28 + lean, 18, 22);
-            LayoutRebuilder.ForceRebuildLayoutImmediate(panel);
+            head.rectTransform.localRotation = Quaternion.Euler(0f, 0f, -1.5f);
+            ControlRows(panel, 15, false);
             var cx = CloseX(panel);
             Button("closecontrols", cx.rt, cx.x);
             controls = panel.gameObject;
@@ -705,27 +688,30 @@ namespace RailTracer
             card.blocksRaycasts = false;
             Img(cardRoot, new Color(0.02f, 0.012f, 0.016f, 0.55f), 0f);
             var box = Rect("Box", cardRoot, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(600, 100));
-            Img(box, Black, 0f, skew: true);
-            var stripe = Img(box, Blood, 0f, skew: true).rectTransform;
-            stripe.anchorMax = new Vector2(0f, 1f);
-            stripe.offsetMax = new Vector2(10f, 0f);
+            CardShape(box); // 19.27: the centre card's shape (the blood bar down its left edge is gone, for now)
             IgnoreLayout(box);
-            var lines = Column(box, new RectOffset(46, 48, 22, 26), 6f);
+            var lines = Column(box, new RectOffset(50, 50, 22, 26), 6f);
             lines.childAlignment = TextAnchor.UpperLeft;
             Fit(box);
-            cardSmall = Label(box, "", 16, LockedText, 6f);
-            cardLine1 = Text(box, title, 46, TextAlignmentOptions.MidlineLeft, Vector2.zero, Vector2.zero);
-            cardLine2 = Text(box, title, 46, TextAlignmentOptions.MidlineLeft, Vector2.zero, Vector2.zero);
+            cardSmall = SketchLabel(box, "", 16, LockedText);
+            cardLine1 = Text(box, sketchBold, 46, TextAlignmentOptions.MidlineLeft, Vector2.zero, Vector2.zero);
+            cardLine2 = Text(box, sketchBold, 46, TextAlignmentOptions.MidlineLeft, Vector2.zero, Vector2.zero);
             cardLine1.fontStyle = cardLine2.fontStyle = FontStyles.UpperCase;
             cardLine1.color = cardLine2.color = Bone;
-            cardLine1.lineSpacing = cardLine2.lineSpacing = -10f;
-            cardFoot = Label(box, "", 14, Grey, 3f);
-            // The win card's hold to walk on: fills while held, empties if you let go early.
-            var hold = Rect("Hold", box, Vector2.zero, Vector2.zero, new Vector2(300, 6));
-            Size(hold, 300, 6);
-            Img(hold, Burgundy, 0f, skew: true);
-            cardHoldFill = Img(hold, Bright, 0f, skew: true);
-            Filled(cardHoldFill, Image.FillMethod.Horizontal, (int)Image.OriginHorizontal.Left);
+            cardLine1.lineSpacing = cardLine2.lineSpacing = -30f;
+            // The foot: up to two hints; one that starts with a single key ("R to ride again") shows it as a key box.
+            var foot = Row("Foot", box, 18f);
+            cardFoot = foot.gameObject;
+            for (int i = 0; i < 2; i++)
+            {
+                var footHint = Row("Hint", foot, 6f);
+                var cap = SketchCap(footHint, "", 15);
+                cardHints[i] = (footHint.gameObject, cap.border.transform.parent.gameObject, cap.text, SketchLabel(footHint, "", 15, LockedText));
+            }
+            // The win card's hold to walk on: a HUD wedge (bone outline, dark inside, bone fill), filling while held.
+            var hold = Rect("Hold", box, Vector2.zero, Vector2.zero, new Vector2(300, 12));
+            Size(hold, 300, 12);
+            cardHoldFill = OutlinedWedge(hold, 12f, Taper, Bone);
             cardHold = hold.gameObject;
             cardTickets = MakeTicketRow(box);
             cardRoot.gameObject.SetActive(false);
@@ -809,8 +795,19 @@ namespace RailTracer
             cardSmall.text = small;
             cardLine1.text = line1;
             cardLine2.text = line2;
-            cardFoot.text = foot;
-            cardFoot.gameObject.SetActive(!string.IsNullOrEmpty(foot));
+            var hints = string.IsNullOrEmpty(foot) ? new string[0] : foot.Split(new[] { "  /  " }, System.StringSplitOptions.None);
+            cardFoot.SetActive(hints.Length > 0);
+            for (int i = 0; i < cardHints.Length; i++)
+            {
+                var h = cardHints[i];
+                h.row.SetActive(i < hints.Length);
+                if (i >= hints.Length) continue;
+                int sp = hints[i].IndexOf(' ');
+                bool key = sp == 1; // "R to ride again", "R or click to retry"
+                h.cap.SetActive(key);
+                h.key.text = key ? hints[i].Substring(0, 1) : "";
+                h.words.text = key ? hints[i].Substring(2) : hints[i];
+            }
             SetCardHold(-1f);
             cardShown = Time.unscaledTime;
             cardAuto = autoHide;
@@ -824,7 +821,7 @@ namespace RailTracer
         public void SetCardHold(float k)
         {
             cardHold.SetActive(k >= 0f);
-            cardHoldFill.fillAmount = Mathf.Clamp01(k);
+            cardHoldFill.Span(0f, Mathf.Clamp01(k));
         }
 
         public void HideCard()

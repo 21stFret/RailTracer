@@ -1105,8 +1105,18 @@ namespace RailTracer
         Awareness? HeldStartle(Enemy e) =>
             e.awareness == Awareness.Startled && ActPlaying && preAct.TryGetValue(e, out var was) && was != Awareness.Startled ? was : (Awareness?)null;
 
+        [Header("Menu hover")]
+        public float hoverSlashTime = 0.42f;  // the red slash: grows, holds, fades over this (seconds, real time)
+        public float hoverSwipeDelay = 0.06f; // the band and the text start this far in
+        public float hoverSwipeTime = 0.15f;  // the band's wipe
+        public float hoverGrow = 1.2f;        // the text's size while hovered
+        public float hoverSwipePast = 100f;   // px the band runs past a line's text (on screen; a card's spans it)
+
         void Update()
         {
+            MenuLine.slashTime = hoverSlashTime; MenuLine.swipeDelay = hoverSwipeDelay; MenuLine.swipeTime = hoverSwipeTime;
+            MenuLine.grow = hoverGrow; MenuLine.swipePast = hoverSwipePast;
+            MenuLine.onSlash ??= () => UiSfx("MenuSwipe");
             if (c != null && !ActPlaying) // before this frame's input: the state an act starts from
             {
                 preAct.Clear();

@@ -22,6 +22,19 @@ namespace RailTracer
             AudioSource.PlayClipAtPoint(sfxPick[Random.Range(0, sfxPick.Count)], root.TransformPoint(at), sfxVolume);
         }
 
+        AudioSource uiAudio;
+
+        // A flat (2D) sound for the menus, the same random pick by name.
+        void UiSfx(string name)
+        {
+            sfxClips ??= Resources.LoadAll<AudioClip>("Audio/Sfx");
+            sfxPick.Clear();
+            foreach (var clip in sfxClips) if (clip.name.StartsWith(name)) sfxPick.Add(clip);
+            if (sfxPick.Count == 0) return;
+            if (!uiAudio) { uiAudio = gameObject.AddComponent<AudioSource>(); uiAudio.playOnAwake = false; uiAudio.spatialBlend = 0f; }
+            uiAudio.PlayOneShot(sfxPick[Random.Range(0, sfxPick.Count)], sfxVolume);
+        }
+
         // A blow landing: the knife (a stomp for a brutal kill) and the blood together.
         void Strike(Vector3 at, bool brutal)
         {
