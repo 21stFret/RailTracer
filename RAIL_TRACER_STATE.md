@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 19.31 (10 Nov 2026).
+Last updated: Update 19.32 (11 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -116,6 +116,7 @@ Inspector; the saved scene matches these.
 | 19.29 (tooltip restacked, window sounds) | Done, not yet seen in Play mode. The skill tooltip now reads top down: the status (No target, Ready, They can see you...) top left, the skill name, then a kill's "+N legend" in red under the name (19.28's status-drops-below rule is gone). Alex's WindowOpen / WindowClose play where a window starts to open or shut (every sliding window: the O key, hops, rail grabs). Scripts compile (checked outside Unity) |
 | 19.30 (legend icon) | Done, not yet seen in Play mode. A small blood-red icon (two steep chevrons up, a drop under them) replaces the word "legend" in four HUD places: beside the legend number (the word LEGEND under it is gone and the number drops into its spot), after "+30" while a kill is targeted, after the tooltip's "+20", and in the tooltip's thresholds ("Unlocks at 30" + icon, "At 50" + icon ": ..."). The tutorial's Legend card title reads LEGEND with the icon. Alex's answers: the icon by the number is a fixed 30 px whatever the number's size; the word stays everywhere else (log, Options, menus, tutorial text). Scripts compile (checked outside Unity) |
 | 19.31 (fear ghost, red hold bar) | Done, not yet seen in Play mode. Whenever an enemy's fear (terror) rises, for any reason (a body dragged out of their sight, a kill they see, Dread, gunfire...), the ghost pops up over their chip: 30 px, bone, a quick pop from 1.4x, held 2 s, then a 0.5 s fade (Hud FearPopHold / FearPopFade). A rise under the kill cam or during your leap, hop or takedown shows once that has played out. The win card's hold-to-walk-on bar fills red again (19.27 had made it bone). Scripts compile (checked outside Unity) |
+| 19.32 (crouched behind luggage stays hidden) | Done, not yet seen in Play mode. Alex, crouched right behind a luggage rack by the near wall (the rack beside a seat), was seen by an enemy in the aisle one tile short of level with the seat: the sight line's tile walk stepped round the rack although the line clips a quarter of its corner (Third class: rack (7,4), you (6,4), enemy (9,2)). Full cover right next to the far end of a sight line now hides it whenever the line passes through the cover's square (0.05 tile allowance at its edges); cover next to the viewer doesn't count this way, so a viewer beside a rack still looks round its corner. Applies to every line-of-sight check (sight, throws). RulesCheck passes with a new case for this (run outside Unity with dotnet); the level solver not rerun, so car targets may shift |
 | Next | Full audio pass |
 
 ## The train
@@ -274,6 +275,7 @@ Hover label: name, role, one state line ("Searching · Shaken", "Panicked · Fre
 - **Partitions** (a column walled off but for its doorway, like Third class's): a sight line through one has to pass the doorway, where the wall is drawn (on the joint after the partition's tiles), within 0.45 m of its middle; so from a steep angle only about a tile shows through, and straight down the aisle is clear. Throws and the other line-of-sight checks follow the same rule.
 - Each standing enemy on the line halves the sight left beyond them (broken ones and bodies don't count).
 - Luggage and walls block sight. Seats block it only for something low (you crouched, a body, blood).
+- **Tall cover right next to you (19.32):** luggage, a wall or a crate on a tile next to you hides you from any sight line that passes through its square (less 0.05 of a tile at its edges), even where the tile-by-tile line would step round its corner. Cover next to the viewer doesn't hide you this way: someone beside a rack can look round it.
 - **Half cover (crouched):** a seat on the line to the viewer hides you if it's right next to you (viewer 3 tiles away or less) or within 2 tiles of you (viewer further). Worked out per viewer. Bodies and blood use the same rule.
 - **Close look:** a searcher spots you on any tile next to it inside its cone, cover or not (a guard's 3 in front, a heavy's 5).
 

@@ -562,6 +562,14 @@ namespace RailTracer
             Check(!c.Sees(watcher2, new Cell(0, 3), false) && c.Sees(watcher2, new Cell(0, 1), false), "set-up: sees the arc, not the landing");
             Check(c.Leap(new Cell(0, 3)) && c.hp < t.maxHp, "reaction fire on a leap across its sight");
 
+            // Crouched behind luggage by the wall: an enemy in the aisle whose line clips the rack's corner can't see
+            // you (19.32: the tile walk stepped round the rack). A viewer right beside a rack still sees round it (above).
+            c = new Carriage(new[] { "......", "......", "......", "......", "...LS." }, t, 1);
+            e = c.Spawn(5, 2, -1, 0, 0);
+            e.awareness = Awareness.Combat;
+            Check(!c.Sees(e, new Cell(2, 4), true), "crouched right behind luggage: hidden from the aisle");
+            Check(c.Sees(e, new Cell(2, 2), true), "the aisle beside it: still seen");
+
             // Dragging a body out of a watcher's sight still spooks it (it saw the body start to slide).
             c = new Carriage(new[] { "......", "L.....", "......", "......" }, t, 1);
             c.player = new Cell(3, 0);

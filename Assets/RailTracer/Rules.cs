@@ -298,6 +298,13 @@ namespace RailTracer
                 double k = (plane - a.x) / (b.x - a.x), yc = a.y + k * (b.y - a.y);
                 if (Math.Abs(yc - door) > DoorHalf) return false;
             }
+            // Full cover right next to the far end hides it from any line that really passes through its square (19.32):
+            // the tile walk below could step round the corner of a rack the line clips (you crouched behind luggage by
+            // the wall, an enemy in the aisle). Cover next to the near end doesn't count this way: a viewer beside a
+            // rack can still look round its corner.
+            for (int cx = b.x - 1; cx <= b.x + 1; cx++)
+                for (int cy = b.y - 1; cy <= b.y + 1; cy++)
+                    if (InBounds(new Cell(cx, cy)) && solid[cx, cy] && (cx != b.x || cy != b.y) && Cheb(new Cell(cx, cy), a) > 1 && Crosses(a, b, cx, cy)) return false;
             int dx = Math.Abs(b.x - a.x), dy = -Math.Abs(b.y - a.y);
             int sx = a.x < b.x ? 1 : -1, sy = a.y < b.y ? 1 : -1, err = dx + dy;
             int x = a.x, y = a.y;
@@ -309,6 +316,23 @@ namespace RailTracer
                 if (e2 >= dy) { err += dy; x += sx; }
                 if (e2 <= dx) { err += dx; y += sy; }
             }
+        }
+
+        // The straight line between the two tiles' centres passes through tile (x, y)'s square, less a 0.05 tile
+        // allowance at its edges (so a line that only touches a corner, like an exact diagonal, still gets by).
+        static bool Crosses(Cell a, Cell b, int x, int y)
+        {
+            const double half = 0.45;
+            double t0 = 0, t1 = 1, dx = b.x - a.x, dy = b.y - a.y;
+            bool Slab(double p, double d, double lo, double hi)
+            {
+                if (Math.Abs(d) < 1e-9) return p > lo && p < hi;
+                double u = (lo - p) / d, v = (hi - p) / d;
+                if (u > v) (u, v) = (v, u);
+                t0 = Math.Max(t0, u); t1 = Math.Min(t1, v);
+                return t0 < t1;
+            }
+            return Slab(a.x, dx, x - half, x + half) && Slab(a.y, dy, y - half, y + half);
         }
 
         // Tiles on the straight line from a to b, a excluded.
