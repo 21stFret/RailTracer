@@ -351,8 +351,7 @@ namespace RailTracer
         TMP_Text legendNum, hpNum, hpWord, log;
         RectTransform bar, tip, legendGroup;
         Slant tipBorder;
-        TMP_Text tipName, tipStatus, tipDesc, tipUp;
-        LayoutElement tipHeader;
+        TMP_Text tipName, tipStatus, tipLegend, tipDesc, tipUp;
         Octagon actionPip;
         Image stanceIcon, sightIcon;
         TMP_Text stanceWord, sightWord;
@@ -586,19 +585,17 @@ namespace RailTracer
             column.childAlignment = TextAnchor.UpperLeft;
             column.childForceExpandWidth = true;
             tip.gameObject.AddComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
-            var header = new GameObject("Header", typeof(RectTransform)).GetComponent<RectTransform>();
-            header.SetParent(tip, false);
-            tipHeader = header.gameObject.AddComponent<LayoutElement>();
-            tipHeader.preferredHeight = 28;
-            tipName = Text(header, sketchBold, 24, TextAlignmentOptions.BottomLeft, Vector2.zero, Vector2.zero);
-            Stretch(tipName.rectTransform, 0f);
-            tipName.fontStyle = FontStyles.UpperCase;
-            tipStatus = Text(header, sketch, 14, TextAlignmentOptions.BottomRight, Vector2.zero, Vector2.zero);
-            Stretch(tipStatus.rectTransform, 0f);
-            tipStatus.margin = new Vector4(0, 0, 0, 3);
+            // Top down (19.29): the status ("No target", "Ready"), the name, a kill's legend under it in red.
+            tipStatus = Text(tip, sketch, 14, TextAlignmentOptions.TopLeft, Vector2.zero, Vector2.zero);
             tipStatus.fontStyle = FontStyles.UpperCase;
             tipStatus.characterSpacing = 5f;
             tipStatus.color = Bone;
+            tipName = Text(tip, sketchBold, 24, TextAlignmentOptions.TopLeft, Vector2.zero, Vector2.zero);
+            tipName.fontStyle = FontStyles.UpperCase;
+            tipName.lineSpacing = -30f;
+            tipLegend = Text(tip, sketchBold, 15, TextAlignmentOptions.TopLeft, Vector2.zero, Vector2.zero);
+            tipLegend.fontStyle = FontStyles.UpperCase;
+            tipLegend.color = Bright;
             tipDesc = Text(tip, sketch, 16, TextAlignmentOptions.TopLeft, Vector2.zero, Vector2.zero);
             tipUp = Text(tip, sketchBold, 16, TextAlignmentOptions.TopLeft, Vector2.zero, Vector2.zero);
             tipDesc.textWrappingMode = tipUp.textWrappingMode = TextWrappingModes.Normal;
@@ -906,15 +903,13 @@ namespace RailTracer
                 bool locked = !c.Has(id), bloodied = c.Bloodied(id), usable = c.Usable(id);
                 tipBorder.color = locked ? Grey : bloodied ? Bright : Bone; // the outline keeps the game's state colour
                 tipName.color = locked ? TipGrey : bloodied ? Bright : Bone;
-                // A kill's legend, small and red beside its name.
+                // A kill's legend, small and red under its name.
                 Act? kill = id == SkillId.Stealth ? Act.QuietKill : id == SkillId.Rail ? Act.RailGrab : id == SkillId.Brutal ? Act.BrutalKill : (Act?)null;
-                tipName.text = kill.HasValue ? $"{d.name} <size=14><color=#E0202F>+{c.LegendGain(kill.Value)} legend</color></size>" : d.name;
+                tipName.text = d.name;
+                tipLegend.gameObject.SetActive(kill.HasValue);
+                if (kill.HasValue) tipLegend.text = $"+{c.LegendGain(kill.Value)} legend";
                 int cool = c.Wait(id);
                 tipStatus.text = locked ? $"Unlocks at {d.unlock}" : cool > 0 ? $"Ready in {cool}" : !usable ? (c.WhyNot(id) ?? "No target") : bloodied ? "Bloodied" : "Ready";
-                // Name and status side by side when they fit; else the status drops to its own line under the name.
-                bool fits = tipName.GetPreferredValues(tipName.text).x + 12f + tipStatus.GetPreferredValues(tipStatus.text).x <= tipName.rectTransform.rect.width;
-                tipHeader.preferredHeight = fits ? 28 : 48;
-                tipName.alignment = fits ? TextAlignmentOptions.BottomLeft : TextAlignmentOptions.TopLeft;
                 tipDesc.text = d.description;
                 tipDesc.color = locked ? TipGrey : Bone;
                 bool upgrade = d.bloodied > d.unlock && !string.IsNullOrEmpty(d.upgrade);

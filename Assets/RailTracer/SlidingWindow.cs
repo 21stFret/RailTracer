@@ -13,6 +13,8 @@ namespace RailTracer
         public float speed = 2.5f;                        // metres per second
 
         float rise;
+        bool? heardOpen; // the state the last sound was for (none yet: a window built open makes no sound)
+        public static System.Action<bool, Vector3> onMove; // it starts opening (true) or shutting: Game plays the sound
 
         public bool IsOpen => Mathf.Approximately(rise, openRise);
         public bool IsShut => rise <= 0f;
@@ -20,6 +22,7 @@ namespace RailTracer
 
         void Update()
         {
+            if (heardOpen != open) { if (heardOpen.HasValue) onMove?.Invoke(open, transform.position); heardOpen = open; }
             float target = open ? openRise : 0f;
             if (Mathf.Approximately(rise, target)) return;
             rise = Mathf.MoveTowards(rise, target, speed * Time.deltaTime);

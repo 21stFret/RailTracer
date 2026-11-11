@@ -1116,6 +1116,7 @@ namespace RailTracer
             MenuLine.slashTime = hoverSlashTime; MenuLine.swipeDelay = hoverSwipeDelay; MenuLine.swipeTime = hoverSwipeTime;
             MenuLine.grow = hoverGrow; MenuLine.swipePast = hoverSwipePast;
             MenuLine.onSlash ??= () => UiSfx("MenuSwipe");
+            SlidingWindow.onMove ??= (opening, at) => { if (root) Sfx(opening ? "WindowOpen" : "WindowClose", root.InverseTransformPoint(at)); };
             if (c != null && !ActPlaying) // before this frame's input: the state an act starts from
             {
                 preAct.Clear();
