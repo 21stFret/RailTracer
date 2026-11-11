@@ -397,6 +397,7 @@ namespace RailTracer
             public Image[] segs, segEdges;
             public GameObject notYet;
             public RectTransform chip;
+            public Image ghost; // pops up over the chip when their fear rises (19.31)
         }
         readonly List<Tag> tags = new List<Tag>();
         RectTransform tagRoot;
@@ -713,7 +714,7 @@ namespace RailTracer
             // The win card's hold to walk on: a HUD wedge (bone outline, dark inside, bone fill), filling while held.
             var hold = Rect("Hold", box, Vector2.zero, Vector2.zero, new Vector2(300, 12));
             Size(hold, 300, 12);
-            cardHoldFill = OutlinedWedge(hold, 12f, Taper, Bone);
+            cardHoldFill = OutlinedWedge(hold, 12f, Taper, Bright); // red fill, as before 19.27
             cardHold = hold.gameObject;
             cardTickets = MakeTicketRow(box);
             cardRoot.gameObject.SetActive(false);
@@ -960,6 +961,8 @@ namespace RailTracer
             }
         }
 
+        public const float FearPopHold = 2f, FearPopFade = 0.5f; // the fear ghost: seconds shown, then its fade
+
         public void BeginTags() => tagCount = 0;
 
         public void EndTags()
@@ -974,7 +977,7 @@ namespace RailTracer
         // ("crosshair", "charge", "wildfire" or null). plate: a tough's armour, 1 whole, 2 cracked (killable).
         // notYet: "Not yet" over a tough you're targeting before it's Shaken.
         public RectTransform AddTag(Vector2 screen, float scale, int awareness, int terrorNow, bool seen, bool hovered, string name, string role, string words, string intent,
-            bool threat = false, string icon = null, int plate = 0, bool notYet = false, bool danger = false, int id = 0)
+            bool threat = false, string icon = null, int plate = 0, bool notYet = false, bool danger = false, int id = 0, float fearAge = -1f)
         {
             if (tagCount == tags.Count) tags.Add(MakeTag());
             var g = tags[tagCount++];
@@ -1002,6 +1005,11 @@ namespace RailTracer
             if (plate > 0) g.plate.sprite = IconSprite(plate == 2 ? "plate_cracked" : "plate");
             g.plate.color = ink;
             g.notYet.SetActive(notYet);
+            // fearAge: seconds since their fear last rose (-1: none). A quick pop, held, then a fade.
+            float ghostA = fearAge < 0f ? 0f : 1f - Mathf.Clamp01((fearAge - FearPopHold) / FearPopFade);
+            g.ghost.transform.parent.gameObject.SetActive(ghostA > 0f);
+            g.ghost.color = Alpha(Bone, ghostA);
+            g.ghost.rectTransform.localScale = Vector3.one * Mathf.Lerp(1.4f, 1f, Mathf.Clamp01(fearAge / 0.15f));
             // Three boxes, one per stage (Shaken, Panicked, Broken), each filling smoothly within its stage.
             for (int i = 0; i < 3; i++)
                 g.segs[i].fillAmount = broken ? 1f : Mathf.Clamp01((terrorNow - terror[i]) / (float)(terror[i + 1] - terror[i]));
@@ -1059,6 +1067,13 @@ namespace RailTracer
             ny.color = Bone;
             ny.text = "Not yet";
             g.notYet = notYet.gameObject;
+
+            // Fear rose: the ghost pops up over the chip, holds, fades.
+            var ghost = Rect("Fear", g.rt, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(30, 30));
+            Size(ghost, 30, 30);
+            g.ghost = Img(ghost, Bone, 0f);
+            g.ghost.sprite = IconSprite("ghost");
+            g.ghost.preserveAspect = true;
 
             // Chip: an octagon (6 px corners) 30 high: the state icon, three fear boxes, the plate (toughs), the eye.
             var chip = g.chip = Row("Chip", g.rt, 6f);

@@ -356,6 +356,8 @@ namespace RailTracer
             begging.Clear();
             bodyCell.Clear();
             bodyOffset.Clear();
+            seenTerror.Clear();
+            fearRoseAt.Clear();
             posedBodies.Clear();
             takedownVictim = null;
             selected = null;
@@ -1459,6 +1461,11 @@ namespace RailTracer
 
         // Enemy chips over their heads (awareness icon, terror segments, has-seen eye), scaled with the zoom within
         // 0.85x..1.4x. Hovering an enemy adds its label: role, awareness and stage, intent.
+        // Fear rising (19.31): the terror each enemy was last shown with, and when it last went up. A rise during the kill cam
+        // or your leap, hop or takedown waits until it has played out (as startles do), so the ghost isn't spent under the kill cam.
+        readonly Dictionary<Enemy, int> seenTerror = new Dictionary<Enemy, int>();
+        readonly Dictionary<Enemy, float> fearRoseAt = new Dictionary<Enemy, float>();
+
         void Tags()
         {
             float k = Mathf.Clamp(12f / camDistance, 0.85f, 1.4f);
@@ -1499,8 +1506,15 @@ namespace RailTracer
                 bool danger = next == Intent.Shoot || next == Intent.Charge || next == Intent.Melee || next == Intent.WildFire;
                 string shot = threat && swingThreats.Contains(e) ? $"Swing · Hit {pct}%" // a heavy's melee (never halved), not a shot
                     : threat ? $"Hit {pct}%" + (leaping && !(previewLanding.HasValue && c.Swings(e, previewLanding.Value)) ? $" · leap -{Mathf.RoundToInt(100 * c.t.leapHitPenalty)}" : "") : c.IntentText(e);
+                if (!seenTerror.TryGetValue(e, out int wasTerror)) seenTerror[e] = wasTerror = e.terror; // first seen: no pop
+                if (!(camming || takedownVictim != null || flipT >= 0f || hopRunning)) // not under the kill cam or mid-act
+                {
+                    if (e.terror > wasTerror) fearRoseAt[e] = Time.unscaledTime;
+                    seenTerror[e] = e.terror;
+                }
+                float fearAge = fearRoseAt.TryGetValue(e, out var rose) ? Time.unscaledTime - rose : -1f;
                 chips[e] = hud.AddTag(sp, k, shownAwareness, e.terror, e.hasSeen && held == null, hover == e.pos || threat, c.Name(e), role, c.StatusText(e),
-                    shot, threat, icon, plate, notYet, danger, e.id);
+                    shot, threat, icon, plate, notYet, danger, e.id, fearAge);
             }
             hud.EndTags();
         }
