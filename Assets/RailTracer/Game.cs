@@ -647,14 +647,24 @@ namespace RailTracer
                     if (!kit.Get(module)) return null;
                     return Panel(Place(module, 0f, z, rot));
                 }
-                // The painting's anchors: 0 the lamp under its hood, 1 the picture's centre, 2 the frame's top corner.
+                // Worked out from the painting's own bounds, in its local space (+X out of the wall, Y up, Z along it):
+                // the hood's lamp 2.4 cm in from the hood's front and 5.4 cm under its top, the picture's centre half way
+                // up the frame (the frame's top is 12.4 cm under the hood's top), the frame's top corner. Numbers from
+                // framed() in railtracer_furnish.py. (The FBX's anchor empties come in on the wrong axes, so not those.)
                 void PictureLight(GameObject art)
                 {
                     if (!live || shadowOnly || !art) return; // none on the cut-away near wall
-                    var marks = art.GetComponentsInChildren<Transform>();
-                    Transform Mark(int i) => marks.FirstOrDefault(t => t.name.EndsWith("Anchor_0" + i));
-                    if (!Mark(0) || !Mark(1) || !Mark(2)) return; // an older export without them
-                    Vector3 lamp = Mark(0).position, mid = Mark(1).position, corner = Mark(2).position;
+                    var rends = art.GetComponentsInChildren<MeshRenderer>();
+                    if (rends.Length == 0) return;
+                    var world = rends.Select(r => r.bounds).Aggregate((a, b) => { a.Encapsulate(b); return a; });
+                    var local = new Bounds(art.transform.InverseTransformPoint(world.min), Vector3.zero);
+                    for (int i = 0; i < 8; i++)
+                        local.Encapsulate(art.transform.InverseTransformPoint(new Vector3((i & 1) == 0 ? world.min.x : world.max.x,
+                            (i & 2) == 0 ? world.min.y : world.max.y, (i & 4) == 0 ? world.min.z : world.max.z)));
+                    float frameTop = local.max.y - 0.124f;
+                    var lamp = art.transform.TransformPoint(new Vector3(local.max.x - 0.024f, local.max.y - 0.054f, local.center.z));
+                    var mid = art.transform.TransformPoint(new Vector3(local.min.x + 0.011f, (local.min.y + frameTop) / 2f, local.center.z));
+                    var corner = art.transform.TransformPoint(new Vector3(local.min.x, frameTop, local.max.z));
                     float dist = Vector3.Distance(lamp, mid), half = Vector3.Distance(mid, corner);
                     var light = new GameObject("Picture Light").AddComponent<Light>();
                     light.transform.SetParent(art.transform, false);

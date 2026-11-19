@@ -1114,8 +1114,8 @@ def framed(name, W, aspect, fw, slot):
     """A painting on the +x wall (back 1 mm off the face at 2.5), centred on y = 0, z = PAINT_ZC, W wide outside the
     frame, as tall as the picture's aspect (width / height) makes it. A mitred gilt frame (fw wide, 37 mm deep), a dark
     slip, the canvas showing the whole picture, and a brass picture light over it: a small wall plate just above the
-    frame, an arm out to a hood 0.6 x W long, 14 cm off the wall, with its lit strip underneath.
-    Anchors (Game's picture light): 0 the lamp under the hood, 1 the picture's centre, 2 the frame's top corner."""
+    frame, an arm out to a hood 0.6 x W long, 14 cm off the wall, with its lit strip underneath. Game places its
+    picture light from these numbers (Game.PictureLight): keep them in step."""
     a = Asset(name, seed=SEED)
     P = a.P
     BACK, GILT, SLIP, CANVAS = 2.499, 2.462, 2.470, 2.488
@@ -1146,8 +1146,7 @@ def framed(name, W, aspect, fw, slot):
         z0, z1 = sorted((sg * L / 2, sg * (L / 2 + 0.006)))
         P.cylinder(0.024, z0, z1, BRASS, segs=12, center=(hx, 0, hz), mat3=rot)
     P.rect(hx - 0.007, hx + 0.007, -L / 2 + 0.01, L / 2 - 0.01, hz - 0.023, hz - 0.014, PICLIGHT)  # lit strip
-    a.anchors += [(hx, 0.0, hz - 0.03), (CANVAS, 0.0, zc), (BACK, hw, zc + hh)]
-    return a.finish(anchors=True)
+    return a.finish()
 
 
 def painting_small():
