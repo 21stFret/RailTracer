@@ -436,6 +436,9 @@ namespace RailTracer
                 look.name = "Car Look";
                 kitBuilt = onKit = true;
                 AddBoothTables(look.transform, trainKit, Map);
+                if (car.kind == CarKind.Baggage) // no curtains in baggage cars (19.45; the baked hold still has them)
+                    foreach (var t in look.GetComponentsInChildren<Transform>(true))
+                        if (t.name.StartsWith("Curtains_Large")) t.gameObject.SetActive(false);
                 WakeLook(look.transform, trainKit, lookTrain, c.H, true);
             }
             else
@@ -637,11 +640,11 @@ namespace RailTracer
                 string[] paintings = { "Painting_Small", "Painting_Medium", "Painting_Large" };
                 void Flush()
                 {
-                    for (; run >= 2; run -= 2, s += 2f) { Panel(Place("Wall_2m_Window", 0f, s + 1f, rot)); Sash("Window_Sash_Large", s + 1f); Dress("Curtains_Large", s + 1f); }
+                    for (; run >= 2; run -= 2, s += 2f) { Panel(Place("Wall_2m_Window", 0f, s + 1f, rot)); Sash("Window_Sash_Large", s + 1f); if (kind != CarKind.Baggage) Dress("Curtains_Large", s + 1f); }
                     if (run == 1) { Panel(Place("Wall_1m_WindowSmall", 0f, s + 0.5f, rot)); Sash("Window_Sash_Small", s + 0.5f); Dress("Blind_Small", s + 0.5f); s += 1f; run = 0; }
                 }
-                // Window dressing (19.33): velvet curtains on every big window, a green blind on
-                // every small one. Static, open.
+                // Window dressing (19.33): velvet curtains on every big window (none in baggage cars, 19.45), a green
+                // blind on every small one. Static, open.
                 GameObject Dress(string module, float z)
                 {
                     if (!kit.Get(module)) return null;
