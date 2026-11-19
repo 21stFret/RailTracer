@@ -129,102 +129,60 @@
       "mask": "Trn_Wallpaper_Navy_mask.png"
     },
     {
-      "name": "Trn_Paint_Sky",
-      "color": [
-        0.1,
-        0.22,
-        0.28
-      ],
-      "metallic": 0.0,
-      "roughness": 0.85,
-      "tile": 0.5,
-      "albedo": "Trn_Paint_Sky_albedo.png",
-      "normal": "Trn_Paint_Sky_normal.png",
-      "mask": "Trn_Paint_Sky_mask.png"
-    },
-    {
-      "name": "Trn_Paint_Glow",
-      "color": [
-        0.95,
-        0.55,
-        0.22
-      ],
-      "metallic": 0.0,
-      "roughness": 0.85,
-      "tile": 0.5,
-      "albedo": "Trn_Paint_Glow_albedo.png",
-      "normal": "Trn_Paint_Glow_normal.png",
-      "mask": "Trn_Paint_Glow_mask.png"
-    },
-    {
-      "name": "Trn_Paint_Pale",
-      "color": [
-        0.9,
-        0.82,
-        0.62
-      ],
-      "metallic": 0.0,
-      "roughness": 0.85,
-      "tile": 0.5,
-      "albedo": "Trn_Paint_Pale_albedo.png",
-      "normal": "Trn_Paint_Pale_normal.png",
-      "mask": "Trn_Paint_Pale_mask.png"
-    },
-    {
-      "name": "Trn_Paint_Hill",
-      "color": [
-        0.12,
-        0.22,
-        0.1
-      ],
-      "metallic": 0.0,
-      "roughness": 0.85,
-      "tile": 0.5,
-      "albedo": "Trn_Paint_Hill_albedo.png",
-      "normal": "Trn_Paint_Hill_normal.png",
-      "mask": "Trn_Paint_Hill_mask.png"
-    },
-    {
-      "name": "Trn_Paint_Far",
-      "color": [
-        0.28,
-        0.22,
-        0.34
-      ],
-      "metallic": 0.0,
-      "roughness": 0.85,
-      "tile": 0.5,
-      "albedo": "Trn_Paint_Far_albedo.png",
-      "normal": "Trn_Paint_Far_normal.png",
-      "mask": "Trn_Paint_Far_mask.png"
-    },
-    {
-      "name": "Trn_Paint_Ink",
-      "color": [
-        0.03,
-        0.025,
-        0.03
-      ],
-      "metallic": 0.0,
-      "roughness": 0.85,
-      "tile": 0.5,
-      "albedo": "Trn_Paint_Ink_albedo.png",
-      "normal": "Trn_Paint_Ink_normal.png",
-      "mask": "Trn_Paint_Ink_mask.png"
-    },
-    {
-      "name": "Trn_Paint_Red",
+      "name": "Trn_Art_Small",
       "color": [
         0.45,
-        0.06,
-        0.05
+        0.4,
+        0.32
       ],
       "metallic": 0.0,
-      "roughness": 0.85,
-      "tile": 0.5,
-      "albedo": "Trn_Paint_Red_albedo.png",
-      "normal": "Trn_Paint_Red_normal.png",
-      "mask": "Trn_Paint_Red_mask.png"
+      "roughness": 0.8,
+      "tile": 1.0,
+      "albedo": "Trn_Art_Small_albedo.png",
+      "normal": "Trn_Art_Small_normal.png",
+      "mask": "Trn_Art_Small_mask.png"
+    },
+    {
+      "name": "Trn_Art_Medium",
+      "color": [
+        0.45,
+        0.4,
+        0.32
+      ],
+      "metallic": 0.0,
+      "roughness": 0.8,
+      "tile": 1.0,
+      "albedo": "Trn_Art_Medium_albedo.png",
+      "normal": "Trn_Art_Medium_normal.png",
+      "mask": "Trn_Art_Medium_mask.png"
+    },
+    {
+      "name": "Trn_Art_Large",
+      "color": [
+        0.45,
+        0.4,
+        0.32
+      ],
+      "metallic": 0.0,
+      "roughness": 0.8,
+      "tile": 1.0,
+      "albedo": "Trn_Art_Large_albedo.png",
+      "normal": "Trn_Art_Large_normal.png",
+      "mask": "Trn_Art_Large_mask.png"
+    },
+    {
+      "name": "Trn_PicLight",
+      "color": [
+        0.98,
+        0.86,
+        0.55
+      ],
+      "metallic": 0.0,
+      "roughness": 0.5,
+      "tile": 1.0,
+      "albedo": "Trn_PicLight_albedo.png",
+      "normal": "Trn_PicLight_normal.png",
+      "mask": "Trn_PicLight_mask.png"
     }
   ]
 }

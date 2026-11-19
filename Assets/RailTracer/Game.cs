@@ -26,6 +26,9 @@ namespace RailTracer
         // (Renamed again from tableLampIntensity etc.: an open scene keeps a field's first default, so a new name is
         // what makes a new value take.)
         public float tableLampPower = 0.1f, tableLampReach = 1f, tableLampCone = 179f, tableLampInnerCone = 0f;
+        // Picture lights (19.43): a dim warm spot under each painting's brass hood, aimed at the picture, its cone and
+        // reach taken from the painting (so as big as its frame). Not reddened by the legend.
+        public float pictureLightPower = 0.25f;
         readonly HashSet<Light> tableLamps = new HashSet<Light>(); // lit at their own level (LegendLighting)
         public float sunDim = 0.01f;      // the directional light over the kit carriage: on, no shadows, very dim
         public Color lampColor = new Color(1f, 0.78f, 0.5f);
@@ -639,10 +642,30 @@ namespace RailTracer
                 }
                 // Window dressing (19.33): velvet curtains on every big window, a green blind on
                 // every small one. Static, open.
-                void Dress(string module, float z)
+                GameObject Dress(string module, float z)
                 {
-                    if (!kit.Get(module)) return;
-                    Panel(Place(module, 0f, z, rot));
+                    if (!kit.Get(module)) return null;
+                    return Panel(Place(module, 0f, z, rot));
+                }
+                // The painting's anchors: 0 the lamp under its hood, 1 the picture's centre, 2 the frame's top corner.
+                void PictureLight(GameObject art)
+                {
+                    if (!live || shadowOnly || !art) return; // none on the cut-away near wall
+                    var marks = art.GetComponentsInChildren<Transform>();
+                    Transform Mark(int i) => marks.FirstOrDefault(t => t.name.EndsWith("Anchor_0" + i));
+                    if (!Mark(0) || !Mark(1) || !Mark(2)) return; // an older export without them
+                    Vector3 lamp = Mark(0).position, mid = Mark(1).position, corner = Mark(2).position;
+                    float dist = Vector3.Distance(lamp, mid), half = Vector3.Distance(mid, corner);
+                    var light = new GameObject("Picture Light").AddComponent<Light>();
+                    light.transform.SetParent(art.transform, false);
+                    light.transform.SetPositionAndRotation(lamp, Quaternion.LookRotation(mid - lamp));
+                    light.type = LightType.Spot;
+                    light.color = lampColor;
+                    light.intensity = pictureLightPower;
+                    light.range = dist + half;                                                  // to the frame's far corners
+                    light.spotAngle = 2f * Mathf.Atan2(half, dist) * Mathf.Rad2Deg;             // the whole frame
+                    light.innerSpotAngle = light.spotAngle * 0.6f;
+                    light.shadows = LightShadows.None;
                 }
                 void Sash(string module, float z) // the glass in that window, on the wall's own transform
                 {
@@ -667,7 +690,7 @@ namespace RailTracer
                     if (At(x, row) == '_' && x - lastPainting > 1)
                     {
                         lastPainting = x;
-                        Dress(x > 0 && Part(x - 1) ? "Painting_Small" : paintings[(x * 7 + row * 3) % 3], s + 0.5f);
+                        PictureLight(Dress(x > 0 && Part(x - 1) ? "Painting_Small" : paintings[(x * 7 + row * 3) % 3], s + 0.5f));
                     }
                     s += 1f;
                 }

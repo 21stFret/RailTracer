@@ -38,6 +38,7 @@ KIT_NAME = "RailTracerFurnish"
 TEXTURE_STYLE = globals().get("TEXTURE_STYLE", "pbr")   # "flat" | "toon" | "painted" | "pbr"
 TEXTURE_RES = 1024
 SEED = 19
+ART_DIR = r"C:/Users/owner/RailTracer/Assets/RailTracer/Art"   # the paintings' pictures (Alex's, 19.43)
 # <<< CONFIG
 
 # Unity editor tools, installed into the Unity project that contains the export folder.
@@ -168,6 +169,11 @@ def generate_textures(out):
     os.makedirs(folder, exist_ok=True)
     for e in PALETTE:
         maps = make_texture_set(e, TEXTURE_STYLE, n=TEXTURE_RES)
+        image = (e[4] if len(e) > 4 else {}).get("image")
+        if image:                                   # a picture: its own pixels as the albedo, the recipe's normal and mask
+            pic = bpy.data.images.load(image)
+            pic.scale(TEXTURE_RES, TEXTURE_RES)
+            maps["albedo"] = np.array(pic.pixels[:], dtype=np.float32).reshape(TEXTURE_RES, TEXTURE_RES, 4)
         TEX_PATHS[e[0]] = {}
         for key, arr in maps.items():
             nm = f"{e[0]}_{key}"
@@ -210,6 +216,7 @@ class MB:
     def __init__(self):
         self.v, self.f, self.m = [], [], []
         self.pid, self.npieces = [], 0      # piece id per face (used by the z-fighting check)
+        self.uvfn = {}                      # piece id -> f(co) -> (u, v): its own UVs instead of the metre box mapping
 
     def add(self, verts, faces, slot=0):
         o = len(self.v)
@@ -312,11 +319,13 @@ class MB:
         if uv:
             uvl = mesh.uv_layers.new(name="UVMap")
             verts = mesh.vertices
-            for poly in mesh.polygons:
+            for poly, pid in zip(mesh.polygons, self.pid):
                 nx, ny, nz = (abs(c) for c in poly.normal)
                 for li in poly.loop_indices:
                     co = verts[mesh.loops[li].vertex_index].co
-                    if nz >= nx and nz >= ny:
+                    if pid in self.uvfn:
+                        uvl.data[li].uv = self.uvfn[pid](co)
+                    elif nz >= nx and nz >= ny:
                         uvl.data[li].uv = (co.x, co.y)
                     elif nx >= ny:
                         uvl.data[li].uv = (co.y, co.z)
@@ -893,7 +902,7 @@ def make_texture_set(entry, style, n=512, seed=1):
     spec = entry[4] if len(entry) > 4 else {}
     st = TEXTURE_STYLES[style]
     fn = RECIPES.get(spec.get("tex", "plain"), r_plain)
-    params = {k: v for k, v in spec.items() if k not in ("tex", "tile")}
+    params = {k: v for k, v in spec.items() if k not in ("tex", "tile", "image")}
     s = seed * 1000 + sum(map(ord, name))
     res = fn(n, s, st, **params)
     tone, height, rvar, cav = res[:4]
@@ -952,17 +961,13 @@ STRIPES = {"tex": "wallpaper", "tile": 1.0, "pattern": "stripes", "ink": (0.62, 
     ("Trn_Wallpaper_Green", (0.010, 0.045, 0.020), 0.0, 0.75, dict(STRIPES, pattern="damask", repeats=3)),
     ("Trn_Wallpaper_Navy",  (0.008, 0.014, 0.045), 0.0, 0.75, dict(STRIPES, pattern="fans", repeats=3)),
 ])
-# paintings: flat deco colours, plaster recipe for a brushed-paint mottle
-PAINT = {"tex": "plaster", "tile": 0.5}
-(P_SKY, P_GLOW, P_PALE, P_HILL, P_FAR, P_INK, P_RED) = set_palette(PALETTE + [
-    ("Trn_Paint_Sky",  (0.10, 0.22, 0.28), 0.0, 0.85, PAINT),
-    ("Trn_Paint_Glow", (0.95, 0.55, 0.22), 0.0, 0.85, PAINT),
-    ("Trn_Paint_Pale", (0.90, 0.82, 0.62), 0.0, 0.85, PAINT),
-    ("Trn_Paint_Hill", (0.12, 0.22, 0.10), 0.0, 0.85, PAINT),
-    ("Trn_Paint_Far",  (0.28, 0.22, 0.34), 0.0, 0.85, PAINT),
-    ("Trn_Paint_Ink",  (0.03, 0.025, 0.03), 0.0, 0.85, PAINT),
-    ("Trn_Paint_Red",  (0.45, 0.06, 0.05), 0.0, 0.85, PAINT),
-])[-7:]
+# paintings: Alex's pictures in ART_DIR, each on its whole canvas (UVs 0..1), over a canvas-weave normal
+def art(name, file):
+    return (name, (0.45, 0.40, 0.32), 0.0, 0.8, {"tex": "fabric", "tile": 1.0, "image": os.path.join(ART_DIR, file)})
+(ART_S, ART_M, ART_L, PICLIGHT) = set_palette(PALETTE + [
+    art("Trn_Art_Small", "small pic.jpg"), art("Trn_Art_Medium", "mediumpic.jpg"), art("Trn_Art_Large", "largepic.jpg"),
+    ("Trn_PicLight", (0.98, 0.86, 0.55), 0.0, 0.5),                            # the picture light's lit strip
+])[-4:]
 
 
 def drape(mb, y_c, s, slot):
@@ -1105,89 +1110,59 @@ def table_booth():
 PAINT_ZC = 1.40         # every painting centred at eye level: under a Lamp_Wall (shade bottom ~1.96) and over the dado (0.78)
 
 
-def framed(name, W, H, fw, art):
-    """A painting on the +x wall (back 1 mm off the face at 2.5), centred on y = 0, z = PAINT_ZC. W x H outside the
-    frame. Mitred gilt frame (fw wide, 37 mm deep), a dark slip inside it, the canvas, then `art(lay)` adds flat
-    colour shapes: lay(points in canvas units 0..1, slot, level), each level 2 mm in front of the one below (the
-    z-fight check's plane step); shapes that don't overlap share a level. Level 7 still sits behind the gilt."""
+def framed(name, W, aspect, fw, slot):
+    """A painting on the +x wall (back 1 mm off the face at 2.5), centred on y = 0, z = PAINT_ZC, W wide outside the
+    frame, as tall as the picture's aspect (width / height) makes it. A mitred gilt frame (fw wide, 37 mm deep), a dark
+    slip, the canvas showing the whole picture, and a brass picture light over it: a small wall plate just above the
+    frame, an arm out to a hood 0.6 x W long, 14 cm off the wall, with its lit strip underneath.
+    Anchors (Game's picture light): 0 the lamp under the hood, 1 the picture's centre, 2 the frame's top corner."""
     a = Asset(name, seed=SEED)
     P = a.P
     BACK, GILT, SLIP, CANVAS = 2.499, 2.462, 2.470, 2.488
-    hw, hh, zc = W / 2, H / 2, PAINT_ZC
+    s = 0.014
+    cw = W / 2 - fw - s                                 # canvas half sizes
+    ch = cw / aspect
+    hw, hh, zc = W / 2, ch + fw + s, PAINT_ZC
 
-    def ring(o_w, o_h, i_w, i_h, x0, slot):           # four mitred bars between two rectangles
+    def ring(o_w, o_h, i_w, i_h, x0, slot_):            # four mitred bars between two rectangles
         o = [(-o_w, zc - o_h), (o_w, zc - o_h), (o_w, zc + o_h), (-o_w, zc + o_h)]
         i = [(-i_w, zc - i_h), (i_w, zc - i_h), (i_w, zc + i_h), (-i_w, zc + i_h)]
         for k in range(4):
-            P.extrude([o[k], o[(k + 1) % 4], i[(k + 1) % 4], i[k]], 'x', x0, BACK, slot)
+            P.extrude([o[k], o[(k + 1) % 4], i[(k + 1) % 4], i[k]], 'x', x0, BACK, slot_)
 
     ring(hw, hh, hw - fw, hh - fw, GILT, BRASS)
-    s = 0.014
-    ring(hw - fw, hh - fw, hw - fw - s, hh - fw - s, SLIP, WOODDARK)
-    cw, ch = hw - fw - s, hh - fw - s                  # canvas half sizes
-    P.rect(CANVAS, BACK, -cw, cw, zc - ch, zc + ch, P_PALE)
+    ring(hw - fw, hh - fw, cw, ch, SLIP, WOODDARK)
+    P.uvfn[P.npieces] = lambda co: ((cw - co.y) / (2 * cw), (co.z - (zc - ch)) / (2 * ch))   # seen from the room
+    P.rect(CANVAS, BACK, -cw, cw, zc - ch, zc + ch, slot)
     P.rect(GILT - 0.002, GILT, -0.04 * W, 0.04 * W, zc - hh + fw * 0.25, zc - hh + fw * 0.75, WOODDARK)  # title plate
 
-    def lay(pts, slot, lvl):
-        prof = [(-cw + 2 * cw * u, zc - ch + 2 * ch * v) for u, v in pts]
-        P.extrude(prof, 'x', CANVAS - 0.002 * (lvl + 1), CANVAS + 0.001, slot)
-    art(lay)
-    return a.finish()
-
-
-def disc(cu, cv, r, aspect, n=24):
-    """Circle in canvas units; aspect = canvas width / height keeps it round."""
-    return [(cu + r * math.cos(2 * math.pi * i / n), cv + r * aspect * math.sin(2 * math.pi * i / n)) for i in range(n)]
-
-
-def ridge(pts, top=None):
-    """A hill band: the skyline through pts (u rising, u 0..1), down to the bottom of the canvas (or to v = top)."""
-    return [(0.0, 0.0)] + pts + [(1.0, 0.0)] if top is None else pts
+    top, L, hx = zc + hh, 0.6 * W, 2.36
+    hz = top + 0.10
+    P.rect(2.484, BACK, -0.025, 0.025, top + 0.01, top + 0.065, BRASS)           # wall plate
+    P.extrude([(2.484, top + 0.03), (2.484, top + 0.045), (hx, hz + 0.005), (hx, hz - 0.008)], 'y', -0.006, 0.006, BRASS)  # arm
+    rot = Matrix.Rotation(math.radians(90), 3, 'X')
+    P.cylinder(0.02, -L / 2, L / 2, BRASS, segs=12, center=(hx, 0, hz), mat3=rot)  # hood
+    for sg in (-1, 1):                                                           # its end caps
+        z0, z1 = sorted((sg * L / 2, sg * (L / 2 + 0.006)))
+        P.cylinder(0.024, z0, z1, BRASS, segs=12, center=(hx, 0, hz), mat3=rot)
+    P.rect(hx - 0.007, hx + 0.007, -L / 2 + 0.01, L / 2 - 0.01, hz - 0.023, hz - 0.014, PICLIGHT)  # lit strip
+    a.anchors += [(hx, 0.0, hz - 0.03), (CANVAS, 0.0, zc), (BACK, hw, zc + hh)]
+    return a.finish(anchors=True)
 
 
 def painting_small():
-    """Small, portrait 0.40 x 0.50: a cypress on a hill against a pale moon at dusk."""
-    def art(lay):
-        lay([(0, 0.35), (1, 0.35), (1, 1), (0, 1)], P_SKY, 0)
-        lay(disc(0.62, 0.70, 0.20, 0.30 / 0.39), P_PALE, 1)
-        lay(ridge([(0, 0.30), (0.3, 0.38), (0.6, 0.34), (1, 0.26)]), P_HILL, 2)
-        lay([(0.30, 0.30), (0.37, 0.55), (0.40, 0.82), (0.42, 0.90), (0.45, 0.80), (0.48, 0.55), (0.53, 0.30)], P_INK, 3)
-    return framed("Painting_Small", 0.40, 0.50, 0.045, art)
+    """Small: 0.40 wide, Alex's small picture (267 x 188)."""
+    return framed("Painting_Small", 0.40, 267 / 188, 0.045, ART_S)
 
 
 def painting_medium():
-    """Medium, landscape 0.70 x 0.52: violet peaks, green hills and a river under a low sun."""
-    def art(lay):
-        lay([(0, 0.45), (1, 0.45), (1, 1), (0, 1)], P_SKY, 0)
-        lay([(0, 0), (1, 0), (1, 0.45), (0, 0.45)], P_GLOW, 0)                    # the horizon glow
-        lay(disc(0.70, 0.50, 0.10, 0.59 / 0.41), P_PALE, 1)
-        lay(ridge([(0, 0.50), (0.15, 0.70), (0.28, 0.52), (0.45, 0.78), (0.62, 0.48), (0.80, 0.66), (1, 0.50)]), P_FAR, 2)
-        lay(ridge([(0, 0.36), (0.25, 0.44), (0.5, 0.33), (0.75, 0.40), (1, 0.30)]), P_HILL, 3)
-        lay([(0.40, 0.0), (0.58, 0.0), (0.52, 0.12), (0.60, 0.24), (0.52, 0.34), (0.49, 0.34),
-             (0.54, 0.24), (0.45, 0.12)], P_PALE, 4)                               # the river winding away
-    return framed("Painting_Medium", 0.70, 0.52, 0.055, art)
+    """Medium: 0.70 wide, Alex's medium picture (610 x 503)."""
+    return framed("Painting_Medium", 0.70, 610 / 503, 0.055, ART_M)
 
 
 def painting_large():
-    """Large, landscape 0.96 x 0.70: a steam train crossing a viaduct at sunset, smoke trailing."""
-    asp = 0.808 / 0.548
-    def art(lay):
-        lay([(0, 0), (1, 0), (1, 0.62), (0, 0.62)], P_GLOW, 0)
-        lay([(0, 0.62), (1, 0.62), (1, 1), (0, 1)], P_SKY, 0)
-        lay(disc(0.30, 0.52, 0.13, asp), P_PALE, 1)
-        lay(ridge([(0, 0.42), (0.2, 0.56), (0.4, 0.46), (0.65, 0.58), (0.85, 0.48), (1, 0.52)]), P_FAR, 2)
-        lay(ridge([(0, 0.20), (0.3, 0.26), (0.6, 0.18), (1, 0.24)]), P_HILL, 3)
-        lay([(0, 0.40), (1, 0.40), (1, 0.44), (0, 0.44)], P_INK, 4)                # viaduct deck
-        for i in range(6):                                                         # its piers, up to the deck
-            u = 0.06 + i * 0.176
-            lay([(u - 0.025, 0.0), (u + 0.025, 0.0), (u + 0.02, 0.40), (u - 0.02, 0.40)], P_INK, 4)
-        lay([(0.18, 0.44), (0.38, 0.44), (0.38, 0.50), (0.18, 0.50)], P_RED, 5)    # carriages on the deck
-        lay([(0.40, 0.44), (0.58, 0.44), (0.58, 0.50), (0.40, 0.50)], P_RED, 5)
-        lay([(0.60, 0.44), (0.76, 0.44), (0.76, 0.49), (0.66, 0.49), (0.66, 0.53), (0.60, 0.53)], P_INK, 5)  # loco + cab
-        lay([(0.72, 0.49), (0.745, 0.49), (0.745, 0.545), (0.72, 0.545)], P_INK, 5)  # chimney
-        for u, v, r in ((0.70, 0.60, 0.030), (0.62, 0.66, 0.040), (0.52, 0.70, 0.048), (0.41, 0.72, 0.040)):
-            lay(disc(u, v, r, asp, 16), P_PALE, 5)                                 # smoke drifting back
-    return framed("Painting_Large", 0.96, 0.70, 0.070, art)
+    """Large: 0.96 wide, Alex's large picture (519 x 385)."""
+    return framed("Painting_Large", 0.96, 519 / 385, 0.070, ART_L)
 
 
 run([curtains_large, blind_small, table_window, table_booth, painting_small, painting_medium, painting_large], spacing=3.0)
