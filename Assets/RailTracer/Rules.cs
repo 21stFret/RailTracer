@@ -892,7 +892,7 @@ namespace RailTracer
             if (!CanMove) return;
             crouched = !crouched;
             if (crouched) return;
-            StepInto(player, enemies.FindAll(WillReact), false); // standing up over the seats
+            StepInto(player, new List<Enemy>(), false); // standing up over the seats: seen (they fight), but no reaction fire (19.57)
             foreach (var e in enemies)
                 if (e.InPlay && e.lastKnown == player) Face(e, player);
         }

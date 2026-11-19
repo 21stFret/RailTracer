@@ -120,6 +120,16 @@ namespace RailTracer
             c.ToggleCrouch();
             Check(c.Move(new Cell(0, 1)) && c.movesLeft == t.moveRange - t.crouchMoveCost, "crouching halves movement");
 
+            // Standing up in a fighting guard's view: spotted, not shot (19.57).
+            c = new Carriage(new[] { "PS...", "....." }, t, 1);
+            var upWatch = c.Spawn(4, 0, -1, 0, 0);
+            upWatch.awareness = Awareness.Combat;
+            c.ToggleCrouch();
+            int upHp = c.hp;
+            Check(!c.CanSee(upWatch, c.player), "set-up: crouched behind the seat, unseen");
+            c.ToggleCrouch();
+            Check(c.CanSee(upWatch, c.player) && c.hp == upHp && upWatch.reactionReady && upWatch.lastKnown == c.player, "standing up in view: spotted, no reaction fire");
+
             // On a patroller's route, unseen (beside it, out of its cone): it doesn't route round you, it walks into you,
             // turns, fights, and the surprise scares it a little.
             c = new Carriage(new[] { "..P..", ".....", "....." }, t, 1);
