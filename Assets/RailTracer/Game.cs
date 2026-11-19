@@ -726,7 +726,8 @@ namespace RailTracer
                     Panel(Place(solo, 0f, s + 0.5f, rot));
                     // Paintings (19.37) on plain wall ('_'), never two side by side; eye level, so they clear a wall
                     // lamp above. Beside a partition (its trims reach 0.15 into this tile) only the small one fits.
-                    if (At(x, row) == '_' && x - lastPainting > 1)
+                    // None in baggage cars (19.49).
+                    if (At(x, row) == '_' && x - lastPainting > 1 && kind != CarKind.Baggage)
                     {
                         lastPainting = x;
                         PictureLight(Dress(x > 0 && Part(x - 1) ? "Painting_Small" : paintings[(x * 7 + row * 3) % 3], s + 0.5f));

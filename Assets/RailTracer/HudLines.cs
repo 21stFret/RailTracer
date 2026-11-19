@@ -8,7 +8,7 @@ using UnityEngine.UI;
 namespace RailTracer
 {
     // A menu line with the sketch-style hover (Update 19.27), the same on every menu, card and tutorial button.
-    // Hovered: a red slash just left of the text grows up from its bottom, holds, fades; a blood-red brush band wipes
+    // Hovered: a red slash just left of the text grows up from its bottom, holds, fades; Alex's brush stripe paints
     // in from its left end; the text turns bone, steps 10 px right and grows from its left edge (a note on the line
     // goes with it). Leaving plays the band and text back in reverse; the slash doesn't replay. Real time throughout.
     // The swipe is the line's height plus 2 px and only ever grows in length: on screen it runs from 14 px left of the
@@ -22,7 +22,7 @@ namespace RailTracer
         static readonly Color Bone = new Color32(0xF2, 0xEF, 0xEA, 0xFF);
 
         public TMP_Text label, note;
-        public Brush swipe;
+        public Image swipe;       // Alex's stripe (Resources/UI/stripe), sliced: its ragged ends keep their shape
         public Slash slash;
         public Color idle, noteIdle;
         public bool hot;          // set by the owner each frame (or by the mouse, with autoHover)
@@ -87,87 +87,13 @@ namespace RailTracer
             var sw = swipe.rectTransform;
             sw.anchoredPosition = new Vector2(card ? -CardPast : -Lead, 0f);
             sw.sizeDelta = new Vector2(card ? rt.rect.width + 2f * CardPast : Lead + textW + (past >= 0f ? past : swipePast), height + 2f);
-            swipe.fill = k;
-            swipe.shown = k > 0f;
+            sw.sizeDelta = new Vector2(sw.sizeDelta.x * k, sw.sizeDelta.y); // painted in from its left end
+            swipe.enabled = k > 0f;
             // The slash: grows over the first 20% of its time, holds to 55%, fades out by the end.
             float q = s < 0f ? 1f : s / slashTime;
             slash.shown = s >= 0f;
             slash.rectTransform.localScale = new Vector3(1f, Mathf.Clamp01(q / 0.2f), 1f);
             slash.color = new Color(slash.color.r, slash.color.g, slash.color.b, q < 0.55f ? 1f : 1f - (q - 0.55f) / 0.45f);
-        }
-    }
-
-    // The hover's brush band: ragged, uneven ends and broken bristle marks at its right end, drawn from its left end
-    // up to `fill` of its length. Its ends are fixed in px, so a longer band is only longer, never thicker.
-    public class Brush : UIShape
-    {
-        public int seed;
-        float fillTo = 1f;
-        public float fill { get => fillTo; set { value = Mathf.Clamp01(value); if (value != fillTo) { fillTo = value; Redraw(); } } }
-
-        float Noise(int i) { float x = Mathf.Sin((i + 1) * 12.9898f + seed * 78.233f) * 43758.5453f; return (x - Mathf.Floor(x)) * 2f - 1f; }
-
-        protected override void Build(VertexHelper vh, Rect r, Color32 col)
-        {
-            float L = r.width, H = r.height, cut = fillTo * L;
-            if (cut < 0.5f || L < 50f) return;
-            float bodyEnd = L - 14f;
-            // Columns along the band: (x, top inset, bottom inset) as shares of the height.
-            var cols = new List<Vector3> { new Vector3(0f, .30f, .20f), new Vector3(3f, .06f, .38f), new Vector3(6f, .16f, .08f), new Vector3(10f, .02f, .04f) };
-            int n = 0;
-            for (float x = 22f; x < bodyEnd - 12f; x += 14f, n++) cols.Add(new Vector3(x, .03f + .03f * Noise(n), .03f + .03f * Noise(n + 50)));
-            cols.Add(new Vector3(bodyEnd - 8f, .12f, .04f));
-            cols.Add(new Vector3(bodyEnd - 4f, .04f, .30f));
-            cols.Add(new Vector3(bodyEnd, .36f, .22f));
-            Strip(vh, col, r, cols, cut);
-            // Bristles off the right end: (bottom, top as shares of the height, start, end in px from the right end).
-            foreach (var b in new[] { new Vector4(.80f, .93f, 34f, 1f), new Vector4(.47f, .57f, 24f, 5f), new Vector4(.08f, .21f, 38f, 3f) })
-            {
-                float x0 = L - b.z, x1 = Mathf.Min(cut, L - b.w);
-                if (x1 - x0 < 1f) continue;
-                Strip(vh, col, r, new List<Vector3> { new Vector3(x0, 1f - b.y, b.x), new Vector3(x1, 1f - b.y + .03f, b.x + .02f) }, cut);
-            }
-        }
-
-        // Quads between neighbouring columns, cut off at `cut`, top and bottom edges faded over one screen pixel.
-        void Strip(VertexHelper vh, Color32 col, Rect r, List<Vector3> cols, float cut)
-        {
-            var clear = new Color32(col.r, col.g, col.b, 0);
-            float h = px / 2f;
-            Vector3? prev = null;
-            foreach (var c in cols)
-            {
-                var cur = c;
-                bool last = false;
-                if (cur.x > cut)
-                {
-                    if (prev == null) return;
-                    float f = (cut - prev.Value.x) / (cur.x - prev.Value.x);
-                    cur = Vector3.Lerp(prev.Value, cur, f);
-                    last = true;
-                }
-                if (prev != null)
-                {
-                    var p = prev.Value;
-                    float aTop = r.yMax - p.y * r.height, aBot = r.yMin + p.z * r.height, bTop = r.yMax - cur.y * r.height, bBot = r.yMin + cur.z * r.height;
-                    float ax = r.xMin + p.x, bx = r.xMin + cur.x;
-                    Quad4(vh, ax, aBot - h, aBot + h, bx, bBot - h, bBot + h, clear, col);
-                    Quad4(vh, ax, aBot + h, aTop - h, bx, bBot + h, bTop - h, col, col);
-                    Quad4(vh, ax, aTop - h, aTop + h, bx, bTop - h, bTop + h, col, clear);
-                }
-                if (last) return;
-                prev = cur;
-            }
-        }
-
-        static void Quad4(VertexHelper vh, float ax, float ay0, float ay1, float bx, float by0, float by1, Color32 c0, Color32 c1)
-        {
-            int i = vh.currentVertCount;
-            var v = UIVertex.simpleVert;
-            v.color = c0; v.position = new Vector3(ax, ay0); vh.AddVert(v); v.position = new Vector3(bx, by0); vh.AddVert(v);
-            v.color = c1; v.position = new Vector3(bx, by1); vh.AddVert(v); v.position = new Vector3(ax, ay1); vh.AddVert(v);
-            vh.AddTriangle(i, i + 1, i + 2);
-            vh.AddTriangle(i + 2, i + 3, i);
         }
     }
 
@@ -194,7 +120,17 @@ namespace RailTracer
         static readonly Color Idle = Hex("D9D3CF");
         // Menu lines alternate their tilts down a list.
         static readonly float[] LineTilt = { -0.8f, 0.6f, -0.4f, 0.8f, -0.6f };
-        int lineSeed;
+        static Sprite stripeSprite;
+
+        // The hover band (19.49): Alex's brush stripe, sliced so its ragged ends (the first 50 and last 60 px of the
+        // image) keep their shape and only the middle stretches. Null if the image is missing (a plain band then).
+        static Sprite StripeSprite()
+        {
+            if (stripeSprite) return stripeSprite;
+            var tex = Resources.Load<Texture2D>("UI/stripe");
+            return tex ? stripeSprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0f, 0.5f), 100f, 0,
+                SpriteMeshType.FullRect, new Vector4(50f, 0f, 60f, 0f)) : null;
+        }
 
         // A menu line: Kalam Bold `size` (its note `noteSize`), `pad` px above and below, the i-th tilt of its list.
         // card: the swipe spans the line's width (set by its column).
@@ -221,11 +157,13 @@ namespace RailTracer
                 return c;
             }
             var sw = Child("Swipe");
-            line.swipe = sw.gameObject.AddComponent<Brush>();
-            line.swipe.GetComponent<Image>().sprite = white;
-            line.swipe.color = Blood;
+            line.swipe = sw.gameObject.AddComponent<Image>();
+            var stripe = StripeSprite();
+            line.swipe.sprite = stripe ? stripe : white;
+            line.swipe.color = stripe ? Color.white : Blood; // the stripe has its own red (Blood)
+            line.swipe.type = Image.Type.Sliced;
+            if (stripe) line.swipe.pixelsPerUnitMultiplier = stripe.rect.height / (h + 2f); // ends scaled with the band's height
             line.swipe.raycastTarget = false;
-            line.swipe.seed = lineSeed++;
             var sl = Child("Slash");
             sl.pivot = Vector2.zero; // grows up from its bottom
             sl.sizeDelta = new Vector2(24f, h + 18f);
@@ -248,7 +186,8 @@ namespace RailTracer
             line.label = Words("Label", size);
             line.note = Words("Note", noteSize);
             line.Set("", "");
-            line.slash.shown = line.swipe.shown = false;
+            line.slash.shown = false;
+            line.swipe.enabled = false;
             return line;
         }
 
