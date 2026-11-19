@@ -1,7 +1,7 @@
 # Rail Tracer: current state
 
 The single source of truth for what is actually built. Updated after every handoff and every change Alex asks for.
-Last updated: Update 19.46 (18 Nov 2026).
+Last updated: Update 19.47 (18 Nov 2026).
 
 Numbers are the code defaults in `Assets/RailTracer/Rules.cs` (`Tuning`) and the skill table in
 `Assets/RailTracer/Resources/SkillTable.asset`. The Game component in the scene can override any tuning value in the
@@ -131,6 +131,7 @@ Inspector; the saved scene matches these.
 | 19.44 (picture lights in place) | Done, not yet seen in Play mode. Alex: the picture lights lay on the floor, facing along the wall. They were placed from anchor empties in the painting FBX, and Blender's FBX export (bake_space_transform) doesn't turn empties to Unity's axes as it does meshes, so height and along-the-wall came out swapped. Game.PictureLight now works the lamp, the picture's centre and the frame's corner out from the painting's own mesh bounds (offsets from framed() in railtracer_furnish.py, noted in both); the paintings no longer export anchors (7 FBX re-exported). Note for later: the kit's anchor empties are unreliable in Unity (Table_Window's are unused; Game hard-codes its spots) |
 | 19.45 (no curtains in baggage cars) | Done, not yet seen in Play mode. Alex: baggage cars (Baggage hold, Mail van, Bullion van, Guard's van) no longer get curtains on their big windows; blinds on small windows stay. The baked Baggage hold look (Look_03) still holds its curtains: Game hides them when it loads a baked baggage car. Game.cs not compiled (Unity not recompiled) |
 | 19.46 (no blinds in baggage cars) | Done, not yet seen in Play mode. Alex: the small windows' blinds go from baggage cars too, so their windows are bare (built cars skip them; Game hides them in the baked Baggage hold). Game.cs not compiled (Unity not recompiled) |
+| 19.47 (wooden walls in baggage cars) | Done, not yet seen in Play mode. Alex: plain wooden walls in the baggage cars. A new material Trn_WallPanel (railtracer_furnish.py, Train Assets/Furnish): pine boarding, six boards per metre along the car with butt joints, a 1 m repeat so it lines up module to module. In every baggage car (built, baked or on the menu train) it takes the wallpaper's place: the look's material swap (`TrainLook`, now told the car's kind through `WakeLook`) turns Trn_Wallpaper (or the train's own) into it. The wood below the dado and the trims are unchanged. Furnish kit re-exported (7 FBX); Game, GameFlow and GameLooks not compiled (Unity not recompiled) |
 | 19.39 (gore at the knife) | Done, not yet seen in Play mode. A takedown's blood splash and gore burst (Blood At and each extra strike) spawn at the knife's mid-blade (Game.Blade: 0.17 m up from the grip) when the blade is within 0.6 m of the victim's chest, else at the chest as before (stomps, punches, the knife put away). Stains and pools stay on the victim's tile. Same in the animation test (TakedownViewer). Not compiled outside Unity |
 | Next | Full audio pass |
 

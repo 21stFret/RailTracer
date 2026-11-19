@@ -995,12 +995,13 @@ namespace RailTracer
             new[] { "Trn_Wallpaper", "Trn_Wallpaper_Navy", "Trn_Curtain", "Trn_Curtain_Navy" },
         };
         Material seeThroughGlass;
-        void TrainLook(TrainKit kit, Transform parent, int train)
+        void TrainLook(TrainKit kit, Transform parent, int train, bool baggage = false)
         {
             var swaps = new Dictionary<string, Material>();
             var pairs = TrainMaterials[Mathf.Clamp(train, 0, TrainMaterials.Length - 1)];
             for (int i = 0; i + 1 < pairs.Length; i += 2)
                 if (kit.Mat(pairs[i + 1]) is Material m) swaps[pairs[i]] = m;
+            if (baggage && kit.Mat("Trn_WallPanel") is Material panel) swaps["Trn_Wallpaper"] = panel; // plain wooden walls (19.47)
             foreach (var r in parent.GetComponentsInChildren<Renderer>(true))
             {
                 var mats = r.sharedMaterials;

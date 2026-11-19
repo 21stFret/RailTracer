@@ -439,14 +439,14 @@ namespace RailTracer
                 if (car.kind == CarKind.Baggage) // no curtains or blinds in baggage cars (19.45, 19.46; the baked hold still has them)
                     foreach (var t in look.GetComponentsInChildren<Transform>(true))
                         if (t.name.StartsWith("Curtains_Large") || t.name.StartsWith("Blind_Small")) t.gameObject.SetActive(false);
-                WakeLook(look.transform, trainKit, lookTrain, c.H, true);
+                WakeLook(look.transform, trainKit, lookTrain, c.H, true, car.kind == CarKind.Baggage);
             }
             else
             {
                 var look = new GameObject("Car Look").transform;
                 look.SetParent(root, false);
                 kitBuilt = onKit = useTrainKit && BuildKitCarriage(trainKit, c, Map, car.kind, look, true, lookTrain, car.name);
-                if (kitBuilt) WakeLook(look, trainKit, lookTrain, c.H, true);
+                if (kitBuilt) WakeLook(look, trainKit, lookTrain, c.H, true, car.kind == CarKind.Baggage);
             }
             if (!kitBuilt) BuildWhitebox();
             if (sun)
@@ -789,7 +789,7 @@ namespace RailTracer
                 for (int i = 0; i < tables.Count; i += 2) TableLight(tables[i]);
             }
             if (live && kind != CarKind.Dining && kind != CarKind.Baggage) ScatterProps(kit, seats, windowTables, car, map, parent);
-            if (!live) WakeLook(parent, kit, train, car.H, false); // the menu train: looks only
+            if (!live) WakeLook(parent, kit, train, car.H, false, kind == CarKind.Baggage); // the menu train: looks only
             return true;
 
             // A wall lamp over a seat bank: a warm spotlight just above head height, set in from the wall and aimed

@@ -949,7 +949,7 @@ def make_texture_set(entry, style, n=512, seed=1):
 import math
 
 STRIPES = {"tex": "wallpaper", "tile": 1.0, "pattern": "stripes", "ink": (0.62, 0.42, 0.12), "repeats": 5}
-(WOOD, WOODDARK, BRASS, CURTAIN, CURTAIN_G, CURTAIN_N, BLIND, PAPER_G, PAPER_N) = set_palette([
+(WOOD, WOODDARK, BRASS, CURTAIN, CURTAIN_G, CURTAIN_N, BLIND, PAPER_G, PAPER_N, PANEL) = set_palette([
     ("Trn_Wood",           (0.45, 0.24, 0.12), 0.0, 0.6, {"tex": "wood", "tile": 2.0, "planks": 1, "rings": 14, "seams": False}),
     ("Trn_WoodDark",       (0.20, 0.10, 0.05), 0.0, 0.6, {"tex": "wood", "tile": 1.0, "planks": 2}),
     ("Trn_Brass",          (0.95, 0.70, 0.25), 1.0, 0.3, {"tex": "brushed", "tile": 0.5}),
@@ -960,6 +960,8 @@ STRIPES = {"tex": "wallpaper", "tile": 1.0, "pattern": "stripes", "ink": (0.62, 
     # train 2: gold damask on deep green; train 3: gold art-deco fans on navy (train 1 keeps the kit's stripes)
     ("Trn_Wallpaper_Green", (0.010, 0.045, 0.020), 0.0, 0.75, dict(STRIPES, pattern="damask", repeats=3)),
     ("Trn_Wallpaper_Navy",  (0.008, 0.014, 0.045), 0.0, 0.75, dict(STRIPES, pattern="fans", repeats=3)),
+    # baggage cars (19.47): plain pine boarding where the wallpaper goes, boards along the car, 1 m repeat
+    ("Trn_WallPanel",       (0.36, 0.22, 0.11), 0.0, 0.65, {"tex": "wood", "tile": 1.0, "planks": 6, "rings": 8}),
 ])
 # paintings: Alex's pictures in ART_DIR, each on its whole canvas (UVs 0..1), over a canvas-weave normal
 def art(name, file):

@@ -35,9 +35,10 @@ namespace RailTracer
         // What a look needs at runtime, found by name, so a built car and a baked (and hand-edited) one behave the same:
         // the train's own wallpaper and curtains, see-through bar glasses, each wall's wood grain shifted; and in the
         // live car the sliding sashes, the gramophone, the lamps' lights, lit cigars, empty ashtrays and hooks.
-        void WakeLook(Transform look, TrainKit kit, int train, int rows, bool live)
+        // baggage: wooden boarding (Trn_WallPanel) where the wallpaper goes.
+        void WakeLook(Transform look, TrainKit kit, int train, int rows, bool live, bool baggage = false)
         {
-            TrainLook(kit, look, train);
+            TrainLook(kit, look, train, baggage);
             foreach (var t in look.GetComponentsInChildren<Transform>(true))
             {
                 string n = t.name;

@@ -129,6 +129,20 @@
       "mask": "Trn_Wallpaper_Navy_mask.png"
     },
     {
+      "name": "Trn_WallPanel",
+      "color": [
+        0.36,
+        0.22,
+        0.11
+      ],
+      "metallic": 0.0,
+      "roughness": 0.65,
+      "tile": 1.0,
+      "albedo": "Trn_WallPanel_albedo.png",
+      "normal": "Trn_WallPanel_normal.png",
+      "mask": "Trn_WallPanel_mask.png"
+    },
+    {
       "name": "Trn_Art_Small",
       "color": [
         0.45,
