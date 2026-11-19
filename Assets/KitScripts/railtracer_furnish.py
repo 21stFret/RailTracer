@@ -15,6 +15,10 @@ piece on the same transform as the wall module it dresses (Game.cs does this), r
                    between the two free tiles: 0.6 wide (y +-0.3) x 0.28 deep (x 2.20-2.48), top 0.69 (under the
                    0.72 sill and dado, 5 mm clear of the wainscot frames), two brass brackets. Ashtrays go on top
                    (the game puts them there: Unity local (-2.34, 0.69, +-0.15)).
+  Painting_Small   0.40 x 0.50 portrait (cypress and moon), Painting_Medium 0.70 x 0.52 (valley at sunset),
+  Painting_Large   0.96 x 0.70 (a steam train on a viaduct). For Wall_1m_Solid: centred on the tile, centre 1.40 m
+                   (clears a Lamp_Wall above, the dado below), gilt frame back 1 mm off the wall, 39 mm deep. Flat
+                   deco art in Trn_Paint_* layers, 2 mm steps, all behind the gilt.
 
 Materials: Trn_Curtain (red velvet: train 1), Trn_Curtain_Green (train 2), Trn_Curtain_Navy (train 3),
 Trn_Blind (green linen), and the per-train wallpapers Trn_Wallpaper_Green (train 2) and Trn_Wallpaper_Navy
@@ -948,6 +952,17 @@ STRIPES = {"tex": "wallpaper", "tile": 1.0, "pattern": "stripes", "ink": (0.62, 
     ("Trn_Wallpaper_Green", (0.010, 0.045, 0.020), 0.0, 0.75, dict(STRIPES, pattern="damask", repeats=3)),
     ("Trn_Wallpaper_Navy",  (0.008, 0.014, 0.045), 0.0, 0.75, dict(STRIPES, pattern="fans", repeats=3)),
 ])
+# paintings: flat deco colours, plaster recipe for a brushed-paint mottle
+PAINT = {"tex": "plaster", "tile": 0.5}
+(P_SKY, P_GLOW, P_PALE, P_HILL, P_FAR, P_INK, P_RED) = set_palette(PALETTE + [
+    ("Trn_Paint_Sky",  (0.10, 0.22, 0.28), 0.0, 0.85, PAINT),
+    ("Trn_Paint_Glow", (0.95, 0.55, 0.22), 0.0, 0.85, PAINT),
+    ("Trn_Paint_Pale", (0.90, 0.82, 0.62), 0.0, 0.85, PAINT),
+    ("Trn_Paint_Hill", (0.12, 0.22, 0.10), 0.0, 0.85, PAINT),
+    ("Trn_Paint_Far",  (0.28, 0.22, 0.34), 0.0, 0.85, PAINT),
+    ("Trn_Paint_Ink",  (0.03, 0.025, 0.03), 0.0, 0.85, PAINT),
+    ("Trn_Paint_Red",  (0.45, 0.06, 0.05), 0.0, 0.85, PAINT),
+])[-7:]
 
 
 def drape(mb, y_c, s, slot):
@@ -1049,4 +1064,92 @@ def table_window():
     return a.finish(anchors=True)
 
 
-run([curtains_large, blind_small, table_window], spacing=3.0)
+PAINT_ZC = 1.40          # every painting centred at eye level: under a Lamp_Wall (shade bottom ~1.96) and over the dado (0.78)
+
+
+def framed(name, W, H, fw, art):
+    """A painting on the +x wall (back 1 mm off the face at 2.5), centred on y = 0, z = PAINT_ZC. W x H outside the
+    frame. Mitred gilt frame (fw wide, 37 mm deep), a dark slip inside it, the canvas, then `art(lay)` adds flat
+    colour shapes: lay(points in canvas units 0..1, slot, level), each level 2 mm in front of the one below (the
+    z-fight check's plane step); shapes that don't overlap share a level. Level 7 still sits behind the gilt."""
+    a = Asset(name, seed=SEED)
+    P = a.P
+    BACK, GILT, SLIP, CANVAS = 2.499, 2.462, 2.470, 2.488
+    hw, hh, zc = W / 2, H / 2, PAINT_ZC
+
+    def ring(o_w, o_h, i_w, i_h, x0, slot):           # four mitred bars between two rectangles
+        o = [(-o_w, zc - o_h), (o_w, zc - o_h), (o_w, zc + o_h), (-o_w, zc + o_h)]
+        i = [(-i_w, zc - i_h), (i_w, zc - i_h), (i_w, zc + i_h), (-i_w, zc + i_h)]
+        for k in range(4):
+            P.extrude([o[k], o[(k + 1) % 4], i[(k + 1) % 4], i[k]], 'x', x0, BACK, slot)
+
+    ring(hw, hh, hw - fw, hh - fw, GILT, BRASS)
+    s = 0.014
+    ring(hw - fw, hh - fw, hw - fw - s, hh - fw - s, SLIP, WOODDARK)
+    cw, ch = hw - fw - s, hh - fw - s                  # canvas half sizes
+    P.rect(CANVAS, BACK, -cw, cw, zc - ch, zc + ch, P_PALE)
+    P.rect(GILT - 0.002, GILT, -0.04 * W, 0.04 * W, zc - hh + fw * 0.25, zc - hh + fw * 0.75, WOODDARK)  # title plate
+
+    def lay(pts, slot, lvl):
+        prof = [(-cw + 2 * cw * u, zc - ch + 2 * ch * v) for u, v in pts]
+        P.extrude(prof, 'x', CANVAS - 0.002 * (lvl + 1), CANVAS + 0.001, slot)
+    art(lay)
+    return a.finish()
+
+
+def disc(cu, cv, r, aspect, n=24):
+    """Circle in canvas units; aspect = canvas width / height keeps it round."""
+    return [(cu + r * math.cos(2 * math.pi * i / n), cv + r * aspect * math.sin(2 * math.pi * i / n)) for i in range(n)]
+
+
+def ridge(pts, top=None):
+    """A hill band: the skyline through pts (u rising, u 0..1), down to the bottom of the canvas (or to v = top)."""
+    return [(0.0, 0.0)] + pts + [(1.0, 0.0)] if top is None else pts
+
+
+def painting_small():
+    """Small, portrait 0.40 x 0.50: a cypress on a hill against a pale moon at dusk."""
+    def art(lay):
+        lay([(0, 0.35), (1, 0.35), (1, 1), (0, 1)], P_SKY, 0)
+        lay(disc(0.62, 0.70, 0.20, 0.30 / 0.39), P_PALE, 1)
+        lay(ridge([(0, 0.30), (0.3, 0.38), (0.6, 0.34), (1, 0.26)]), P_HILL, 2)
+        lay([(0.30, 0.30), (0.37, 0.55), (0.40, 0.82), (0.42, 0.90), (0.45, 0.80), (0.48, 0.55), (0.53, 0.30)], P_INK, 3)
+    return framed("Painting_Small", 0.40, 0.50, 0.045, art)
+
+
+def painting_medium():
+    """Medium, landscape 0.70 x 0.52: violet peaks, green hills and a river under a low sun."""
+    def art(lay):
+        lay([(0, 0.45), (1, 0.45), (1, 1), (0, 1)], P_SKY, 0)
+        lay([(0, 0), (1, 0), (1, 0.45), (0, 0.45)], P_GLOW, 0)                    # the horizon glow
+        lay(disc(0.70, 0.50, 0.10, 0.59 / 0.41), P_PALE, 1)
+        lay(ridge([(0, 0.50), (0.15, 0.70), (0.28, 0.52), (0.45, 0.78), (0.62, 0.48), (0.80, 0.66), (1, 0.50)]), P_FAR, 2)
+        lay(ridge([(0, 0.36), (0.25, 0.44), (0.5, 0.33), (0.75, 0.40), (1, 0.30)]), P_HILL, 3)
+        lay([(0.40, 0.0), (0.58, 0.0), (0.52, 0.12), (0.60, 0.24), (0.52, 0.34), (0.49, 0.34),
+             (0.54, 0.24), (0.45, 0.12)], P_PALE, 4)                               # the river winding away
+    return framed("Painting_Medium", 0.70, 0.52, 0.055, art)
+
+
+def painting_large():
+    """Large, landscape 0.96 x 0.70: a steam train crossing a viaduct at sunset, smoke trailing."""
+    asp = 0.808 / 0.548
+    def art(lay):
+        lay([(0, 0), (1, 0), (1, 0.62), (0, 0.62)], P_GLOW, 0)
+        lay([(0, 0.62), (1, 0.62), (1, 1), (0, 1)], P_SKY, 0)
+        lay(disc(0.30, 0.52, 0.13, asp), P_PALE, 1)
+        lay(ridge([(0, 0.42), (0.2, 0.56), (0.4, 0.46), (0.65, 0.58), (0.85, 0.48), (1, 0.52)]), P_FAR, 2)
+        lay(ridge([(0, 0.20), (0.3, 0.26), (0.6, 0.18), (1, 0.24)]), P_HILL, 3)
+        lay([(0, 0.40), (1, 0.40), (1, 0.44), (0, 0.44)], P_INK, 4)                # viaduct deck
+        for i in range(6):                                                         # its piers, up to the deck
+            u = 0.06 + i * 0.176
+            lay([(u - 0.025, 0.0), (u + 0.025, 0.0), (u + 0.02, 0.40), (u - 0.02, 0.40)], P_INK, 4)
+        lay([(0.18, 0.44), (0.38, 0.44), (0.38, 0.50), (0.18, 0.50)], P_RED, 5)    # carriages on the deck
+        lay([(0.40, 0.44), (0.58, 0.44), (0.58, 0.50), (0.40, 0.50)], P_RED, 5)
+        lay([(0.60, 0.44), (0.76, 0.44), (0.76, 0.49), (0.66, 0.49), (0.66, 0.53), (0.60, 0.53)], P_INK, 5)  # loco + cab
+        lay([(0.72, 0.49), (0.745, 0.49), (0.745, 0.545), (0.72, 0.545)], P_INK, 5)  # chimney
+        for u, v, r in ((0.70, 0.60, 0.030), (0.62, 0.66, 0.040), (0.52, 0.70, 0.048), (0.41, 0.72, 0.040)):
+            lay(disc(u, v, r, asp, 16), P_PALE, 5)                                 # smoke drifting back
+    return framed("Painting_Large", 0.96, 0.70, 0.070, art)
+
+
+run([curtains_large, blind_small, table_window, painting_small, painting_medium, painting_large], spacing=3.0)

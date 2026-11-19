@@ -607,7 +607,8 @@ namespace RailTracer
             {
                 // Seat columns get pilasters, the partition column a solid wall, every run of bay tiles windows.
                 float s = 0.5f;
-                int run = 0;
+                int run = 0, lastPainting = -9;
+                string[] paintings = { "Painting_Small", "Painting_Medium", "Painting_Large" };
                 void Flush()
                 {
                     for (; run >= 2; run -= 2, s += 2f) { Panel(Place("Wall_2m_Window", 0f, s + 1f, rot)); Sash("Window_Sash_Large", s + 1f); Dress("Curtains_Large", s + 1f); }
@@ -638,6 +639,13 @@ namespace RailTracer
                     if (solo == null) { run++; continue; }
                     Flush();
                     Panel(Place(solo, 0f, s + 0.5f, rot));
+                    // Paintings (19.37) on plain wall ('_'), never two side by side; eye level, so they clear a wall
+                    // lamp above. Beside a partition (its trims reach 0.15 into this tile) only the small one fits.
+                    if (At(x, row) == '_' && x - lastPainting > 1)
+                    {
+                        lastPainting = x;
+                        Dress(x > 0 && Part(x - 1) ? "Painting_Small" : paintings[(x * 7 + row * 3) % 3], s + 0.5f);
+                    }
                     s += 1f;
                 }
                 Flush();
