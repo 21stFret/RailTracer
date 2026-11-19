@@ -13,7 +13,9 @@
 - **Materials:** semi-realistic textures (`TEXTURE_STYLE = "pbr"`), modest detail. Side walls: wood
   veneer below the dado rail (split at z 0.74, hidden by the rail), WALLPAPER above: gold-on-black
   stripes (paper (0.015,0.015,0.02), ink (0.62,0.42,0.12), 5 repeats/m) - set in CONFIG `WALLPAPER`.
-  End walls and partitions stay wood. Recipes: Trn_Wood wood veneer (tile 2, planks 1, rings 14,
+  End walls and partitions stay wood. Wall trims (19.36): Trn_Trim, dark varnished walnut (0.13,0.055,0.025), rough 0.32, wood tile 1 rings 22, stepped
+  profiles (BASE/DADO/CORNICE_PROFILE in railtracer_train_kit.py); each step mitres at IN_W - its depth.
+  Recipes: Trn_Wood wood veneer (tile 2, planks 1, rings 14,
   seams False), Trn_WoodDark wood planks 2, Trn_Brass brushed (0.5), Trn_Cream plaster (2),
   Trn_Velvet velvet (0.5), Trn_Leather leather (0.5), Trn_Iron painted_metal (2), Trn_Wallpaper wallpaper (1), Trn_Glass untextured (opaque dark glossy).
 - **Palette:** `Trn_Wood (0.45,0.24,0.12)`, `Trn_WoodDark (0.20,0.10,0.05)`, `Trn_Brass (0.95,0.70,0.25) metal`,
