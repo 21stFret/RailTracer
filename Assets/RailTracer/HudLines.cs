@@ -18,6 +18,7 @@ namespace RailTracer
         // Game's "Hover ..." fields, copied in every frame.
         public static float slashTime = 0.42f, swipeDelay = 0.06f, swipeTime = 0.15f, grow = 1.2f, swipePast = 100f;
         public static Action onSlash; // the hover's sound
+        public static bool showSlash = false; // the red slash left of the text: off for now (19.50, Alex trying it without)
         const float ColourTime = 0.12f, MoveTime = 0.16f, Step = 10f, Lead = 14f, CardPast = 12f, NoteGap = 8f;
         static readonly Color Bone = new Color32(0xF2, 0xEF, 0xEA, 0xFF);
 
@@ -91,7 +92,7 @@ namespace RailTracer
             swipe.enabled = k > 0f;
             // The slash: grows over the first 20% of its time, holds to 55%, fades out by the end.
             float q = s < 0f ? 1f : s / slashTime;
-            slash.shown = s >= 0f;
+            slash.shown = showSlash && s >= 0f;
             slash.rectTransform.localScale = new Vector3(1f, Mathf.Clamp01(q / 0.2f), 1f);
             slash.color = new Color(slash.color.r, slash.color.g, slash.color.b, q < 0.55f ? 1f : 1f - (q - 0.55f) / 0.45f);
         }
