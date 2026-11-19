@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.LowLevel;
 
 namespace RailTracer
 {
@@ -300,16 +301,16 @@ namespace RailTracer
             for (float time = 0f; time < thanksDelay; time += Time.deltaTime) yield return null;
             hud.ShowTutorial("Thanks for playing", null,
                 "Thanks for playing the demo! If you enjoyed it, please leave a review and join our Discord.\n\nTry the Endless mode for more fun!",
-                "Click or press any key");
+                Pad.Active ? "Press any button" : "Click or press any key");
             hud.SetTutorialTargets(new List<Rect>());
             thanksUp = true;
         }
 
         // True while the thank-you card is up (it takes the input).
-        bool ThanksStep(Keyboard kb, Mouse mouse)
+        bool ThanksStep(Keyboard kb, Pointer mouse)
         {
             if (!thanksUp) return false;
-            bool any = (kb != null && kb.anyKey.wasPressedThisFrame) || (mouse != null && (mouse.leftButton.wasPressedThisFrame || mouse.rightButton.wasPressedThisFrame));
+            bool any = (kb != null && kb.anyKey.wasPressedThisFrame) || Pad.AnyDown || (mouse != null && (mouse.click || mouse.rclick));
             if (any)
             {
                 thanksUp = false;
@@ -391,8 +392,8 @@ namespace RailTracer
         void OpenChoice(string which)
         {
             choice = which;
-            hud.ShowPause(true, which == "board" ? NextName() : which == "done" ? "Demo complete" : "Paused", false,
-                which == "board" ? "Not yet" : which == "done" ? null : "Resume"); // no close X: each panel has its own way out (Resume, Not yet)
+            hud.ShowPause(true, which == "board" ? NextName() : which == "done" ? "Demo complete" : "Paused",
+                which == "board" ? "Not yet" : which == "done" ? null : "Resume"); // each panel's way out is a line (Resume, Not yet)
         }
 
         void CloseChoice()
@@ -410,16 +411,16 @@ namespace RailTracer
             : new[] { "Resume", $"Tutorial tips\t{(tut.Skipped ? "Off" : "On")}", $"Kill cam\t{(KillCamOn ? "On" : "Off")}", "Restart car", "Main menu" };
 
         // True while the panel is open (it takes the input).
-        bool ChoiceStep(Keyboard kb, Mouse mouse)
+        bool ChoiceStep(Keyboard kb, Pointer mouse)
         {
             if (choice == null) return false;
-            var at = mouse != null ? mouse.position.ReadValue() : Vector2.zero;
+            var at = mouse != null ? mouse.pos : Vector2.zero;
             int hit = hud.RefreshPause(ChoiceItems(), at);
-            bool x = mouse != null && hud.RefreshButtons(at, mouse.leftButton.isPressed, mouse.leftButton.wasPressedThisFrame) == "closepause";
-            bool esc = x || (kb != null && kb.escapeKey.wasPressedThisFrame);
+            if (mouse != null) hud.RefreshButtons(at, mouse.held, mouse.click); // the HUD's hover colours
+            bool esc = (kb != null && kb.escapeKey.wasPressedThisFrame) || Pad.Down(GamepadButton.East) || Pad.Down(GamepadButton.Start);
             if (esc && choice != "done") { CloseChoice(); return true; }
             if (kb != null && choice == "board" && (kb.spaceKey.wasPressedThisFrame || kb.enterKey.wasPressedThisFrame)) hit = 0;
-            else if (mouse == null || !mouse.leftButton.wasPressedThisFrame) return true;
+            else if (mouse == null || !mouse.click) return true;
             switch (choice)
             {
                 case "board":
@@ -665,16 +666,16 @@ namespace RailTracer
             return r.endless ? $"Continue\t· endless car {r.car}, turn {r.turn}" : $"Continue\t· {where}, turn {r.turn}";
         }
 
-        void MenuStep(Keyboard kb, Mouse mouse)
+        void MenuStep(Keyboard kb, Pointer mouse)
         {
             MenuCamera();
             ShowRows(screen == MenuScreen.Journey); // the other trains only in Journey
             SyncSettingLamps(screen == MenuScreen.Options || screen == MenuScreen.Controls || screen == MenuScreen.ResetData);
-            var at = mouse != null ? mouse.position.ReadValue() : Vector2.zero;
-            bool click = mouse != null && mouse.leftButton.wasPressedThisFrame;
-            bool back = kb != null && kb.escapeKey.wasPressedThisFrame;
-            bool held = mouse != null && mouse.leftButton.isPressed;
-            bool down = mouse != null && mouse.rightButton.wasPressedThisFrame; // right-click: a volume down
+            var at = mouse != null ? mouse.pos : Vector2.zero;
+            bool click = mouse != null && mouse.click;
+            bool back = (kb != null && kb.escapeKey.wasPressedThisFrame) || Pad.Down(GamepadButton.East);
+            bool held = mouse != null && mouse.held;
+            bool down = mouse != null && mouse.rclick; // right-click: a volume down
             switch (screen)
             {
                 case MenuScreen.Start:
@@ -728,7 +729,7 @@ namespace RailTracer
                     var on = lines.Select((_, i) => i != 0 || cleared || isNext).ToArray();
                     int hit = hud.RefreshMenu(false, "Journey", lines, on, info, at, held, 1 + shownTrain);
                     int backAt = lines.Length - 1;
-                    if (back || (click && (hit == backAt || hit == -2))) { screen = MenuScreen.Start; break; }
+                    if (back || (click && (hit == backAt))) { screen = MenuScreen.Start; break; }
                     if (click && hit >= 1 && hit < backAt && hit - 1 != shownTrain) // another train: the camera glides up or down to it
                     {
                         int t = hit - 1;
@@ -759,7 +760,7 @@ namespace RailTracer
                     };
                     int hit = hud.RefreshMenu(false, "Options", items, null, "Volumes: click to turn up, right-click to turn down.", at, held, -1, "Reset data");
                     if (click && hit == -3) { screen = MenuScreen.ResetData; break; }
-                    if (back || (click && (hit == 9 || hit == -2))) { screen = MenuScreen.Start; break; }
+                    if (back || (click && (hit == 9))) { screen = MenuScreen.Start; break; }
                     if ((click || down) && (hit == 0 || hit == 1)) // 10% steps, wrapping round
                     {
                         float Step(float v) => Mathf.Repeat(Mathf.Round(v * 10f) + (down ? -1f : 1f), 11f) / 10f;
@@ -806,14 +807,14 @@ namespace RailTracer
                     const string warning = "This deletes all your progress: the saved run, the cars you've cleared, your best tickets, " +
                                            "your settings and the tutorial tips you've seen.\n\nIt can't be undone.";
                     int hit = hud.RefreshMenu(false, "Reset data?", new[] { "Reset everything", "Cancel" }, null, warning, at, held, 0);
-                    if (back || (click && (hit == 1 || hit == -2))) { screen = MenuScreen.Options; break; }
+                    if (back || (click && (hit == 1))) { screen = MenuScreen.Options; break; }
                     if (click && hit == 0) { ResetData(); screen = MenuScreen.Start; }
                     break;
                 }
                 case MenuScreen.Controls:
                 {
                     int hit = hud.RefreshMenu(false, "Controls", new[] { "Back" }, null, null, at, held); // the key boxes beside it
-                    if (back || (click && (hit == 0 || hit == -2))) screen = MenuScreen.Options;
+                    if (back || (click && (hit == 0))) screen = MenuScreen.Options;
                     break;
                 }
             }

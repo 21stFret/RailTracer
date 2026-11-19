@@ -240,7 +240,6 @@ namespace RailTracer
 
         RectTransform pause;
         TMP_Text pauseHead;
-        GameObject pauseClose;
         readonly List<MenuLine> pauseItems = new List<MenuLine>();
         GameObject pauseHint;
         TMP_Text pauseHintWords;
@@ -310,7 +309,7 @@ namespace RailTracer
             var gap = new GameObject("Gap", typeof(RectTransform));
             gap.transform.SetParent(buttons, false);
             gap.AddComponent<LayoutElement>().minWidth = 22f; // clear of NEXT as it grows
-            SketchCap(buttons, "Space", 14);
+            Glyph(SketchCap(buttons, "Space", 14).text, "A");
             tut.gameObject.SetActive(false);
 
             // Pause menu (19.27): a centre card at least 400 wide, PAUSED, the lines, an ESC key hint. Behind it the
@@ -332,13 +331,11 @@ namespace RailTracer
             head.text = "Paused";
             head.rectTransform.localRotation = Quaternion.Euler(0f, 0f, -1.5f);
             pauseHead = head;
-            var px = CloseX(pause);
-            Button("closepause", px.rt, px.x);
-            pauseClose = px.rt.gameObject;
             var lines = Rect("Lines", pause, Vector2.zero, Vector2.zero, Vector2.zero);
             Column(lines, new RectOffset(0, 0, 0, 0), 0f).childForceExpandWidth = true;
             for (int i = 0; i < 5; i++) pauseItems.Add(Line(lines, 26, 20, 5f, i, card: true));
             pauseHint = KeyHint(pause, "Esc", "Resume", out pauseHintWords).gameObject;
+            Glyph(pauseHint.GetComponentInChildren<TMP_Text>(), "B");
             pause.gameObject.SetActive(false);
         }
 
@@ -418,12 +415,11 @@ namespace RailTracer
         public bool PauseOpen => pause.gameObject.activeSelf;
         // The centre panel: the pause menu, or another short choice under its own heading (up to 5 lines).
         // escWord: what Esc does here, shown as a key hint (null: none).
-        public void ShowPause(bool on, string heading = "Paused", bool closable = true, string escWord = "Resume")
+        public void ShowPause(bool on, string heading = "Paused", string escWord = "Resume")
         {
             pauseHead.text = heading;
             pauseHint.SetActive(escWord != null);
             pauseHintWords.text = escWord ?? "";
-            pauseClose.SetActive(closable);
             pause.gameObject.SetActive(on);
             pauseDim.SetActive(on);
         }

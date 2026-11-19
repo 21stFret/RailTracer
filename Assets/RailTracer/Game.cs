@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.LowLevel;
 using UnityEngine.Rendering;
 
 namespace RailTracer
@@ -1310,8 +1311,12 @@ namespace RailTracer
             }
             MusicStep();
             if (slowUntil >= 0f && Time.unscaledTime >= slowUntil) { slowUntil = -1f; if (camming) Time.timeScale = 1f; } // a hit's slow motion ends
+            Pad.EnsureKeyboard();
+            Pad.Tick();
+            hud.SetPad(Pad.Active);
             var kb = Keyboard.current;
-            var mouse = Mouse.current;
+            var mouse = Pad.Active ? PadPointer() : Pointer.FromMouse(Mouse.current);
+            MenuLine.pointer = mouse != null ? mouse.pos : new Vector2(-9999f, -9999f);
             // The menus own the camera and the input; the live car carries on behind them (paused: nobody acts).
             if (phase != Phase.Play)
             {
@@ -1328,16 +1333,16 @@ namespace RailTracer
             bool carded = kb != null && hud.CardUp;
             if (carded)
             {
-                bool any = kb.anyKey.wasPressedThisFrame || (mouse != null && (mouse.leftButton.wasPressedThisFrame || mouse.rightButton.wasPressedThisFrame));
-                if (kb.rKey.wasPressedThisFrame) RestartCar();
+                bool any = kb.anyKey.wasPressedThisFrame || Pad.AnyDown || (mouse != null && (mouse.click || mouse.rclick));
+                if (kb.rKey.wasPressedThisFrame || Pad.Down(GamepadButton.North)) RestartCar();
                 else if (kb.nKey.wasPressedThisFrame && c.Won && !busy) { hud.HideCard(); StartCoroutine(ExitCar()); } // debug: straight out
                 else if (endShown && c.Won && !busy)
                 {
-                    if (!kb.spaceKey.isPressed && !(mouse != null && mouse.leftButton.isPressed)) winHeld = 0f; // Space, or the mouse held down
+                    if (!kb.spaceKey.isPressed && !(mouse != null && mouse.held)) winHeld = 0f; // Space, or the mouse held down
                     else if ((winHeld += Time.unscaledDeltaTime) >= endTurnHold) { winHeld = -1f; hud.HideCard(); StartCoroutine(ExitCar()); }
                     hud.SetCardHold(winHeld >= 0f ? winHeld / endTurnHold : 1f);
                 }
-                else if (endShown && c.Lost && mouse != null && mouse.leftButton.wasPressedThisFrame) RestartCar(); // the loss card: a click retries
+                else if (endShown && c.Lost && mouse != null && mouse.click) RestartCar(); // the loss card: a click retries
                 else if (any && hud.CardDismissable) hud.HideCard();
                 kb = null;
                 mouse = null;
@@ -1363,16 +1368,17 @@ namespace RailTracer
                 if (kb.hKey.wasPressedThisFrame) hud.ToggleControls();
                 if (kb.lKey.wasPressedThisFrame) { hud.ShowLog(c.log); Time.timeScale = 0f; }
                 if (kb.gKey.wasPressedThisFrame && !busy && !walking) c.Do(c.held != null ? "drop" : "grab");
-                showAllSenses = kb.vKey.isPressed;
+                showAllSenses = kb.vKey.isPressed || Pad.Held(GamepadButton.LeftTrigger);
                 if (kb.zKey.wasPressedThisFrame) Undo();
                 if (kb.cKey.wasPressedThisFrame && !busy) c.Do("crouch");
                 if (kb.bKey.wasPressedThisFrame) bloodOutlines = !bloodOutlines;
-                if (kb.oKey.wasPressedThisFrame && mouse != null) WindowUnderMouse(mouse.position.ReadValue())?.Toggle();
-                // End turn: hold Space (a tap does nothing, so it can't end a turn by accident).
-                if (kb.spaceKey.wasPressedThisFrame && !busy && !c.Over && !walking) { spaceHeld = 0f; endByMouse = false; }
+                if (kb.oKey.wasPressedThisFrame && mouse != null) WindowUnderMouse(mouse.pos)?.Toggle();
+                if (Pad.Active) PadPlay();
+                // End turn: hold Space or the pad's X (a tap does nothing, so it can't end a turn by accident).
+                if ((kb.spaceKey.wasPressedThisFrame || Pad.Down(GamepadButton.West)) && !busy && !c.Over && !walking) { spaceHeld = 0f; endByMouse = false; }
                 if (spaceHeld >= 0f)
                 {
-                    bool holding = kb.spaceKey.isPressed || (endByMouse && mouse != null && mouse.leftButton.isPressed);
+                    bool holding = kb.spaceKey.isPressed || Pad.Held(GamepadButton.West) || (endByMouse && mouse != null && mouse.held);
                     if (!holding || busy || c.Over) spaceHeld = -1f;
                     else if ((spaceHeld += Time.deltaTime) >= endTurnHold) { spaceHeld = -1f; StartCoroutine(EnemyPhase()); }
                 }
@@ -1386,13 +1392,21 @@ namespace RailTracer
             leaping = !walking && (selected == SkillId.Leap || (kb != null && kb.shiftKey.isPressed));
             hopping = !walking && (selected == SkillId.Hop || (kb != null && kb.ctrlKey.isPressed));
             throwing = selected == SkillId.Throw;
-            var screen = mouse != null ? mouse.position.ReadValue() : Vector2.zero;
-            bool overHud = mouse != null && hud.Blocks(screen);
-            hudSlot = mouse != null ? hud.SlotAt(screen) : -1;
-            hover = mouse != null && !overHud ? CellUnderMouse(screen) : null;
-            if (mouse != null && mouse.leftButton.wasPressedThisFrame && hudSlot >= 0) Select((SkillId)hudSlot);
+            var screen = mouse != null ? mouse.pos : Vector2.zero;
+            if (Pad.Active) // the cursor tile; the selected skill's tooltip; the HUD's buttons aren't under it
+            {
+                hudSlot = selected.HasValue ? (int)selected.Value : -1;
+                hover = mouse != null ? padCell : (Cell?)null;
+            }
+            else
+            {
+                bool overHud = mouse != null && hud.Blocks(screen);
+                hudSlot = mouse != null ? hud.SlotAt(screen) : -1;
+                hover = mouse != null && !overHud ? CellUnderMouse(screen) : null;
+                if (mouse != null && mouse.click && hudSlot >= 0) Select((SkillId)hudSlot);
+            }
             // The HUD's key hints as buttons, for playing with the mouse alone.
-            switch (hud.RefreshButtons(mouse != null ? screen : new Vector2(-9999f, -9999f), mouse != null && mouse.leftButton.isPressed, mouse != null && mouse.leftButton.wasPressedThisFrame))
+            switch (hud.RefreshButtons(mouse != null && !Pad.Active ? screen : new Vector2(-9999f, -9999f), mouse != null && mouse.held, mouse != null && mouse.click))
             {
                 case "end": if (!busy && !c.Over && !walking) { spaceHeld = 0f; endByMouse = true; } break; // hold the button, like Space
                 case "crouch": if (!busy) c.Do("crouch"); break;
@@ -1403,7 +1417,7 @@ namespace RailTracer
                 case "closecontrols": hud.CloseControls(); break;
                 case "log": hud.ShowLog(c.log); Time.timeScale = 0f; break;
             }
-            if (!busy && !c.Over && mouse != null && mouse.leftButton.wasPressedThisFrame && hover.HasValue)
+            if (!busy && !c.Over && mouse != null && mouse.click && hover.HasValue)
             {
                 var target = c.EnemyAt(hover.Value);
                 var kill = KillMode;
@@ -1469,10 +1483,11 @@ namespace RailTracer
                 if (c.Won)
                 {
                     RecordClear();
-                    hud.ShowCard($"{CarLabel()} cleared", "The assassin washes up", "and steps out as the conductor.", "Hold Space / click to walk on  /  R to ride again", 0f, false, TicketStates());
+                    hud.ShowCard($"{CarLabel()} cleared", "The assassin washes up", "and steps out as the conductor.",
+                        Pad.Active ? "A hold to walk on  /  Y to ride again" : "Hold Space / click to walk on  /  R to ride again", 0f, false, TicketStates());
                     hud.SetCardHold(0f);
                 }
-                else hud.ShowCard(CarLabel(), "The demon was only", "human after all.", "R or click to retry", 0f, false);
+                else hud.ShowCard(CarLabel(), "The demon was only", "human after all.", Pad.Active ? "A to retry" : "R or click to retry", 0f, false);
             }
         }
 
@@ -1497,7 +1512,7 @@ namespace RailTracer
 
         // Shows the current card: pans the camera first if it names a spot, then dims all but its targets.
         // Enter or NEXT moves on; Skip tutorial ends them all. True while a card is up or about to be.
-        bool TutorialStep(Keyboard kb, Mouse mouse)
+        bool TutorialStep(Keyboard kb, Pointer mouse)
         {
             if (!walkQueued && !hud.CardVisible)
             {
@@ -1520,8 +1535,8 @@ namespace RailTracer
                 hud.ShowTutorial(card.title, card.number, card.text, card.tip);
             }
             hud.SetTutorialTargets(card.targets?.Invoke() ?? new Rect[0]);
-            var at = mouse != null ? mouse.position.ReadValue() : Vector2.zero;
-            bool click = mouse != null && mouse.leftButton.wasPressedThisFrame;
+            var at = mouse != null ? mouse.pos : Vector2.zero;
+            bool click = mouse != null && mouse.click;
             bool closed = false;
             if (click && hud.TutorialSkipHit(at)) { tut.Skip(); closed = true; }
             else if ((kb != null && kb.spaceKey.wasPressedThisFrame) || (click && hud.TutorialNextHit(at)))
@@ -1611,19 +1626,20 @@ namespace RailTracer
         }
 
         // The full log (L): the game is paused while it's open; the wheel or arrow keys scroll it, L or Esc closes it.
-        bool LogStep(Keyboard kb, Mouse mouse)
+        bool LogStep(Keyboard kb, Pointer mouse)
         {
             if (!hud.LogOpen) return false;
-            bool clicked = mouse != null && hud.RefreshButtons(mouse.position.ReadValue(), mouse.leftButton.isPressed, mouse.leftButton.wasPressedThisFrame) == "closelog";
-            if (clicked || (kb != null && (kb.lKey.wasPressedThisFrame || kb.escapeKey.wasPressedThisFrame)))
+            bool clicked = mouse != null && hud.RefreshButtons(mouse.pos, mouse.held, mouse.click) == "closelog";
+            if (clicked || (kb != null && (kb.lKey.wasPressedThisFrame || kb.escapeKey.wasPressedThisFrame || Pad.Down(GamepadButton.East) || Pad.Down(GamepadButton.LeftStick))))
             {
                 hud.HideLog();
                 Time.timeScale = 1f;
                 return true;
             }
-            float scroll = mouse != null ? mouse.scroll.ReadValue().y * 0.25f : 0f;
+            float scroll = mouse != null ? mouse.scroll * 0.25f : 0f;
             if (kb != null) scroll += (kb.upArrowKey.isPressed || kb.wKey.isPressed ? 1f : kb.downArrowKey.isPressed || kb.sKey.isPressed ? -1f : 0f) * 600f * Time.unscaledDeltaTime
-                + (kb.pageUpKey.wasPressedThisFrame ? 300f : kb.pageDownKey.wasPressedThisFrame ? -300f : 0f);
+                + (kb.pageUpKey.wasPressedThisFrame ? 300f : kb.pageDownKey.wasPressedThisFrame ? -300f : 0f)
+                + Pad.LeftStickY * 600f * Time.unscaledDeltaTime;
             hud.ScrollLog(scroll);
             return true;
         }
@@ -1718,6 +1734,93 @@ namespace RailTracer
             selected = s;
         }
 
+        // ---- Controller (Pad.cs) ----
+
+        [Header("Controller")]
+        public float padZoomSpeed = 1.2f; // right stick up / down: the share of the distance zoomed per second
+        public float padFollowEdge = 0.2f; // the cursor tile this close to a screen edge (share of the screen) recentres the camera
+        Cell padCell;            // the pad's cursor tile
+        Carriage padFor;         // the car it was placed in (a new car puts it back on you)
+        string focusKey;         // the list the pad's focus is in (a new one puts it on its first line)
+        int focusAt;
+
+        // The pad's stand-in pointer. With a list of lines up (a menu screen, the pause card, a tutorial card) it sits on
+        // the focused line: up / down (or any direction on a card) move the focus, A clicks it. Options: left / right
+        // turn a setting down / up; Journey: left / right pick the car. Otherwise it sits on the cursor tile.
+        Pointer PadPointer()
+        {
+            var p = new Pointer { click = Pad.Down(GamepadButton.South), held = Pad.Held(GamepadButton.South) };
+            var lines = hud.Focusables(out string key);
+            if (lines.Count == 0)
+            {
+                focusKey = null;
+                p.pos = phase == Phase.Play && c != null ? (Vector2)cam.WorldToScreenPoint(World(padCell) + Vector3.up * 0.25f) : new Vector2(-9999f, -9999f);
+                return p;
+            }
+            var step = Pad.Step;
+            bool options = phase == Phase.Menu && screen == MenuScreen.Options, journey = phase == Phase.Menu && screen == MenuScreen.Journey;
+            int by = options || journey ? -step.y : step.x != 0 ? step.x : -step.y;
+            if (key != focusKey)
+            {
+                focusKey = key;
+                // Tutorial cards start on Next; the Reset data warning on Cancel, never on Reset everything.
+                focusAt = key.StartsWith("tut") ? lines.Count - 1 : phase == Phase.Menu && screen == MenuScreen.ResetData ? 1 : 0;
+                if (lines[Mathf.Min(focusAt, lines.Count - 1)].off) by = 1;
+            }
+            focusAt = Mathf.Clamp(focusAt, 0, lines.Count - 1);
+            if (by != 0)
+                for (int i = 0; i < lines.Count; i++) // past greyed-out lines
+                {
+                    focusAt = (focusAt + by + lines.Count) % lines.Count;
+                    if (!lines[focusAt].off) break;
+                }
+            p.pos = lines[focusAt].Centre;
+            if (options && step.x != 0 && focusAt <= 7) // the settings (0, 1 the volumes: left turns them down)
+            {
+                if (step.x < 0 && focusAt <= 1) p.rclick = true;
+                else p.click = true;
+            }
+            if (journey && step.x != 0) journeyPick = Mathf.Clamp(journeyPick + step.x, 0, Train.TrainCars - 1);
+            return p;
+        }
+
+        // Play with the pad: the stick or D-pad steps the cursor a tile (the camera follows it near an edge), the rest
+        // of the buttons as their keys. See Hud.PadControlsList.
+        void PadPlay()
+        {
+            if (padFor != c) { padFor = c; padCell = c.player; }
+            var step = Pad.Step;
+            if (step != Vector2Int.zero)
+            {
+                var to = new Cell(padCell.x + step.x, padCell.y - step.y); // up the screen is down the rows
+                if (c.InBounds(to)) padCell = to;
+                var sp = cam.WorldToScreenPoint(World(padCell));
+                float e = padFollowEdge;
+                if (sp.x < Screen.width * e || sp.x > Screen.width * (1f - e) || sp.y < Screen.height * e || sp.y > Screen.height * (1f - e))
+                    camTarget = World(padCell);
+            }
+            if (Pad.Down(GamepadButton.East)) { if (hud.ControlsOpen) hud.CloseControls(); else selected = null; }
+            if (Pad.Down(GamepadButton.Start) && !busy) OpenChoice("pause");
+            if (Pad.Down(GamepadButton.RightStick)) hud.ToggleControls();
+            if (Pad.Down(GamepadButton.LeftStick)) { hud.ShowLog(c.log); Time.timeScale = 0f; }
+            if (Pad.Down(GamepadButton.RightTrigger) && !busy && !walking) c.Do(c.held != null ? "drop" : "grab");
+            if (Pad.Down(GamepadButton.Select)) Undo();
+            if (Pad.Down(GamepadButton.North) && !busy) c.Do("crouch");
+            if (Pad.Down(GamepadButton.LeftShoulder)) CycleSkill(-1);
+            if (Pad.Down(GamepadButton.RightShoulder)) CycleSkill(1);
+        }
+
+        // LB / RB: the previous / next skill you can use right now (not Drag, RT grabs; not Dread, it's passive).
+        void CycleSkill(int by)
+        {
+            if (c == null || busy || walking) return;
+            var ids = Enumerable.Range(0, c.t.skills.Length).Select(i => (SkillId)i)
+                .Where(s => s != SkillId.Drag && s != SkillId.Dread && c.Usable(s)).ToList();
+            if (ids.Count == 0) return;
+            int at = selected.HasValue ? ids.IndexOf(selected.Value) : -1;
+            selected = ids[at < 0 ? (by > 0 ? 0 : ids.Count - 1) : (at + by + ids.Count) % ids.Count];
+        }
+
         // Inspector debug: shows the live legend and cooldowns; editing one in Play mode sets it.
         void OnValidate() => debugDirty = true;
 
@@ -1739,7 +1842,7 @@ namespace RailTracer
         }
 
         // WASD / arrows pan, right-drag pans, scroll zooms.
-        void MoveCamera(Keyboard kb, Mouse mouse)
+        void MoveCamera(Keyboard kb, Pointer mouse)
         {
             var pan = Vector2.zero;
             if (kb != null)
@@ -1748,13 +1851,17 @@ namespace RailTracer
                 if (kb.dKey.isPressed || kb.rightArrowKey.isPressed) pan.x += 1;
                 if (kb.wKey.isPressed || kb.upArrowKey.isPressed) pan.y += 1;
                 if (kb.sKey.isPressed || kb.downArrowKey.isPressed) pan.y -= 1;
+                // The pad's right stick: left / right pan along the car, up / down zoom.
+                var rs = Pad.RightStick;
+                if (Mathf.Abs(rs.x) > 0.2f) pan.x += rs.x;
+                if (Mathf.Abs(rs.y) > 0.2f) camDistance = Mathf.Clamp(camDistance * (1f - rs.y * padZoomSpeed * Time.deltaTime), 4f, 30f);
             }
-            if (pan != Vector2.zero || (mouse != null && mouse.rightButton.isPressed)) camTarget = null; // you took the camera
+            if (pan != Vector2.zero || (mouse != null && mouse.rheld)) camTarget = null; // you took the camera
             pan *= panSpeed * camDistance * Time.deltaTime;
             if (mouse != null)
             {
-                if (mouse.rightButton.isPressed) pan -= mouse.delta.ReadValue() * camDistance * 0.002f;
-                camDistance = Mathf.Clamp(camDistance - mouse.scroll.ReadValue().y * zoomSpeed * camDistance, 4f, 30f);
+                if (mouse.rheld) pan -= mouse.delta * camDistance * 0.002f;
+                camDistance = Mathf.Clamp(camDistance - mouse.scroll * zoomSpeed * camDistance, 4f, 30f);
             }
             if (camTarget.HasValue)
             {

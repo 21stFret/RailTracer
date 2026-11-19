@@ -446,6 +446,39 @@ namespace RailTracer
             (new[] { "H" }, "Close this"),
         };
 
+        // The same for the controller (Steam Deck, Xbox layout), shown while it's in use.
+        public static readonly (string[] keys, string what)[] PadControlsList =
+        {
+            (new[] { "L stick" }, "Move the tile cursor (or the D-pad)"),
+            (new[] { "A" }, "Move there; with a kill selected, act on the enemy there"),
+            (new[] { "LB / RB" }, "Previous / next skill (B cancels)"),
+            (new[] { "RT" }, "Grab or drop a body"),
+            (new[] { "Y" }, "Crouch: hidden behind seats, half speed"),
+            (new[] { "X" }, "Hold: end turn"),
+            (new[] { "View" }, "Undo (until you act, are seen or move a body)"),
+            (new[] { "LT" }, "Hold: every enemy's senses"),
+            (new[] { "L3" }, "The full log (paused while open)"),
+            (new[] { "R stick" }, "Pan along the car; up and down zoom"),
+            (new[] { "Menu" }, "Pause; restart and the main menu are in there"),
+            (new[] { "R3" }, "Close this"),
+        };
+
+        // Key caps that change with the controller: (the text, its keyboard label, its pad label).
+        readonly List<(TMP_Text t, string key, string pad)> glyphs = new List<(TMP_Text, string, string)>();
+        readonly List<GameObject> keyRows = new List<GameObject>(), padRows = new List<GameObject>();
+        bool padShown;
+        TMP_Text Glyph(TMP_Text t, string pad) { glyphs.Add((t, t.text, pad)); return t; }
+
+        // The prompts for the pad (on) or the keyboard and mouse (off).
+        public void SetPad(bool on)
+        {
+            if (on == padShown) return;
+            padShown = on;
+            foreach (var (t, key, pad) in glyphs) if (t) t.text = on ? pad : key;
+            foreach (var r in keyRows) if (r) r.SetActive(!on);
+            foreach (var r in padRows) if (r) r.SetActive(on);
+        }
+
         public void Build(SkillDef[] table, int maxLegend, int moveRange, int shakenAt, int panickedAt, int brokenAt)
         {
             skills = table;
@@ -531,6 +564,7 @@ namespace RailTracer
                 b.key = Text(b.rt, sketchBold, 16, TextAlignmentOptions.TopLeft, Vector2.zero, new Vector2(24, 20));
                 Place(b.key.rectTransform, new Vector2(0f, 1f), new Vector2(9f, -3f));
                 b.key.text = (i + 1).ToString();
+                Glyph(b.key, ""); // the pad picks skills with LB / RB
                 b.name = Text(b.rt, sketchBold, 15, TextAlignmentOptions.Center, new Vector2(0, -26.5f), new Vector2(TileW, 18));
                 b.name.fontStyle = FontStyles.UpperCase;
                 b.name.characterSpacing = 3f;
@@ -560,6 +594,7 @@ namespace RailTracer
             var state = Row("State", line, 18f);
             var stance = Row("Stance", state, 6f);
             var crouchCap = SketchCap(stance, "C", 14);
+            Glyph(crouchCap.text, "Y");
             stanceIcon = Icon(stance, "stand", 14, 16);
             stanceIcon.color = Bone;
             stanceWord = SketchLabel(stance, "Standing", 14, Bone);
@@ -580,6 +615,7 @@ namespace RailTracer
             // Undo: the key while you can undo, the padlock once it's locked, nothing when there's nothing to undo.
             var undoRow = Row("Undo Key", state, 6f);
             var undoCap = SketchCap(undoRow, "Z", 14);
+            Glyph(undoCap.text, "View");
             Button("undo", undoRow, undoCap.border, undoCap.text, SketchLabel(undoRow, "Undo", 14, LockedText));
             undoKey = undoRow.gameObject;
             var lockRow = Row("Undo", state, 6f);
@@ -631,6 +667,7 @@ namespace RailTracer
             bannerHint.color = Bone;
             var esc = Row("Esc", banner, 6f);
             var escCap = KeyCap(esc, "Esc");
+            Glyph(escCap.text, "B");
             Button("cancel", esc, escCap.border, escCap.text, Label(esc, "Cancel", 14, Grey, 2f));
 
             // ---- Bottom right: the key hints (ESC MENU, H CONTROLS, L LOG; under them SPACE HOLD: END TURN), the log above ----
@@ -645,6 +682,7 @@ namespace RailTracer
             Filled(endFill, Image.FillMethod.Horizontal, (int)Image.OriginHorizontal.Left);
             IgnoreLayout(spaceCap);
             var spaceWord = SketchLabel(spaceCap, "Space", 15, LockedText);
+            Glyph(spaceWord, "X");
             spaceWord.gameObject.AddComponent<LayoutElement>().minHeight = 20;
             endWord = SketchLabel(end, "Hold: end turn", 15, LockedText);
             Glow(endWord);
@@ -656,6 +694,7 @@ namespace RailTracer
             {
                 var b = Row(caption, hint, 6f);
                 var cap = SketchCap(b, key, 15);
+                Glyph(cap.text, key == "Esc" ? "Menu" : key == "H" ? "R3" : "L3");
                 var w = SketchLabel(b, caption, 15, LockedText);
                 Glow(w);
                 Button(id, b, cap.border, cap.text, w);
@@ -679,8 +718,15 @@ namespace RailTracer
             head.text = "Controls";
             head.rectTransform.localRotation = Quaternion.Euler(0f, 0f, -1.5f);
             ControlRows(panel, 15, false);
-            var cx = CloseX(panel);
-            Button("closecontrols", cx.rt, cx.x);
+            var close = Row("Close", panel, 6f); // top right, out of the column: H or Esc, or a click
+            IgnoreLayout(close);
+            Place(close, Vector2.one, new Vector2(-24, -22));
+            close.pivot = new Vector2(1f, 1f);
+            Fit(close);
+            Glyph(KeyCap(close, "H").text, "R3");
+            Label(close, "or", 13, Grey, 1f);
+            Glyph(KeyCap(close, "Esc").text, "B");
+            Button("closecontrols", close, Label(close, "Close", 14, Grey, 2f));
             controls = panel.gameObject;
             controls.SetActive(false);
 
@@ -768,13 +814,11 @@ namespace RailTracer
             Place(close, Vector2.one, new Vector2(-lean, -22));
             close.pivot = new Vector2(1f, 1f);
             Fit(close);
-            KeyCap(close, "L");
+            Glyph(KeyCap(close, "L").text, "L3");
             Label(close, "or", 13, Grey, 1f);
-            KeyCap(close, "Esc");
-            Label(close, "Close", 14, Grey, 2f);
-            close.anchoredPosition += new Vector2(-40f, 0f); // clear of the X
-            var lx = CloseX(panel, lean * 0.5f + 8f);
-            Button("closelog", lx.rt, lx.x);
+            Glyph(KeyCap(close, "Esc").text, "B");
+            var word = Label(close, "Close", 14, Grey, 2f);
+            Button("closelog", close, word); // the hint is the mouse's way out (white under the mouse)
             logView = Rect("View", panel, Vector2.zero, Vector2.zero, Vector2.zero);
             Stretch(logView, 0f);
             logView.offsetMin = new Vector2(lean, 22);
@@ -1344,21 +1388,6 @@ namespace RailTracer
 
         void Button(string id, RectTransform rt, params Graphic[] parts) =>
             buttons.Add(new HudButton { id = id, rt = rt, parts = parts.Select(g => (g, g.color)).ToArray() });
-
-        // The close button every panel has in its top-right corner: a red X on black with a white border (the X turns
-        // white under the mouse, red again while pressed). Out of the panel's layout.
-        (RectTransform rt, TMP_Text x) CloseX(RectTransform panel, float inset = 10f)
-        {
-            var x = Rect("Close X", panel, Vector2.one, new Vector2(-inset, -inset), new Vector2(28, 28));
-            x.gameObject.AddComponent<LayoutElement>().ignoreLayout = true;
-            Img(x, Bone, 0f);
-            Img(x, Black, 2f);
-            var t = Text(x, title, 22, TextAlignmentOptions.Center, Vector2.zero, Vector2.zero);
-            Stretch(t.rectTransform, 0f);
-            t.text = "X";
-            t.color = Blood;
-            return (x, t);
-        }
 
         HudButton ButtonUnder(Vector2 screen) => hudCanvas.enabled
             ? buttons.LastOrDefault(b => b.rt.gameObject.activeInHierarchy && RectTransformUtility.RectangleContainsScreenPoint(b.rt, screen, null)) : null;

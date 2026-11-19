@@ -58,12 +58,16 @@ namespace RailTracer
 
         public bool Over(Vector2 screen) => gameObject.activeInHierarchy && RectTransformUtility.RectangleContainsScreenPoint(rt, screen, null);
 
+        public static Vector2 pointer;  // where autoHover looks: the mouse, or the pad's focused line (Game sets it each frame)
+        public bool off;                // greyed out this frame (the pad's focus steps past it)
+        public Vector2 Centre => rt.TransformPoint(rt.rect.center); // on screen (the menus are overlay canvases)
+
         void OnDisable() { u = 0f; s = -1f; wasHot = hot = false; Apply(); }
 
         void Update()
         {
             float dt = Time.unscaledDeltaTime;
-            if (autoHover) hot = Mouse.current != null && Over(Mouse.current.position.ReadValue());
+            if (autoHover) hot = Over(pointer);
             if (hot && !wasHot) { s = 0f; onSlash?.Invoke(); }
             wasHot = hot;
             u = Mathf.Clamp(u + (hot ? dt : -dt), 0f, swipeDelay + Mathf.Max(swipeTime, MoveTime));

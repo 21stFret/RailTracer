@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
@@ -22,8 +23,6 @@ namespace RailTracer
         readonly List<MenuLine> menuItems = new List<MenuLine>();
         readonly List<MenuLine> journeyNames = new List<MenuLine>();
         readonly List<Image> journeyLinks = new List<Image>();
-        RectTransform menuClose;
-        TMP_Text menuCloseX;
         MenuLine menuCorner; // a line on its own in the bottom-right corner (Options: Reset data)
 
         public void BuildMenu()
@@ -80,9 +79,6 @@ namespace RailTracer
             var crt = menuCorner.rt;
             crt.anchorMin = crt.anchorMax = crt.pivot = Vector2.right; // its bottom-right on the corner point
             crt.anchoredPosition = Vector2.zero;
-            var screenRect = Rect("Screen", root, Vector2.zero, Vector2.zero, Vector2.zero);
-            Stretch(screenRect, 0f);
-            (menuClose, menuCloseX) = CloseX(screenRect, 32f); // a submenu's way back
             for (int i = 0; i < Train.TrainCars; i++)
             {
                 if (i > 0)
@@ -101,11 +97,20 @@ namespace RailTracer
         }
 
         // The controls list as rows: key boxes (Kalam) then what each does. glow: over the train (the menu page).
+        // Both lists are built; SetPad shows the keyboard's or the pad's.
         void ControlRows(RectTransform parent, float size, bool glow)
         {
-            foreach (var (keys, what) in ControlsList)
+            ControlRows(parent, size, glow, ControlsList, keyRows);
+            ControlRows(parent, size, glow, PadControlsList, padRows);
+            foreach (var r in padRows) r.SetActive(padShown);
+        }
+
+        void ControlRows(RectTransform parent, float size, bool glow, (string[] keys, string what)[] list, List<GameObject> into)
+        {
+            foreach (var (keys, what) in list)
             {
                 var row = Row("Row", parent, 14f);
+                into.Add(row.gameObject);
                 var caps = Row("Keys", row, 4f);
                 caps.gameObject.AddComponent<LayoutElement>().minWidth = 96;
                 for (int i = 0; i < keys.Length; i++)
@@ -122,6 +127,32 @@ namespace RailTracer
 
         public void ShowMenu(bool on) => menuCanvas.gameObject.SetActive(on);
 
+        // The lines the pad's focus moves over, top to bottom, in what's on top: a menu screen (its corner line
+        // last), else a tutorial card (Skip, Next), else the centre card. key: which list it is.
+        public List<MenuLine> Focusables(out string key)
+        {
+            var lines = new List<MenuLine>();
+            if (menuCanvas.gameObject.activeSelf)
+            {
+                key = "menu " + (menuTitle.gameObject.activeSelf ? "title" : menuHeading.text);
+                lines.AddRange(menuItems.Where(l => l.gameObject.activeSelf));
+                if (menuCorner.gameObject.activeSelf) lines.Add(menuCorner);
+            }
+            else if (TutorialUp)
+            {
+                key = "tut " + tutText.text;
+                lines.Add(tutSkip.GetComponent<MenuLine>());
+                lines.Add(tutNext.GetComponent<MenuLine>());
+            }
+            else if (PauseOpen)
+            {
+                key = "pause " + pauseHead.text;
+                lines.AddRange(pauseItems.Where(l => l.gameObject.activeSelf));
+            }
+            else key = null;
+            return lines;
+        }
+
         // An item's label and note: "Label\tnote" (a tab between them), else no note.
         static (string label, string note) Split(string item)
         {
@@ -129,15 +160,12 @@ namespace RailTracer
             return tab < 0 ? (item, "") : (item.Substring(0, tab), item.Substring(tab + 1));
         }
 
-        // One frame of a menu screen. title: the "Red Line" title (else `heading`, with the close X top right);
-        // enabled: per item (null = all); info: a block of text beside the lines (or null). Returns the enabled line
-        // under the mouse, -2 for the close X, -3 for the corner line, or -1. danger: a line drawn in red, or -1.
+        // One frame of a menu screen. title: the "Red Line" title (else `heading`; each submenu's way back is its
+        // own Back/Cancel line); enabled: per item (null = all); info: a block of text beside the lines (or null).
+        // Returns the enabled line under the mouse, -3 for the corner line, or -1. danger: a line drawn in red, or -1.
         // corner: a red line on its own in the bottom-right corner (null: none). An item's note follows a tab.
         public int RefreshMenu(bool showTitle, string heading, string[] items, bool[] enabled, string info, Vector2 screen, bool held = false, int danger = -1, string corner = null)
         {
-            menuClose.gameObject.SetActive(!showTitle);
-            bool onX = !showTitle && RectTransformUtility.RectangleContainsScreenPoint(menuClose, screen, null);
-            menuCloseX.color = onX && !held ? Bone : Blood;
             menuTitle.gameObject.SetActive(showTitle);
             menuHeading.gameObject.SetActive(!showTitle && heading != null);
             menuHeading.text = heading;
@@ -165,12 +193,13 @@ namespace RailTracer
                 var (label, note) = Split(items[i]);
                 t.Set(label, note);
                 bool on = enabled == null || enabled[i];
+                t.off = !on;
                 bool over = on && t.Over(screen);
                 if (over) hit = i;
                 t.idle = !on ? LockedBox : i == danger ? Bright : Idle;
                 t.hot = over;
             }
-            return onX ? -2 : onCorner ? -3 : hit;
+            return onCorner ? -3 : hit;
         }
 
         // Journey: each car's name under it on screen (`at`, screen pixels), red cleared (2), white next (1), grey
