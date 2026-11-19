@@ -596,16 +596,58 @@ namespace RailTracer
             var shell = look.Find("Train Car");
             var tiles = Enumerable.Range(0, map.Length).SelectMany(y => Enumerable.Range(0, map[y].Length).Where(x => map[y][x] == 't').Select(x => (x, y))).ToList();
             if (!model || !shell || tiles.Count == 0 || look.GetComponentsInChildren<Transform>(true).Any(t => t.name.StartsWith("Table_Booth"))) return;
+            var tables = new List<Transform>();
             foreach (var (x, y) in tiles)
             {
                 var table = Instantiate(model, shell);
+                table.name = "Table_Booth";
                 table.transform.localPosition = new Vector3(y - 2f, 0f, x + 1f);
+                tables.Add(table.transform);
             }
             foreach (Transform prop in look)
             {
                 if (!prop.name.StartsWith("Prop_")) continue;
                 var p = look.InverseTransformPoint(prop.position); // carriage space: tile (x, y) at (x, 0, -y)
                 if (tiles.Any(t => Mathf.Abs(p.x - t.x) < 0.5f && Mathf.Abs(p.z + t.y) < 0.5f)) prop.gameObject.SetActive(false);
+            }
+            DressTables(kit, tables, new System.Random(MapSeed(map) + 1), look); // the same as a built car's
+        }
+
+        static int MapSeed(string[] map) => map.Aggregate(17, (h, row) => row.Aggregate(h, (k, ch) => unchecked(k * 31 + ch)));
+
+        // What's left on a booth table (top 0.62 m square at 0.72): now and then a briefcase lying flat across it;
+        // otherwise an ashtray on one half (about 6 in 10 lit) and a newspaper on the other, each often left out.
+        static void DressTables(TrainKit kit, IEnumerable<Transform> tables, System.Random rng, Transform into)
+        {
+            float Rand(float a, float b) => a + (float)rng.NextDouble() * (b - a);
+            GameObject Put(string name, Vector3 at, Quaternion rot)
+            {
+                var model = kit.Get(name);
+                if (!model) return null;
+                var go = Instantiate(model, into);
+                go.name = name;
+                go.transform.SetPositionAndRotation(at, rot);
+                return go;
+            }
+            const float top = 0.721f; // 1 mm over the top: no z-fighting
+            foreach (var t in tables)
+            {
+                float yaw = t.eulerAngles.y;
+                if (rng.NextDouble() < 0.2)
+                {
+                    // On its back (the case's 0.14 thickness now vertical), lifted by half that, centred, at an easy angle.
+                    var rot = Quaternion.Euler(0f, yaw + Rand(-20f, 20f) + (rng.Next(2) == 0 ? 0f : 180f), 0f) * Quaternion.Euler(-90f, 0f, 0f);
+                    Put("Prop_Briefcase", t.TransformPoint(new Vector3(Rand(-0.03f, 0.03f), top, Rand(-0.03f, 0.03f))) - rot * Vector3.up * 0.165f + Vector3.up * 0.07f, rot);
+                    continue;
+                }
+                float side = rng.Next(2) == 0 ? -1f : 1f; // the ashtray's half; the newspaper takes the other
+                if (rng.NextDouble() < 0.7)
+                {
+                    var tray = Put("Prop_Ashtray_Cigar", t.TransformPoint(new Vector3(side * 0.15f + Rand(-0.03f, 0.03f), top, Rand(-0.12f, 0.12f))), Quaternion.Euler(0f, yaw + Rand(0f, 360f), 0f));
+                    if (tray && rng.NextDouble() >= 0.6) tray.name += Empty;
+                }
+                if (rng.NextDouble() < 0.55) // folded 0.30 x 0.21, turned so its short side runs across the half
+                    Put("Prop_Newspaper", t.TransformPoint(new Vector3(-side * 0.15f + Rand(-0.02f, 0.02f), top, Rand(-0.08f, 0.08f))), Quaternion.Euler(0f, yaw + 90f + Rand(-15f, 15f), 0f));
             }
         }
 
@@ -784,9 +826,10 @@ namespace RailTracer
                         }
                 }
             // Booth tables ('t', Second and First class): symmetric, standing on their tile.
+            var boothTables = new List<Transform>();
             for (int x = 0; x < car.W; x++)
                 for (int y = 0; y < car.H; y++)
-                    if (At(x, y) == 't' && kit.Get("Table_Booth")) Place("Table_Booth", y - 2f, x + 1f, 0f);
+                    if (At(x, y) == 't' && kit.Get("Table_Booth")) boothTables.Add(Place("Table_Booth", y - 2f, x + 1f, 0f).transform);
             // The gramophone ('G', one per car), its back (local +Z) to the nearer side wall: against the wall, or beside
             // the window seat it shares a bank with. The live car's plays the music.
             for (int x = 0; x < car.W; x++)
@@ -819,6 +862,7 @@ namespace RailTracer
                 for (int i = 0; i < tables.Count; i += 2) TableLight(tables[i]);
             }
             if (live && kind != CarKind.Dining && kind != CarKind.Baggage) ScatterProps(kit, seats, windowTables, car, map, parent);
+            if (live) DressTables(kit, boothTables, new System.Random(MapSeed(map) + 1), parent); // its own seed: the scatter above is unchanged
             if (!live) WakeLook(parent, kit, train, car.H, false, kind == CarKind.Baggage); // the menu train: looks only
             return true;
 
@@ -912,7 +956,7 @@ namespace RailTracer
         // name rather than hidden here, so a baked car keeps the choice: WakeLook hides those parts and lights the rest.
         void ScatterProps(TrainKit kit, List<Transform> seats, List<Transform> windowTables, Carriage c, string[] Map, Transform into)
         {
-            var rng = new System.Random(Map.Aggregate(17, (h, row) => row.Aggregate(h, (k, ch) => unchecked(k * 31 + ch))));
+            var rng = new System.Random(MapSeed(Map));
             float Rand(float a, float b) => a + (float)rng.NextDouble() * (b - a);
             int More(int lo, int hiExclusive) => Mathf.RoundToInt(rng.Next(lo, hiExclusive) * propAmount); // a count, scaled
             GameObject Put(string name, Vector3 at, float yaw)
