@@ -1789,8 +1789,8 @@ namespace RailTracer
                     float t = second ? time / length2 : time / length;
                     if ((!chained || second) && !bled && t >= bloodAt)
                     {
-                        Sfx(brutal ? "HeadStomp" : "KnifeSlice", Chest(va) ?? at);
-                        KillBlood(victim, act, playerFacing, Chest(va), entry != null && entry.gore);
+                        Sfx(brutal ? "HeadStomp" : "KnifeSlice", Wound(va) ?? at);
+                        KillBlood(victim, act, playerFacing, Wound(va), entry != null && entry.gore);
                         Soak(va, brutal);
                         if (entry != null && entry.headOff) HeadOff(va);
                         HitSlowMo();
@@ -1804,7 +1804,7 @@ namespace RailTracer
                             if (!struck.Contains(s) && whole >= entry.extraBlood[s])
                             {
                                 struck.Add(s);
-                                var chestNow = Chest(va) ?? va.transform.localPosition + Vector3.up * FigureHeight * 0.6f;
+                                var chestNow = Wound(va) ??va.transform.localPosition + Vector3.up * FigureHeight * 0.6f;
                                 blood.Splash(root, chestNow, playerFacing, brutal || entry.gore);
                                 Strike(chestNow, brutal);
                                 HitSlowMo();
@@ -1875,6 +1875,23 @@ namespace RailTracer
         {
             var bone = a.GetBoneTransform(HumanBodyBones.Chest);
             return bone ? root.InverseTransformPoint(bone.position) : (Vector3?)null;
+        }
+
+        // Where a blow bleeds (root space): the knife's blade when it's at the victim, else the chest (a stomp, a punch).
+        Vector3? Wound(Animator a)
+        {
+            var chest = Chest(a);
+            if (!chest.HasValue || knife == null || !knife.t || !knife.t.gameObject.activeInHierarchy) return chest;
+            return root.InverseTransformPoint(Blade(knife, root.TransformPoint(chest.Value)));
+        }
+
+        // The knife's mid-blade (world) if it's within bladeReach of `chest`, else `chest`.
+        public static float bladeMid = 0.17f, bladeReach = 0.6f; // metres up the knife from the grip; how close counts as in the wound
+        internal static Vector3 Blade(Knife k, Vector3 chest)
+        {
+            if (k == null || !k.t) return chest;
+            var p = k.t.TransformPoint(Vector3.up * bladeMid);
+            return (p - chest).sqrMagnitude <= bladeReach * bladeReach ? p : chest;
         }
 
         static void Override(Animator a, string slot, AnimationClip clip)

@@ -284,8 +284,9 @@ namespace RailTracer
             bloodFlash = Time.time;
             if (!blood) return;
             var bone = victim.GetBoneTransform(HumanBodyBones.Chest);
-            var chest = bone ? bone.position : victim.transform.position + Vector3.up * 1.1f;
-            var floor = new Vector3(chest.x, 0f, chest.z);
+            var body = bone ? bone.position : victim.transform.position + Vector3.up * 1.1f;
+            var chest = Game.Blade(knife, body);
+            var floor = new Vector3(body.x, 0f, body.z); // stains stay on the victim's tile
             var dir = victim.transform.position - attacker.transform.position;
             dir.y = 0f;
             dir = dir.sqrMagnitude > 1e-4f ? dir.normalized : Vector3.forward;
@@ -319,7 +320,7 @@ namespace RailTracer
             bloodFlash = Time.time;
             if (!blood) return;
             var bone = victim.GetBoneTransform(HumanBodyBones.Chest);
-            var chest = bone ? bone.position : victim.transform.position + Vector3.up * 1.1f;
+            var chest = Game.Blade(knife, bone ? bone.position : victim.transform.position + Vector3.up * 1.1f);
             var dir = victim.transform.position - attacker.transform.position;
             dir.y = 0f;
             blood.Splash(bloodRoot, chest, dir.sqrMagnitude > 1e-4f ? dir.normalized : Vector3.forward, t.kind == KillKind.Brutal || t.gore);
