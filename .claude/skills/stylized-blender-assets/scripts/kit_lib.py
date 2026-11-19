@@ -161,6 +161,8 @@ class MB:
     def __init__(self):
         self.v, self.f, self.m = [], [], []
         self.pid, self.npieces = [], 0      # piece id per face (used by the z-fighting check)
+        self.vertical = False               # while True, added pieces get vertical grain (UVs turned on side faces)
+        self.vert = set()                   # piece ids with vertical grain
 
     def add(self, verts, faces, slot=0):
         o = len(self.v)
@@ -168,6 +170,8 @@ class MB:
         self.f += [[i + o for i in face] for face in faces]
         self.m += [slot] * len(faces)
         self.pid += [self.npieces] * len(faces)
+        if self.vertical:
+            self.vert.add(self.npieces)
         self.npieces += 1
 
     def merge(self, other, mat4):
@@ -176,6 +180,7 @@ class MB:
         self.f += [[i + o for i in face] for face in other.f]
         self.m += other.m
         self.pid += [self.npieces + p for p in other.pid]
+        self.vert |= {self.npieces + p for p in other.vert}
         self.npieces += other.npieces
 
     def merge_mirror_x(self, other):
@@ -185,6 +190,7 @@ class MB:
         self.f += [[i + o for i in reversed(face)] for face in other.f]
         self.m += other.m
         self.pid += [self.npieces + p for p in other.pid]
+        self.vert |= {self.npieces + p for p in other.vert}
         self.npieces += other.npieces
 
     def box(self, center, size, slot=0, rot=None):
@@ -263,16 +269,17 @@ class MB:
         if uv:
             uvl = mesh.uv_layers.new(name="UVMap")
             verts = mesh.vertices
-            for poly in mesh.polygons:
+            for poly, pid in zip(mesh.polygons, self.pid):
                 nx, ny, nz = (abs(c) for c in poly.normal)
+                up = pid in self.vert            # vertical grain: u runs up the side faces
                 for li in poly.loop_indices:
                     co = verts[mesh.loops[li].vertex_index].co
                     if nz >= nx and nz >= ny:
                         uvl.data[li].uv = (co.x, co.y)
                     elif nx >= ny:
-                        uvl.data[li].uv = (co.y, co.z)
+                        uvl.data[li].uv = (co.z, co.y) if up else (co.y, co.z)
                     else:
-                        uvl.data[li].uv = (co.x, co.z)
+                        uvl.data[li].uv = (co.z, co.x) if up else (co.x, co.z)
         obj = bpy.data.objects.new(name, mesh)
         bpy.context.collection.objects.link(obj)
         activate(obj)

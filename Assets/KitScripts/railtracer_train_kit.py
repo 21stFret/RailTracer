@@ -220,6 +220,8 @@ class MB:
     def __init__(self):
         self.v, self.f, self.m = [], [], []
         self.pid, self.npieces = [], 0      # piece id per face (used by the z-fighting check)
+        self.vertical = False               # while True, added pieces get vertical grain (UVs turned on side faces)
+        self.vert = set()                   # piece ids with vertical grain
 
     def add(self, verts, faces, slot=0):
         o = len(self.v)
@@ -227,6 +229,8 @@ class MB:
         self.f += [[i + o for i in face] for face in faces]
         self.m += [slot] * len(faces)
         self.pid += [self.npieces] * len(faces)
+        if self.vertical:
+            self.vert.add(self.npieces)
         self.npieces += 1
 
     def merge(self, other, mat4):
@@ -235,6 +239,7 @@ class MB:
         self.f += [[i + o for i in face] for face in other.f]
         self.m += other.m
         self.pid += [self.npieces + p for p in other.pid]
+        self.vert |= {self.npieces + p for p in other.vert}
         self.npieces += other.npieces
 
     def merge_mirror_x(self, other):
@@ -244,6 +249,7 @@ class MB:
         self.f += [[i + o for i in reversed(face)] for face in other.f]
         self.m += other.m
         self.pid += [self.npieces + p for p in other.pid]
+        self.vert |= {self.npieces + p for p in other.vert}
         self.npieces += other.npieces
 
     def box(self, center, size, slot=0, rot=None):
@@ -322,16 +328,17 @@ class MB:
         if uv:
             uvl = mesh.uv_layers.new(name="UVMap")
             verts = mesh.vertices
-            for poly in mesh.polygons:
+            for poly, pid in zip(mesh.polygons, self.pid):
                 nx, ny, nz = (abs(c) for c in poly.normal)
+                up = pid in self.vert            # vertical grain: u runs up the side faces
                 for li in poly.loop_indices:
                     co = verts[mesh.loops[li].vertex_index].co
                     if nz >= nx and nz >= ny:
                         uvl.data[li].uv = (co.x, co.y)
                     elif nx >= ny:
-                        uvl.data[li].uv = (co.y, co.z)
+                        uvl.data[li].uv = (co.z, co.y) if up else (co.y, co.z)
                     else:
-                        uvl.data[li].uv = (co.x, co.z)
+                        uvl.data[li].uv = (co.z, co.x) if up else (co.x, co.z)
         obj = bpy.data.objects.new(name, mesh)
         bpy.context.collection.objects.link(obj)
         activate(obj)
@@ -966,11 +973,6 @@ def make_texture_set(entry, style, n=512, seed=1):
     # The wall trims (19.36): dark varnished walnut, glossier than the furniture's dark wood, finer grain.
     ("Trn_Trim",     (0.13, 0.055, 0.025), 0.0, 0.32, {"tex": "wood", "tile": 1.0, "planks": 1, "rings": 22, "seams": False})])
 
-# Moulding profiles (19.36), bottom to top: (z0, z1, depth from the wall face). Every run of a step stops where a
-# crossing wall's same step starts (at IN_W - its own depth), so corners mitre without overlapping.
-BASE_PROFILE = ((0.0, 0.115, 0.03), (0.115, 0.13, 0.036), (0.13, 0.15, 0.024))          # board, bead, stepped top
-DADO_PROFILE = ((0.72, 0.73, 0.032), (0.73, 0.752, 0.05), (0.752, 0.76, 0.04))          # cove, rail (hides 0.74), cap
-CORNICE_PROFILE = ((2.85, 2.87, 0.06), (2.87, 2.90, 0.085), (2.90, 2.94, 0.10), (2.94, 3.0, 0.12))   # to the ceiling (CEIL)
 
 # ---------------------------------------------------------------- cross-section (shared by every module)
 IN_W   = 2.5          # inner wall face
@@ -983,10 +985,154 @@ DADO_Z = 0.74         # wood / wallpaper split, inside the dado rail (0.72-0.76)
 ROOF_PROFILE = [(-2.8, TOP), (2.8, TOP), (2.8, 3.30), (2.2, 3.60), (1.2, 3.78), (0.0, 3.82),
                 (-1.2, 3.78), (-2.2, 3.60), (-2.8, 3.30)]
 
+# ---------------------------------------------------------------- carved mouldings (19.37)
+# A profile is the moulding's front curve as (d, s) points, s strictly rising (along the moulding's height or width)
+# and d > 0 how far it stands off its backing; the back is flat (d = 0). Shapes are joined from segments, each
+# sampled smooth: an S-curve (ogee), a cove (hollow), a round (quarter round) and a bead (a half-round bump).
+def _seg(pts, d1, s1, shape, n):
+    d0, s0 = pts[-1]
+    for i in range(1, n + 1):
+        t = i / n
+        pts.append((d0 + (d1 - d0) * shape(t), s0 + (s1 - s0) * t))
+    return pts
+
+OGEE = lambda t: t - sin(2 * pi * t) / (2 * pi)
+COVE = lambda t: 1 - cos(pi * t / 2)        # leaves flat, ends steep
+ROUND = lambda t: sin(pi * t / 2)           # leaves steep, ends flat
+LINE = lambda t: t
+
+def _bead(pts, h, s1, n=6):
+    d0, s0 = pts[-1]
+    for i in range(1, n + 1):
+        t = i / n
+        pts.append((d0 + h * sin(pi * t), s0 + (s1 - s0) * t))
+    return pts
+
+def _profile(start, *segs):
+    pts = [start]
+    for sg in segs:
+        if sg[0] == 'bead':
+            _bead(pts, sg[1], sg[2], *sg[3:])
+        else:
+            d1, s1, shape, n = sg
+            _seg(pts, d1, s1, shape, n)
+    return pts
+
+# Colonial baseboard: a quarter-round shoe, the flat board, a cove up to a beaded, rolled cap (top 0.173).
+BASE = _profile((0.032, 0.0), (0.018, 0.016, lambda t: 1 - sqrt(max(0.0, 1 - t * t)), 5), (0.018, 0.118, LINE, 1),
+                (0.016, 0.121, LINE, 1), (0.026, 0.142, COVE, 5), ('bead', 0.006, 0.162), (0.006, 0.172, ROUND, 4),
+                (0.004, 0.173, LINE, 1))
+BASE_TOP = 0.173
+# Chair rail (dado): a cove, a big rounded nose, a fillet and an ogee back to the wall (0.712-0.778, hides 0.74).
+DADO = _profile((0.004, 0.712), (0.020, 0.728, COVE, 5), (0.022, 0.730, LINE, 1), ('bead', 0.022, 0.762, 10),
+                (0.026, 0.765, LINE, 1), (0.004, 0.778, OGEE, 6))
+DADO_BOT = 0.712
+# Crown: a fillet and bead at the wall, then a long ogee out to the ceiling (0.12 deep).
+CROWN = _profile((0.006, 2.85), (0.010, 2.853, LINE, 1), ('bead', 0.005, 2.866, 4), (0.012, 2.870, LINE, 1),
+                 (0.105, 2.975, OGEE, 12), (0.118, 2.981, ROUND, 3), (0.120, 3.0, LINE, 1))
+# Window and door casing (s across, from the opening's edge outward, 0.085 wide): an edge bead, a quirk, a gentle
+# rise, an ogee up to a back band.
+CASING_W = 0.085
+CASING = _profile((0.012, 0.0), (0.016, 0.004, ROUND, 2), ('bead', 0.004, 0.014, 4), (0.012, 0.017, LINE, 1),
+                  (0.016, 0.050, COVE, 5), (0.024, 0.070, OGEE, 5), (0.026, 0.072, LINE, 1), (0.026, 0.082, LINE, 1),
+                  (0.020, 0.085, ROUND, 2))
+# Window stool (sill) with its apron: an ogee apron, then the bullnosed stool, its top at the sill (0.80).
+STOOL = _profile((0.012, 0.725), (0.014, 0.735, ROUND, 2), (0.020, 0.765, OGEE, 5), (0.068, 0.766, LINE, 1),
+                 ('bead', 0.014, 0.796, 8), (0.066, 0.800, LINE, 1))
+# Panel moulding round each wainscot panel (s from the frame's edge into the panel).
+PANEL = _profile((0.013, 0.0), (0.015, 0.003, ROUND, 2), (0.003, 0.020, OGEE, 6), (0.002, 0.022, LINE, 1))
+# Pilaster base (a torus on the plinth) and capital (a cove under the abacus), wrapped round the shaft.
+TORUS = _profile((0.002, 0.200), ('bead', 0.010, 0.235, 8))
+CAPITAL = _profile((0.002, 2.47), (0.014, 2.52, COVE, 6), (0.016, 2.53, LINE, 1))
+PIL_D, PIL_HALF = 0.04, 0.08             # pilaster shaft: depth off the wall, half width
+
+def _fluted():
+    """The pilaster shaft's face across its width: chamfered arrises and three rounded flutes."""
+    pts = [(PIL_D - 0.006, -PIL_HALF)]
+    s = -PIL_HALF + 0.006
+    while s < PIL_HALF - 0.006 + 1e-9:
+        d = PIL_D
+        for c in (-0.04, 0.0, 0.04):
+            if abs(s - c) < 0.014:
+                d -= 0.008 * sqrt(1 - ((s - c) / 0.014) ** 2)
+        pts.append((d, s))
+        s += 0.004
+    pts.append((PIL_D - 0.006, PIL_HALF))
+    return pts
+FLUTED = _fluted()
+
+def moulding(mb, prof, origin, run, out, up, a0, a1, m0=0, m1=0, by='d', slot=None):
+    """Sweep `prof` from a0 to a1 along `run`: point = origin + run*a + out*d + up*s, backed flat at d = 0. Each end
+    is square (0), mitred outward (+1, an outside corner: the end moves out by the point's d, or by its s) or inward
+    (-1, an inside corner). A closed solid made of convex quads (no concave caps to triangulate)."""
+    slot = SLOT_TRIM if slot is None else slot
+    m = len(prof)
+    loop = list(prof) + [(0.0, s) for d, s in reversed(prof)]       # the front curve, then the flat back
+    n = len(loop)
+    verts = []
+    for a, k in ((a0, -m0), (a1, m1)):
+        for d, s in loop:
+            t = a + k * (d if by == 'd' else s)
+            verts.append(tuple(origin[i] + run[i] * t + out[i] * d + up[i] * s for i in range(3)))
+    faces = [[i, (i + 1) % n, n + (i + 1) % n, n + i] for i in range(n)]          # round the sides
+    for e in (0, n):                                                              # each end: strips front to back
+        for i in range(m - 1):
+            faces.append([e + i, e + i + 1, e + n - 2 - i, e + n - 1 - i])
+    mb.add(verts, faces, slot)
+
+def casing(mb, origin_face, out, along, c, w, bottom, top, m_bottom=0):
+    """A cased opening (window or door) on a wall face: two jambs (vertical grain) and a head, mitred at the top
+    corners. origin_face: a point on the face; `along` the wall's direction; c the opening's centre along it."""
+    o = origin_face
+    mb.vertical = True
+    for sg in (-1, 1):
+        edge = tuple(o[i] + along[i] * (c + sg * w / 2) for i in range(3))
+        moulding(mb, CASING, edge, (0, 0, 1), out, tuple(sg * a for a in along), bottom, top, m_bottom, 1, by='s')
+    mb.vertical = False
+    moulding(mb, CASING, (o[0], o[1], top), along, out, (0, 0, 1), c - w / 2, c + w / 2, 1, 1, by='s')
+
+def wrap(mb, prof, p, half, depth):
+    """A moulding round the three faces of a pilaster at p (the front face `depth` off the wall), outside corners mitred."""
+    moulding(mb, prof, (IN_W - depth, 0, 0), (0, 1, 0), (-1, 0, 0), (0, 0, 1), p - half, p + half, 1, 1)
+    for sg in (-1, 1):
+        moulding(mb, prof, (IN_W, p + sg * half, 0), (-1, 0, 0), (0, sg, 0), (0, 0, 1), 0.0, depth, 0, 1)
+
+def pilaster(S, p):
+    """A fluted pilaster: a plinth, a torus base, the fluted shaft (vertical grain), a cove capital and an abacus."""
+    S.rect(IN_W - 0.052, IN_W, p - 0.10, p + 0.10, 0.0, 0.20, SLOT_TRIM)           # plinth
+    wrap(S, TORUS, p, PIL_HALF, PIL_D)
+    S.vertical = True
+    moulding(S, FLUTED, (IN_W, p, 0), (0, 0, 1), (-1, 0, 0), (0, 1, 0), 0.20, 2.53)
+    S.vertical = False
+    wrap(S, CAPITAL, p, PIL_HALF, PIL_D)
+    S.rect(IN_W - 0.062, IN_W, p - 0.102, p + 0.102, 2.53, 2.60, SLOT_TRIM)         # abacus
+
+def _runs(a, b, gaps):
+    runs = [(a, b)]
+    for g0, g1 in gaps:
+        nxt = []
+        for r0, r1 in runs:
+            if g1 <= r0 or g0 >= r1:
+                nxt.append((r0, r1))
+                continue
+            if g0 > r0:
+                nxt.append((r0, g0))
+            if g1 < r1:
+                nxt.append((g1, r1))
+        runs = nxt
+    return runs
+
+def side_run(S, prof, y0, y1, gaps, m_end):
+    """A moulding along the +x side wall, square at module joints and gaps; m_end mitres its y1 end (end caps)."""
+    for a, b in _runs(y0, y1, gaps):
+        if b - a > 0.02:
+            moulding(S, prof, (IN_W, 0, 0), (0, 1, 0), (-1, 0, 0), (0, 0, 1), a, b, 0, m_end if abs(b - y1) < 1e-6 else 0)
+
 def side_wall(S, y0, y1, windows=(), door=None, pilasters=(), trim_end=None):
     """+x side wall from y0 to y1 (inner face x = 2.5). windows: [(centre, width)], door: (centre, width).
-    trim_end: interior trims stop here instead of y1 (end caps: at the end wall's inner face)."""
+    trim_end: interior trims stop here instead of y1 (end caps: at the end wall's inner face, mitred into its trims)."""
     ty1 = y1 if trim_end is None else trim_end
+    corner = -1 if trim_end is not None else 0
     h = TOP - Z_BOT
     ops = [(c, w, SILL - Z_BOT, WIN_TOP - Z_BOT) for c, w in windows]
     if door:
@@ -997,24 +1143,21 @@ def side_wall(S, y0, y1, windows=(), door=None, pilasters=(), trim_end=None):
     wall(S, 'y', 2.55, y0, y1, Z_BOT, DADO_Z - Z_BOT, 0.10, lower, SLOT_WOOD)
     wall(S, 'y', 2.55, y0, y1, DADO_Z, TOP - DADO_Z, 0.10, upper, SLOT_WALLPAPER)
     wall(S, 'y', 2.625, y0, y1, Z_BOT, h, 0.05, ops, SLOT_IRON)       # outer painted steel skin
-    # gaps in the low trims
-    sill_gaps = [(c - w / 2 - 0.10, c + w / 2 + 0.10) for c, w in windows]
-    door_gap = [(door[0] - door[1] / 2 - 0.08, door[0] + door[1] / 2 + 0.08)] if door else []
-    for z0, z1, d in BASE_PROFILE:                                                                   # baseboard
-        band(S, 'y', IN_W, -1, y0, ty1, z0, z1, d, SLOT_TRIM, gaps=door_gap)
-    for z0, z1, d in DADO_PROFILE:                                                                   # dado rail
-        band(S, 'y', IN_W, -1, y0, ty1, z0, z1, d, SLOT_TRIM, gaps=sill_gaps + door_gap)
-    wainscot(S, y0, ty1, door_gap + [(p - 0.095, p + 0.095) for p in pilasters])
+    # where the low trims stop: windows (the stool), the door (its casing), pilasters (their plinth)
+    stool_gaps = [(c - w / 2 - CASING_W - 0.03, c + w / 2 + CASING_W + 0.03) for c, w in windows]
+    door_gap = [(door[0] - door[1] / 2 - CASING_W, door[0] + door[1] / 2 + CASING_W)] if door else []
+    plinths = [(p - 0.10, p + 0.10) for p in pilasters]
+    shafts = [(p - PIL_HALF, p + PIL_HALF) for p in pilasters]
+    side_run(S, BASE, y0, ty1, door_gap + plinths, corner)                       # baseboard
+    side_run(S, DADO, y0, ty1, stool_gaps + door_gap + shafts, corner)           # chair rail
+    wainscot(S, y0, ty1, door_gap + plinths)
     for c, w in windows:
-        frame_opening(S, 'y', IN_W, -1, c, w, SILL, WIN_TOP, SLOT_TRIM,
-                      jamb=(0.08, 0.06), head=(0.10, 0.07), sill=(0.08, 0.08), sill_drop=0.08)
-        S.rect(IN_W - 0.075, IN_W, c - w / 2 - 0.10, c + w / 2 + 0.10, WIN_TOP + 0.10, WIN_TOP + 0.125, SLOT_TRIM)  # crown
+        moulding(S, STOOL, (IN_W, 0, 0), (0, 1, 0), (-1, 0, 0), (0, 0, 1), *stool_gaps[windows.index((c, w))])
+        casing(S, (IN_W, 0, 0), (-1, 0, 0), (0, 1, 0), c, w, SILL, WIN_TOP)
         S.rect(2.505, 2.52, c - w / 2, c + w / 2, SILL, SILL + 0.04, SLOT_BRASS)   # brass strip in the reveal
     if door:
         c, w = door
-        frame_opening(S, 'y', IN_W, -1, c, w, 0.0, DOOR_H, SLOT_TRIM,
-                      jamb=(0.08, 0.06), head=(0.12, 0.07), sill=None)
-        S.rect(IN_W - 0.075, IN_W, c - w / 2 - 0.10, c + w / 2 + 0.10, DOOR_H + 0.12, DOOR_H + 0.145, SLOT_TRIM)  # crown
+        casing(S, (IN_W, 0, 0), (-1, 0, 0), (0, 1, 0), c, w, 0.0, DOOR_H)
         S.rect(2.5, 2.65, c - w / 2, c + w / 2, 0.0, 0.012, SLOT_BRASS)            # tread plate
         S.rect(2.65, 2.95, c - w / 2, c + w / 2, -0.55, -0.50, SLOT_IRON)          # exterior step
         for s in (-1, 1):                                                          # step hangers
@@ -1024,56 +1167,38 @@ def side_wall(S, y0, y1, windows=(), door=None, pilasters=(), trim_end=None):
             S.cylinder(0.022, 0.15, 2.05, SLOT_BRASS, segs=10, center=(2.74, yr, 0))
             for za in (0.15, 2.02):                                                # rail brackets
                 S.rect(2.65, 2.74, yr - 0.015, yr + 0.015, za, za + 0.03, SLOT_BRASS)
-    for p in pilasters:                                          # a base block, the shaft with a raised panel, a capital
-        S.rect(IN_W - 0.045, IN_W, p - 0.095, p + 0.095, 0.15, 0.32, SLOT_TRIM)
-        S.rect(IN_W - 0.04, IN_W, p - 0.08, p + 0.08, 0.32, 2.45, SLOT_TRIM)
-        S.rect(IN_W - 0.045, IN_W - 0.04, p - 0.05, p + 0.05, 0.40, 2.38, SLOT_TRIM)
-        S.rect(IN_W - 0.055, IN_W, p - 0.10, p + 0.10, 2.45, 2.60, SLOT_TRIM)
+    for p in pilasters:
+        pilaster(S, p)
     S.rect(2.45, 2.50, y0, ty1, 2.60, 2.65, SLOT_BRASS)          # picture rail
     S.rect(2.49, 2.50, y0, ty1, 2.65, 2.85, SLOT_CREAM)          # cream frieze
-    for z0, z1, d in CORNICE_PROFILE:                            # cornice, stepped out to the ceiling
-        S.rect(IN_W - d, IN_W, y0, ty1, z0, z1, SLOT_TRIM)
-    k = 0                                                        # dentils under it, every 10 cm on the 1 m grid
-    while y0 + 0.05 + 0.1 * k + 0.02 <= ty1:
-        yc = y0 + 0.05 + 0.1 * k
-        S.rect(IN_W - 0.072, IN_W - 0.06, yc - 0.02, yc + 0.02, 2.853, 2.868, SLOT_TRIM)
-        k += 1
+    side_run(S, CROWN, y0, ty1, (), corner)                      # crown moulding to the ceiling
     band(S, 'y', 2.65, 1, y0, y1, 0.50, 0.55, 0.015, SLOT_BRASS, gaps=door_gap)   # exterior pinstripes
     band(S, 'y', 2.65, 1, y0, y1, 2.45, 2.50, 0.015, SLOT_BRASS)
 
 def wainscot(S, y0, y1, gaps=()):
-    """Panelled wainscot on the wood below the dado (z 0.15-0.72): a frame of stiles and rails 15 mm proud, a stile
-    on every half-metre line (half of one at a module's end, its neighbour has the other half), and a dark bead
-    moulding round each sunk panel, 19 mm proud. Breaks the wood's grain into panels, so its repeat doesn't read.
-    gaps: (a, b) runs with no wainscot (doors; pilasters, which stand in for a stile)."""
+    """Panelled wainscot on the wood between the baseboard and the chair rail: stiles (vertical grain) on every
+    half-metre line (half of one at a module's end, its neighbour has the other half) and rails, 15 mm proud, and a
+    carved panel moulding mitred round each sunk panel. gaps: (a, b) runs with no wainscot (doors, pilasters)."""
     import math
-    FRONT, BEAD, Z0, Z1, RB, RT, SW, BW = 2.485, 2.481, 0.15, 0.72, 0.23, 0.63, 0.04, 0.01
-    runs = [(y0, y1)]
-    for g0, g1 in gaps:
-        nxt = []
-        for a, b in runs:
-            if g1 <= a or g0 >= b:
-                nxt.append((a, b))
-                continue
-            if g0 > a:
-                nxt.append((a, g0))
-            if g1 < b:
-                nxt.append((g1, b))
-        runs = nxt
-    for a, b in runs:
+    FRONT, Z0, Z1, RB, RT, SW = IN_W - 0.015, BASE_TOP - 0.003, DADO_BOT, 0.245, 0.64, 0.04
+    for a, b in _runs(y0, y1, gaps):
         if b - a < 0.12:
             continue
         lines = [k * 0.5 for k in range(math.ceil(a / 0.5 + 1e-6), math.floor(b / 0.5 - 1e-6) + 1)]
         stiles = [(a, a + SW)] + [(g - SW, g + SW) for g in lines if a + 2 * SW < g < b - 2 * SW] + [(b - SW, b)]
+        S.vertical = True
         for s0, s1 in stiles:
             S.rect(FRONT, IN_W, s0, s1, Z0, Z1, SLOT_WOOD)
+        S.vertical = False
         for (_, p0), (p1, _) in zip(stiles, stiles[1:]):            # each panel between two stiles
             S.rect(FRONT, IN_W, p0, p1, Z0, RB, SLOT_WOOD)          # bottom rail
             S.rect(FRONT, IN_W, p0, p1, RT, Z1, SLOT_WOOD)          # top rail
-            S.rect(BEAD, IN_W, p0, p0 + BW, RB, RT, SLOT_TRIM)      # bead: the sides full height, top and bottom between
-            S.rect(BEAD, IN_W, p1 - BW, p1, RB, RT, SLOT_TRIM)
-            S.rect(BEAD, IN_W, p0 + BW, p1 - BW, RB, RB + BW, SLOT_TRIM)
-            S.rect(BEAD, IN_W, p0 + BW, p1 - BW, RT - BW, RT, SLOT_TRIM)
+            moulding(S, PANEL, (IN_W, 0, RB), (0, 1, 0), (-1, 0, 0), (0, 0, 1), p0, p1, -1, -1, by='s')
+            moulding(S, PANEL, (IN_W, 0, RT), (0, 1, 0), (-1, 0, 0), (0, 0, -1), p0, p1, -1, -1, by='s')
+            S.vertical = True
+            moulding(S, PANEL, (IN_W, p0, 0), (0, 0, 1), (-1, 0, 0), (0, 1, 0), RB, RT, -1, -1, by='s')
+            moulding(S, PANEL, (IN_W, p1, 0), (0, 0, 1), (-1, 0, 0), (0, -1, 0), RB, RT, -1, -1, by='s')
+            S.vertical = False
 
 def sash(S, w):
     """Sliding sash for a window of width w in the +x side wall (wall-module coords). It sits in the wall's
@@ -1156,22 +1281,22 @@ def end_cap(S, door=True):
     wall(S, 'x', 0.15, -IN_W, IN_W, Z_BOT, h, 0.10, ops, SLOT_WOOD)
     wall(S, 'x', 0.225, -IN_W, IN_W, Z_BOT, h, 0.05, ops, SLOT_IRON)
     face = YI
+    FACE, OUT, ALONG = (0.0, YI, 0.0), (0, -1, 0), (1, 0, 0)
+
     def er(xa, xb, d, za, zb, slot):
         S.rect(xa, xb, face - d, face, za, zb, slot)
+
+    def run(prof, a, b, ma, mb_):                                          # a moulding along the end wall
+        moulding(S, prof, FACE, ALONG, OUT, (0, 0, 1), a, b, ma, mb_)
     if door:
-        for z0, z1, d in BASE_PROFILE:                                     # baseboard, each step to its own corner
-            for xa, xb in ((-(IN_W - d), -0.72), (0.72, IN_W - d)):
-                er(xa, xb, d, z0, z1, SLOT_TRIM)
-        for sg in (1, -1):
-            er(*sx(sg, 0.60, 0.72), 0.06, 0.0, DOOR_H, SLOT_TRIM)          # door jambs
-        er(-0.72, 0.72, 0.06, DOOR_H, DOOR_H + 0.12, SLOT_TRIM)            # door head
-        er(-0.82, 0.82, 0.075, DOOR_H + 0.12, DOOR_H + 0.145, SLOT_TRIM)   # its crown
+        run(BASE, -IN_W, -0.6 - CASING_W, -1, 0)                           # baseboard, mitred into the side walls
+        run(BASE, 0.6 + CASING_W, IN_W, 0, -1)
+        casing(S, FACE, OUT, ALONG, 0.0, 1.2, 0.0, DOOR_H)                 # door casing
         er(-0.25, 0.25, 0.02, 2.46, 2.56, SLOT_BRASS)                      # car number plate
         S.rect(-0.6, 0.6, YI, YO, 0.0, 0.012, SLOT_BRASS)                  # tread plate
         panels = ((0.95, 2.25),)
     else:
-        for z0, z1, d in BASE_PROFILE:
-            er(-(IN_W - d), IN_W - d, d, z0, z1, SLOT_TRIM)
+        run(BASE, -IN_W, IN_W, -1, -1)
         er(-0.6, 0.6, 0.02, 0.30, 0.90, SLOT_TRIM)                        # centre panels
         er(-0.6, 0.6, 0.02, 1.05, 2.40, SLOT_TRIM)
         er(-0.25, 0.25, 0.025, 2.46, 2.56, SLOT_BRASS)
@@ -1182,8 +1307,7 @@ def end_cap(S, door=True):
             er(*sx(sg, a0, a1), 0.02, 1.05, 2.40, SLOT_TRIM)
     er(-2.45, 2.45, 0.05, 2.60, 2.65, SLOT_BRASS)                          # picture rail
     er(-2.49, 2.49, 0.01, 2.65, 2.85, SLOT_CREAM)
-    for z0, z1, d in CORNICE_PROFILE:                                      # cornice
-        er(-(IN_W - d), IN_W - d, d, z0, z1, SLOT_TRIM)
+    run(CROWN, -IN_W, IN_W, -1, -1)                                        # crown
     S.rect(-IN_W, IN_W, Y0, YI, CEIL, TOP, SLOT_CREAM)                     # ceiling
     S.extrude(ROOF_PROFILE, 'y', Y0, YO, SLOT_IRON)                        # roof
 
@@ -1193,23 +1317,19 @@ ENDS = [
 ]
 
 def partition(S):
-    """Cross-wall at y = 0 (0.1 thick), 1.0 x 2.3 m doorway, trimmed both faces."""
+    """Cross-wall at y = 0 (0.1 thick), 1.0 x 2.3 m doorway, cased and trimmed both faces; each trim butts into the
+    side wall's matching moulding."""
     wall(S, 'x', 0.0, -IN_W, IN_W, 0.0, CEIL, 0.10, [(0.0, 1.0, 0.0, DOOR_H)], SLOT_WOOD)
     for f in (1, -1):
-        face = 0.05 * f
-        def pr(xa, xb, d, za, zb, slot):
-            y0_, y1_ = sorted((face, face + f * d))
-            S.rect(xa, xb, y0_, y1_, za, zb, slot)
-        for sg in (1, -1):                       # each trim step stops at the matching side-wall step's face
-            for z0, z1, d in BASE_PROFILE + DADO_PROFILE:
-                pr(*sx(sg, 0.62, IN_W - d), d, z0, z1, SLOT_TRIM)
-            pr(*sx(sg, 0.62, 2.45), 0.05, 2.60, 2.65, SLOT_BRASS)
-        for sg in (1, -1):
-            pr(*sx(sg, 0.50, 0.62), 0.06, 0.0, DOOR_H, SLOT_TRIM)
-        pr(-0.62, 0.62, 0.07, DOOR_H, DOOR_H + 0.12, SLOT_TRIM)
-        pr(-0.72, 0.72, 0.075, DOOR_H + 0.12, DOOR_H + 0.145, SLOT_TRIM)  # crown over the doorway
-        for z0, z1, d in CORNICE_PROFILE:
-            pr(-(IN_W - d), IN_W - d, min(d, 0.10), z0, z1, SLOT_TRIM)
+        face, out = (0.0, 0.05 * f, 0.0), (0, f, 0)
+        for sg in (1, -1):                                   # door casing edge out to the side wall
+            along = (sg, 0, 0)
+            for prof in (BASE, DADO):
+                moulding(S, prof, face, along, out, (0, 0, 1), 0.5 + CASING_W, IN_W, 0, -1)
+            y0_, y1_ = sorted((0.05 * f, 0.05 * f + f * 0.05))
+            S.rect(*sorted((sg * 0.5 + sg * CASING_W, sg * 2.45)), y0_, y1_, 2.60, 2.65, SLOT_BRASS)  # picture rail
+        casing(S, face, out, (1, 0, 0), 0.0, 1.0, 0.0, DOOR_H)
+        moulding(S, CROWN, face, (1, 0, 0), out, (0, 0, 1), -IN_W, IN_W, -1, -1)
     S.rect(-0.5, 0.5, -0.05, 0.05, 0.0, 0.012, SLOT_BRASS)                 # threshold
 
 PARTS = [module("Partition_Door", partition)]

@@ -2,8 +2,9 @@ using UnityEngine;
 
 namespace RailTracer
 {
-    // The music: DarkJazz (Resources/Audio/DarkJazz1) on ONE looping AudioSource for the whole game, so it never
-    // restarts. It fades in over the menus as a flat (2D) track at full level. Diving into a car with a gramophone, the
+    // The music: every track in Resources/Audio (DarkJazz1, JazzNoir1-5...; not the Sfx folder) on ONE AudioSource for
+    // the whole game, played in random order, each a different one from the last (19.37), so it never restarts on a
+    // scene change. It fades in over the menus as a flat (2D) track at full level. Diving into a car with a gramophone, the
     // same source slides over to 3D at the record (spatial blend 0 to 1 over the dive), so the music carries on from
     // the gramophone at the same moment of the track, and changes character on the way: much quieter (musicInCar of
     // the menu level, even right beside it), its top end taken off (a low-pass filter, the gramophone's tinny sound),
@@ -27,6 +28,16 @@ namespace RailTracer
         public float recordRpm = 78f;      // a shellac 78
 
         AudioSource music;
+        AudioClip[] tracks = new AudioClip[0];
+
+        // The track has ended: another at random, never the same one twice in a row.
+        void NextTrack()
+        {
+            var next = music.clip;
+            while (tracks.Length > 1 && next == music.clip) next = tracks[Random.Range(0, tracks.Length)];
+            music.clip = next;
+            music.Play();
+        }
         AudioLowPassFilter muffle;
         Transform ears;
         bool enabledMusic = true; // false once the track was found missing (warned once)
@@ -48,9 +59,11 @@ namespace RailTracer
             if (!music)
             {
                 if (!enabledMusic) return;
-                var clip = Resources.Load<AudioClip>("Audio/DarkJazz1");
                 if (!cam) return;
-                if (!clip) { Debug.LogWarning("Rail Tracer: no Resources/Audio/DarkJazz1; no music."); enabledMusic = false; return; }
+                var sfx = new System.Collections.Generic.HashSet<string>(System.Array.ConvertAll(Resources.LoadAll<AudioClip>("Audio/Sfx"), a => a.name));
+                tracks = System.Array.FindAll(Resources.LoadAll<AudioClip>("Audio"), a => !sfx.Contains(a.name));
+                if (tracks.Length == 0) { Debug.LogWarning("Rail Tracer: no music tracks in Resources/Audio; no music."); enabledMusic = false; return; }
+                var clip = tracks[Random.Range(0, tracks.Length)];
                 ears = new GameObject("Ears").AddComponent<AudioListener>().transform;
                 foreach (var l in FindObjectsByType<AudioListener>(FindObjectsSortMode.None)) if (l.transform != ears) l.enabled = false; // one listener
                 var cfg = AudioSettings.GetConfiguration();
@@ -59,7 +72,7 @@ namespace RailTracer
                           (AudioSettings.outputSampleRate == 0 ? " - NO AUDIO DEVICE" : ""));
                 music = new GameObject("Music").AddComponent<AudioSource>();
                 music.clip = clip;
-                music.loop = true;
+                music.loop = tracks.Length == 1; // one track: loop it; more: NextTrack when it ends
                 music.playOnAwake = false;
                 music.volume = 0f;
                 music.spatialBlend = 0f;
@@ -73,6 +86,7 @@ namespace RailTracer
                 music.Play();
             }
 
+            if (!music.isPlaying && !music.loop && Application.isFocused) NextTrack();
             float dt = Time.unscaledDeltaTime; // pauses and slow motion don't touch the music
             bool playing = phase != Phase.Menu;
             bool here = gramophone;
