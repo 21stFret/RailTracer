@@ -994,6 +994,7 @@ def side_wall(S, y0, y1, windows=(), door=None, pilasters=(), trim_end=None):
     door_gap = [(door[0] - door[1] / 2 - 0.08, door[0] + door[1] / 2 + 0.08)] if door else []
     band(S, 'y', IN_W, -1, y0, ty1, 0.0, 0.15, 0.03, SLOT_WOODDARK, gaps=door_gap)                 # baseboard
     band(S, 'y', IN_W, -1, y0, ty1, 0.72, 0.76, 0.045, SLOT_WOODDARK, gaps=sill_gaps + door_gap)  # dado
+    wainscot(S, y0, ty1, door_gap + [(p - 0.08, p + 0.08) for p in pilasters])
     for c, w in windows:
         frame_opening(S, 'y', IN_W, -1, c, w, SILL, WIN_TOP, SLOT_WOODDARK,
                       jamb=(0.08, 0.06), head=(0.10, 0.07), sill=(0.08, 0.08), sill_drop=0.08)
@@ -1018,6 +1019,40 @@ def side_wall(S, y0, y1, windows=(), door=None, pilasters=(), trim_end=None):
     S.rect(2.38, 2.50, y0, ty1, 2.85, CEIL, SLOT_WOODDARK)       # cornice
     band(S, 'y', 2.65, 1, y0, y1, 0.50, 0.55, 0.015, SLOT_BRASS, gaps=door_gap)   # exterior pinstripes
     band(S, 'y', 2.65, 1, y0, y1, 2.45, 2.50, 0.015, SLOT_BRASS)
+
+def wainscot(S, y0, y1, gaps=()):
+    """Panelled wainscot on the wood below the dado (z 0.15-0.72): a frame of stiles and rails 15 mm proud, a stile
+    on every half-metre line (half of one at a module's end, its neighbour has the other half), and a dark bead
+    moulding round each sunk panel, 19 mm proud. Breaks the wood's grain into panels, so its repeat doesn't read.
+    gaps: (a, b) runs with no wainscot (doors; pilasters, which stand in for a stile)."""
+    import math
+    FRONT, BEAD, Z0, Z1, RB, RT, SW, BW = 2.485, 2.481, 0.15, 0.72, 0.23, 0.63, 0.04, 0.01
+    runs = [(y0, y1)]
+    for g0, g1 in gaps:
+        nxt = []
+        for a, b in runs:
+            if g1 <= a or g0 >= b:
+                nxt.append((a, b))
+                continue
+            if g0 > a:
+                nxt.append((a, g0))
+            if g1 < b:
+                nxt.append((g1, b))
+        runs = nxt
+    for a, b in runs:
+        if b - a < 0.12:
+            continue
+        lines = [k * 0.5 for k in range(math.ceil(a / 0.5 + 1e-6), math.floor(b / 0.5 - 1e-6) + 1)]
+        stiles = [(a, a + SW)] + [(g - SW, g + SW) for g in lines if a + 2 * SW < g < b - 2 * SW] + [(b - SW, b)]
+        for s0, s1 in stiles:
+            S.rect(FRONT, IN_W, s0, s1, Z0, Z1, SLOT_WOOD)
+        for (_, p0), (p1, _) in zip(stiles, stiles[1:]):            # each panel between two stiles
+            S.rect(FRONT, IN_W, p0, p1, Z0, RB, SLOT_WOOD)          # bottom rail
+            S.rect(FRONT, IN_W, p0, p1, RT, Z1, SLOT_WOOD)          # top rail
+            S.rect(BEAD, IN_W, p0, p0 + BW, RB, RT, SLOT_WOODDARK)  # bead: the sides full height, top and bottom between
+            S.rect(BEAD, IN_W, p1 - BW, p1, RB, RT, SLOT_WOODDARK)
+            S.rect(BEAD, IN_W, p0 + BW, p1 - BW, RB, RB + BW, SLOT_WOODDARK)
+            S.rect(BEAD, IN_W, p0 + BW, p1 - BW, RT - BW, RT, SLOT_WOODDARK)
 
 def sash(S, w):
     """Sliding sash for a window of width w in the +x side wall (wall-module coords). It sits in the wall's

@@ -407,6 +407,17 @@ namespace RailTracer
         Canvas hudCanvas;
         public void SetVisible(bool on) => hudCanvas.enabled = on; // the kill cam hides it
 
+        RectTransform play, controlsHint;
+        GameObject logHint;
+        // The walk-through car: only ESC MENU and H CONTROLS, dropped to where SPACE HOLD: END TURN sits.
+        public void SetQuiet(bool on)
+        {
+            if (play.gameObject.activeSelf != on) return;
+            play.gameObject.SetActive(!on);
+            logHint.SetActive(!on);
+            controlsHint.anchoredPosition = new Vector2(controlsHint.anchoredPosition.x, on ? 8f : 38f);
+        }
+
         public bool CardUp => card.gameObject.activeSelf && cardFading < 0f;
         public bool CardVisible => card.gameObject.activeSelf;
         public bool CardDismissable => cardDismissable;
@@ -682,6 +693,14 @@ namespace RailTracer
 
             BuildTickets(root);
             BuildTurnCount(root);
+            // Everything built so far but the key hints and the controls panel: hidden together in the walk-through car.
+            play = Rect("Play HUD", root, Vector2.zero, Vector2.zero, Vector2.zero);
+            Stretch(play, 0f);
+            play.SetAsFirstSibling();
+            foreach (var part in root.Cast<Transform>().ToList())
+                if (part != play && part != hint && part.gameObject != controls) part.SetParent(play, false);
+            controlsHint = hint;
+            logHint = hint.Find("Log").gameObject;
 
             // ---- Intro / end card: the screen dimmed, a slanted card with a blood bar down its left edge ----
             var cardRoot = new GameObject("Card", typeof(RectTransform), typeof(CanvasGroup)).GetComponent<RectTransform>();

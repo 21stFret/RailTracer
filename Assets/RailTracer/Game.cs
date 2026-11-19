@@ -161,6 +161,8 @@ namespace RailTracer
             return pick ? pick : characterModel;
         }
         RuntimeAnimatorController enemyController, playerController;
+        IdleSet idleSet; // the standing idles enemies pick from at random (Editor/AnimationSetup fills it)
+        readonly Dictionary<Animator, float> lookYaw = new Dictionary<Animator, float>(); // IdleLook's turn this frame, put on the spine in LateUpdate
         bool HasModels => characterModel && enemyController && playerController;
         float FigureHeight => playerAnim ? 1.8f * characterScale : 1f; // Mixamo characters are ~1.8 m at scale 1
         Animator playerAnim;
@@ -209,7 +211,10 @@ namespace RailTracer
         // A heavy's melee: the hit (blood, the red screen, your health going down) waits until it has walked up and its
         // "Swing" clip is this far in (seconds), so it lands with the blow.
         public float swingHitAt = 0.35f;
+        // How much of the Swing clip's forward travel shows (0 = in place: the slash clip lunged right through you).
+        [Range(0f, 1f)] public float swingTravel = 0f;
         bool holdHit;
+        (Animator a, Vector3 hips) swingHold; // the swinging heavy and its hips (its own space) as the swing began
         // Walking out of a cleared car: the walk clip (not the sprint), a little brisker than its own pace.
         public float walkOutPace = 1.25f;
         bool exiting;
@@ -275,6 +280,7 @@ namespace RailTracer
             suitModel = Resources.Load<GameObject>("Anim/Guard_CH02");
             enemyController = Resources.Load<RuntimeAnimatorController>("Anim/Enemy");
             takedowns = Resources.Load<TakedownLibrary>("Takedowns");
+            idleSet = Resources.Load<IdleSet>("Anim/IdleSet");
             baseAmbient = RenderSettings.ambientLight;
             baseAmbientIntensity = RenderSettings.ambientIntensity;
             playerController = Resources.Load<RuntimeAnimatorController>("Anim/Player");
@@ -353,6 +359,7 @@ namespace RailTracer
             armed.Clear();
             guns.Clear(); // they went with the old car
             idleLook.Clear();
+            lookYaw.Clear();
             begging.Clear();
             bodyCell.Clear();
             bodyOffset.Clear();
@@ -415,7 +422,8 @@ namespace RailTracer
                 marks[e] = (route, Line(Color.white, 0.05f));
             }
             gramophone = null; // the old car's went with it
-            bool kitBuilt = onKit = useTrainKit && BuildKitCarriage(Resources.Load<TrainKit>("Kit/TrainKit"), c, Map, car.kind, root, true);
+            bool kitBuilt = onKit = useTrainKit && BuildKitCarriage(Resources.Load<TrainKit>("Kit/TrainKit"), c, Map, car.kind, root, true,
+                endless ? 0 : Train.TrainOf(Mathf.Min(carIndex, Train.Cars - 1)), car.name);
             if (!kitBuilt) BuildWhitebox();
             if (sun)
             {
@@ -476,12 +484,24 @@ namespace RailTracer
             foreach (var e in c.enemies)
             {
                 views[e].body.enabled = views[e].nose.enabled = false;
-                var a = anims[e] = Character(GuardModel(e), new AnimatorOverrideController(enemyController));
+                var o = new AnimatorOverrideController(enemyController);
+                PickIdle(o, idleSet ? idleSet.relaxed : null);
+                PickIdle(o, idleSet ? idleSet.armed : null);
+                var a = anims[e] = Character(GuardModel(e), o);
+                if (a.parameters.Any(p => p.name == "IdleOffset")) a.SetFloat("IdleOffset", Random.value); // out of step, every time they idle
                 a.Play(0, 0, Random.value); // out of sync so they don't bob together
                 AddEyes(a, e.id % 2 == 0 ? enemyEyeBlue : enemyEyeGreen, false);
                 if (a.parameters.Any(p => p.name == "Armed")) armed.Add(a);
                 if (!e.tough) { var gun = HoldGun(a); if (gun != null) guns[e] = gun; } // heavies don't shoot
             }
+        }
+
+        // One idle of the set at random in place of the controller's own (whichever of the set the controller uses).
+        void PickIdle(AnimatorOverrideController o, AnimationClip[] set)
+        {
+            if (set == null || set.Length < 2) return;
+            var own = enemyController.animationClips.FirstOrDefault(c => System.Array.IndexOf(set, c) >= 0);
+            if (own) o[own] = set[Random.Range(0, set.Length)];
         }
 
         Animator Character(GameObject model, RuntimeAnimatorController controller)
@@ -540,7 +560,7 @@ namespace RailTracer
         // way TrainCarBuilder does: modules run along the shell's local +Z (walls from z = 0.5, end caps outside),
         // side A on local -X. The shell is turned so local +Z runs along the game's +X: cell (x, y) is at local
         // (y - 2, 0, x + 1). Checked z-fighting-free with the kit's joint_check (partition on a joint, racks clear).
-        bool BuildKitCarriage(TrainKit kit, Carriage car, string[] map, CarKind kind, Transform parent, bool live)
+        bool BuildKitCarriage(TrainKit kit, Carriage car, string[] map, CarKind kind, Transform parent, bool live, int train = 0, string carName = null)
         {
             if (!kit || car.H != 5) return false; // the kit's interior is exactly 5 m (rows) wide
             var missing = new[] { "EndCap_Door", "Floor_1m", "Wall_1m_Solid", "Wall_1m_Pilaster", "Wall_1m_WindowSmall",
@@ -573,8 +593,16 @@ namespace RailTracer
                 int run = 0;
                 void Flush()
                 {
-                    for (; run >= 2; run -= 2, s += 2f) { Panel(Place("Wall_2m_Window", 0f, s + 1f, rot)); Sash("Window_Sash_Large", s + 1f); }
-                    if (run == 1) { Panel(Place("Wall_1m_WindowSmall", 0f, s + 0.5f, rot)); Sash("Window_Sash_Small", s + 0.5f); s += 1f; run = 0; }
+                    for (; run >= 2; run -= 2, s += 2f) { Wood(Panel(Place("Wall_2m_Window", 0f, s + 1f, rot))); Sash("Window_Sash_Large", s + 1f); Dress("Curtains_Large", s + 1f); }
+                    if (run == 1) { Wood(Panel(Place("Wall_1m_WindowSmall", 0f, s + 0.5f, rot))); Sash("Window_Sash_Small", s + 0.5f); Dress("Blind_Small", s + 0.5f); s += 1f; run = 0; }
+                }
+                // Window dressing (19.33): velvet curtains on most big windows (about 1 in 5 left bare), a green blind on
+                // every small one. Static, open.
+                void Dress(string module, float z)
+                {
+                    if (!kit.Get(module)) return;
+                    if (module == "Curtains_Large" && (int)(z * 7 + row * 13) % 5 == 0) return;
+                    Panel(Place(module, 0f, z, rot));
                 }
                 void Sash(string module, float z) // the glass in that window, on the wall's own transform
                 {
@@ -583,10 +611,11 @@ namespace RailTracer
                     if (live) sashes.Add((sash.AddComponent<SlidingWindow>(), row, z - 1f, module.EndsWith("Large") ? 1f : 0.5f)); // shell z = game x + 1
                     Panel(sash);
                 }
-                void Panel(GameObject wall)
+                GameObject Panel(GameObject wall)
                 {
-                    if (!shadowOnly) return; // the camera side: still casts shadows, but you can see in
+                    if (!shadowOnly) return wall; // the camera side: still casts shadows, but you can see in
                     foreach (var r in wall.GetComponentsInChildren<Renderer>()) r.shadowCastingMode = ShadowCastingMode.ShadowsOnly;
+                    return wall;
                 }
                 for (int x = 0; x < car.W; x++)
                 {
@@ -594,7 +623,7 @@ namespace RailTracer
                     string solo = At(x, row) == 'S' ? "Wall_1m_Pilaster" : Part(x) || car.BlankWall(at) || car.IsCage(at) ? "Wall_1m_Solid" : null;
                     if (solo == null) { run++; continue; }
                     Flush();
-                    Panel(Place(solo, 0f, s + 0.5f, rot));
+                    Wood(Panel(Place(solo, 0f, s + 0.5f, rot)));
                     s += 1f;
                 }
                 Flush();
@@ -638,6 +667,22 @@ namespace RailTracer
                 if (At(x, car.H - 2) == 'S' && At(x, car.H - 1) == 'S') { seats.Add(Place("Seat_Double", 1.45f, z, rot).transform); Lamp(x, false); }
                 else if (At(x, car.H - 1) == 'S' && kit.Get("Seat_Single")) { seats.Add(Place("Seat_Single", 1.95f, z, rot).transform); Lamp(x, false); }
             }
+            // The smoking car (19.33): a small table under the window between each pair of facing seat banks, on the
+            // joint between the two free tiles, with an ashtray or two on it (ScatterProps puts them there).
+            var windowTables = new List<Transform>();
+            if (carName != null && carName.Contains("Smoking") && kit.Get("Table_Window"))
+                for (int p = 0; p + 1 < seatColumns.Count; p += 2)
+                {
+                    int x0 = seatColumns[p], x1 = seatColumns[p + 1];
+                    if (x1 - x0 != 3) continue; // two free tiles between them
+                    foreach (int row in new[] { 0, car.H - 1 })
+                        if (At(x0, row) == 'S' && At(x1, row) == 'S' && At(x0 + 1, row) == '.' && At(x0 + 2, row) == '.')
+                        {
+                            var t = Place("Table_Window", 0f, x0 + 2.5f, row == 0 ? 0f : 180f); // shell z = game x + 1: the joint after x0 + 1
+                            if (row != 0 && cutawayNearWall) foreach (var r in t.GetComponentsInChildren<Renderer>()) r.shadowCastingMode = ShadowCastingMode.ShadowsOnly;
+                            else windowTables.Add(t.transform);
+                        }
+                }
             // The gramophone ('G', one per car), its back (local +Z) to the nearer side wall: against the wall, or beside
             // the window seat it shares a bank with. The live car's plays the music.
             for (int x = 0; x < car.W; x++)
@@ -670,8 +715,28 @@ namespace RailTracer
                 var tables = bulbs.OrderBy(b => parent.InverseTransformPoint(b.position).x).ToList();
                 for (int i = 0; i < tables.Count; i += 2) TableLight(tables[i]);
             }
-            if (live && kind != CarKind.Dining && kind != CarKind.Baggage) ScatterProps(kit, seats);
+            if (live && kind != CarKind.Dining && kind != CarKind.Baggage) ScatterProps(kit, seats, windowTables);
+            TrainLook(kit, parent, train);
             return true;
+
+            // The wood below the dado: each wall module's grain shifted at random, so the 1 and 2 m modules don't all show
+            // the same stretch of the texture (the wainscot's stiles hide the joins).
+            void Wood(GameObject wall)
+            {
+                foreach (var r in wall.GetComponentsInChildren<Renderer>())
+                {
+                    var mats = r.sharedMaterials;
+                    for (int i = 0; i < mats.Length; i++)
+                    {
+                        if (!mats[i] || mats[i].name != "Trn_Wood" || !mats[i].HasProperty("_BaseMap_ST")) continue;
+                        var st = mats[i].GetVector("_BaseMap_ST");
+                        var block = new MaterialPropertyBlock();
+                        r.GetPropertyBlock(block, i);
+                        block.SetVector("_BaseMap_ST", new Vector4(st.x, st.y, Random.value, Random.value));
+                        r.SetPropertyBlock(block, i);
+                    }
+                }
+            }
 
             // A wall lamp over a seat bank: a warm spotlight just above head height, set in from the wall and aimed
             // at the seat, plus the kit's lamp model if it has one (module name in lampModule).
@@ -732,7 +797,7 @@ namespace RailTracer
         // hat hooks on the end walls beside the doors, umbrellas in the end corners and against the side walls
         // beside the seats, briefcases standing by the seats, a steamer trunk in an end corner, ashtrays on seat
         // arms, newspapers on seats or arms. None blocks a tile; none goes on a tile someone starts on.
-        void ScatterProps(TrainKit kit, List<Transform> seats)
+        void ScatterProps(TrainKit kit, List<Transform> seats, List<Transform> windowTables = null)
         {
             var rng = new System.Random(Map.Aggregate(17, (h, row) => row.Aggregate(h, (k, ch) => unchecked(k * 31 + ch))));
             float Rand(float a, float b) => a + (float)rng.NextDouble() * (b - a);
@@ -837,6 +902,18 @@ namespace RailTracer
                 if (rng.NextDouble() < 0.6) Smolder(tray);
                 else HideCigar(tray);
             }
+            // The smoking car's window tables: an ashtray on each, sometimes two (Table_Window's top at 0.69 m, the
+            // two places at Unity local (-2.34, 0.69, +-0.15)).
+            foreach (var t in windowTables ?? new List<Transform>())
+                foreach (float side in new[] { -0.15f, 0.15f })
+                {
+                    if (side > 0f && rng.NextDouble() < 0.5) continue;
+                    var tray = Put("Prop_Ashtray_Cigar", t.TransformPoint(new Vector3(-2.34f + Rand(-0.03f, 0.03f), 0.69f, side + Rand(-0.04f, 0.04f))), t.eulerAngles.y + Rand(0f, 360f));
+                    if (!tray) continue;
+                    MatteBrass(tray);
+                    if (rng.NextDouble() < 0.6) Smolder(tray);
+                    else HideCigar(tray);
+                }
             for (int n = More(3, 6), i = 0; i < n; i++)
             {
                 if (rng.NextDouble() < 0.3 && a < arms.Count)
@@ -1263,7 +1340,7 @@ namespace RailTracer
                 if (paired) StartCoroutine(PairedKill(target, kill.Value)); // the turn only ends when you end it
             }
             LegendLighting();
-            foreach (var o in c.shotsFired) ShotEffect(o);
+            Volley(c.shotsFired);
             c.shotsFired.Clear();
             DetectBlood();
             FlickerEmbers();
@@ -1273,6 +1350,7 @@ namespace RailTracer
             Tickets();
             hud.SetEndTurn(spaceHeld >= 0f ? spaceHeld / endTurnHold : 0f, !busy && !c.Over && !walking);
             var mode = Mode();
+            hud.SetQuiet(walking); // the walk-through car: only the menu and controls hints
             hud.Refresh(c, selected ?? (leaping ? SkillId.Leap : hopping ? SkillId.Hop : (SkillId?)null), hudSlot, mode?.name, mode?.hint,
                 c.log.Skip(Mathf.Max(0, c.log.Count - 8)).ToList());
             // The level is won the moment nobody is left fighting; anyone broken and fleeing still runs out first.
@@ -1986,6 +2064,24 @@ namespace RailTracer
         }
 
         // One shot: the "Shoot" state if the enemy controller has one, a muzzle flash and a tracer to whatever they fired at.
+        // Several guns going off: in quick succession, the first at once, then each a random beat after the last.
+        [Tooltip("Seconds between shots of one volley (random in this range).")]
+        public Vector2 volleyGap = new Vector2(0.08f, 0.22f);
+        void Volley(List<Enemy> shooters)
+        {
+            if (shooters.Count == 0) return;
+            if (shooters.Count == 1) { ShotEffect(shooters[0]); return; }
+            StartCoroutine(VolleyRun(shooters.OrderBy(_ => Random.value).ToList()));
+        }
+        IEnumerator VolleyRun(List<Enemy> shooters)
+        {
+            for (int i = 0; i < shooters.Count; i++)
+            {
+                if (i > 0) yield return new WaitForSeconds(Random.Range(volleyGap.x, volleyGap.y));
+                ShotEffect(shooters[i]);
+            }
+        }
+
         void ShotEffect(Enemy e)
         {
             if (!shown.ContainsKey(e)) return;
@@ -2009,6 +2105,7 @@ namespace RailTracer
             flash.range = 3f;
             Destroy(flash.gameObject, 0.08f);
             Destroy(tracer.gameObject, 0.1f);
+            Sfx("pistol-shoot", muzzle); // Alex's pistol-shoot.mp3 (any clip starting "pistol-shoot")
         }
 
         static Vector3 World(Cell cell) => new Vector3(cell.x, 0, -cell.y);
@@ -2030,8 +2127,9 @@ namespace RailTracer
             pendingAct = null;
             // A heavy's hit waits for its swing; a hop's reaction hits wait (still counted) until its shots play as you
             // climb back in (HopThrough).
-            if (hopShots.Count > 0) return;
-            if (c.hitsTaken > lastHits && !holdHit) HitBlood();
+            // (holdHit leaves lastHits behind, so the held hit still plays once the swing lands.)
+            if (hopShots.Count > 0 || holdHit) return;
+            if (c.hitsTaken > lastHits) HitBlood();
             lastHits = c.hitsTaken;
         }
 
@@ -2040,6 +2138,10 @@ namespace RailTracer
         void KillBlood(Enemy e, Act? how, Vector3 dir, Vector3? chestAt = null, bool gore = false)
         {
             Sfx("BloodStab", chestAt ?? World(e.pos) + Vector3.up * FigureHeight * 0.6f);
+            // A loud death: a scream for a brutal kill and a rail grab, a cry for anyone shot (Resources/Audio/Sfx
+            // "Scream*" / "DeathCry*"; silent until those clips are there). Quiet kills stay quiet.
+            if (how == Act.BrutalKill || how == Act.RailGrab) Sfx("Scream", chestAt ?? World(e.pos) + Vector3.up * FigureHeight * 0.9f);
+            else if (how == null) Sfx("DeathCry", World(e.pos) + Vector3.up * FigureHeight * 0.9f);
             if (!blood) return;
             var at = chestAt.HasValue ? new Vector3(chestAt.Value.x, 0f, chestAt.Value.z) : World(e.pos);
             var chest = chestAt ?? at + Vector3.up * FigureHeight * 0.6f;
@@ -2264,11 +2366,19 @@ namespace RailTracer
                         var face = World(c.player) - shown[e];
                         face.y = 0f;
                         if (face.sqrMagnitude > 1e-4f) ea.transform.localRotation = Quaternion.LookRotation(face);
+                        var hips = ea.GetBoneTransform(HumanBodyBones.Hips);
+                        swingHold = (ea, hips ? ea.transform.InverseTransformPoint(hips.position) : Vector3.zero);
                         ea.CrossFadeInFixedTime("Swing", 0.1f);
                     }
                     for (float time = 0f; time < swingHitAt; time += Time.deltaTime) yield return null;
                 }
                 holdHit = false;
+                if (c.hitsTaken > lastHits) // the swing's hit lands: the slash, your blood, the red screen
+                {
+                    Sfx("KnifeSlice", playerShown + Vector3.up * FigureHeight * 0.6f);
+                    HitBlood();
+                    lastHits = c.hitsTaken;
+                }
                 hud.shownHp = -1;
                 // The camera stays until the swing has played out (the hit shows meanwhile).
                 for (float time = 0f; swinger && time < 3f; time += Time.deltaTime)
@@ -2277,6 +2387,7 @@ namespace RailTracer
                     if (!swinger.IsInTransition(0) && (!st.IsName("Swing") || st.normalizedTime >= 1f)) break;
                     yield return null;
                 }
+                swingHold = (null, Vector3.zero);
                 if (fleeing && e.state == EnemyState.Fled) { yield return new WaitForSeconds(0.3f / EnemyPace); gone.Add(e); }
                 else if (walked) yield return new WaitForSeconds(0.15f / EnemyPace);
                 Poll(); // a card pauses the turn before the next enemy acts
@@ -2859,6 +2970,7 @@ namespace RailTracer
             t.localRotation = Quaternion.LookRotation(playerFacing);
             t.localScale = Vector3.one * characterScale;
             PoseKnife(knife, knifeOffset, knifeTwist, knifeReversed); // live, so Knife Offset / Twist can be tuned in Play mode
+            if (knife != null) knife.t.gameObject.SetActive(!walking); // put away in the walk-through car
             // Soaks up as the legend fills, washes back when you're hurt; eased so a kill spreads rather than pops.
             // The walk-through car: every legend effect fully off.
             shownBlood = c.freeWalk ? 0f : Mathf.MoveTowards(shownBlood, c.legend / (float)tuning.maxLegend, bloodSpreadSpeed * Time.deltaTime);
@@ -3188,7 +3300,7 @@ namespace RailTracer
             }
             hopMoving = false;
             yield return Climb(SashNear(to, row), outside, to, () => ShowPlayer(true));
-            foreach (var o in hopShots) ShotEffect(o); // reaction fire at the landing, now you're on the tile
+            Volley(hopShots); // reaction fire at the landing, now you're on the tile
             if (hopShots.Count > 0) hud.shownHp = -1;
             hopShots.Clear();
             hopRunning = false;
@@ -3409,10 +3521,33 @@ namespace RailTracer
             var step = pos - before;
             t.localRotation = Quaternion.LookRotation(moving && step.sqrMagnitude > 1e-8f ? step : new Vector3(e.facing.x, 0, -e.facing.y));
             if (aware == Awareness.Startled) t.localRotation *= Quaternion.Euler(-14f, 0f, 0f); // recoils
-            else if (!moving && aware == Awareness.Unaware) t.localRotation *= Quaternion.Euler(0f, IdleLook(e), 0f);
+            lookYaw[a] = !moving && aware == Awareness.Unaware ? IdleLook(e) : 0f; // a glance turns the upper body, the feet stay planted
             t.localScale = Vector3.one * characterScale * (e.tough ? 1.15f : 1f);
             Tint(a, SuitColor(e));
         }
+
+        // The idle glance, after the animator: spread up the spine to the head (feet and hips stay on the pose).
+        void LateUpdate()
+        {
+            if (swingHold.a && swingHold.a.GetBoneTransform(HumanBodyBones.Hips) is Transform hb) // the swing's travel held back
+            {
+                var t = swingHold.a.transform;
+                var now = t.InverseTransformPoint(hb.position);
+                var keep = swingHold.hips + (now - swingHold.hips) * swingTravel;
+                hb.position = t.TransformPoint(new Vector3(keep.x, now.y, keep.z));
+            }
+            foreach (var kv in lookYaw)
+            {
+                if (!kv.Key || Mathf.Abs(kv.Value) < 0.01f || !kv.Key.isActiveAndEnabled) continue;
+                foreach (var (bone, share) in LookBones)
+                {
+                    var b = kv.Key.GetBoneTransform(bone);
+                    if (b) b.rotation = Quaternion.AngleAxis(kv.Value * share, Vector3.up) * b.rotation;
+                }
+            }
+        }
+        static readonly (HumanBodyBones, float)[] LookBones =
+            { (HumanBodyBones.Spine, 0.15f), (HumanBodyBones.Chest, 0.2f), (HumanBodyBones.Neck, 0.25f), (HumanBodyBones.Head, 0.4f) };
 
         // Idle reaction: now and then an unaware enemy glances round (yaw in degrees, eased out and back).
         float IdleLook(Enemy e)

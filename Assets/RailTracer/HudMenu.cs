@@ -15,7 +15,8 @@ namespace RailTracer
     {
         const float MenuSize = 28f, MenuNote = 18f;
         Canvas menuCanvas;
-        TMP_Text menuTitle, menuHeading, menuInfo;
+        Image menuTitle;
+        TMP_Text menuHeading, menuInfo;
         RectTransform menuInfoBox, menuControls;
         UIShape[] menuInfoCard;
         readonly List<MenuLine> menuItems = new List<MenuLine>();
@@ -39,12 +40,11 @@ namespace RailTracer
             var top = Rect("Title", root, new Vector2(0f, 1f), new Vector2(64f, -40f), Vector2.zero);
             Column(top, new RectOffset(0, 0, 0, 0), 0f).childAlignment = TextAnchor.UpperLeft;
             Fit(top);
-            menuTitle = Text(top, sketchBold, 104, TextAlignmentOptions.TopLeft, Vector2.zero, Vector2.zero);
-            menuTitle.text = $"<color=#C8102E>RED</color> LINE"; // "Red" in blood red, "Line" in bone
-            menuTitle.color = Bone;
-            menuTitle.fontStyle = FontStyles.UpperCase;
-            menuTitle.rectTransform.localRotation = Quaternion.Euler(0f, 0f, -2f);
-            Glow(menuTitle);
+            menuTitle = Rect("Logo", top, Vector2.zero, Vector2.zero, Vector2.zero).gameObject.AddComponent<Image>();
+            menuTitle.sprite = Resources.Load<Sprite>("UI/RedLineLogo"); // the "Red Line" logo, 706x315
+            menuTitle.preserveAspect = true;
+            menuTitle.raycastTarget = false;
+            Size(menuTitle.rectTransform, 380f, 170f);
             menuHeading = Text(top, sketchBold, 48, TextAlignmentOptions.TopLeft, Vector2.zero, Vector2.zero);
             menuHeading.fontStyle = FontStyles.UpperCase;
             menuHeading.color = Bone;

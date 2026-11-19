@@ -125,6 +125,50 @@ namespace RailTracer
                 AssetDatabase.SaveAssets();
                 Debug.Log("Rail Tracer: enemies now stand relaxed (gun holstered) until \"Armed\" is set.");
             }
+            if (IdleOffsets(Dir + "Enemy.controller"))
+            {
+                AssetDatabase.SaveAssets();
+                Debug.Log("Rail Tracer: enemy idles start at their own \"IdleOffset\".");
+            }
+            FillIdleSet();
+        }
+
+        // Each enemy's idles start at its own point in the loop (the "IdleOffset" float, set at random by Game), so
+        // guards entering an idle together (a car's first frame, an alarm) don't sway in step.
+        static bool IdleOffsets(string path)
+        {
+            var ac = AssetDatabase.LoadAssetAtPath<AnimatorController>(path);
+            if (!ac || ac.parameters.Any(p => p.name == "IdleOffset")) return false;
+            ac.AddParameter("IdleOffset", AnimatorControllerParameterType.Float);
+            foreach (var s in ac.layers[0].stateMachine.states.Select(s => s.state).Where(s => s.name == "Idle" || s.name == "Relaxed"))
+            {
+                s.cycleOffsetParameter = "IdleOffset";
+                s.cycleOffsetParameterActive = true;
+            }
+            EditorUtility.SetDirty(ac);
+            return true;
+        }
+
+        // Resources/Anim/IdleSet: every standing idle there is, rebuilt each run (drop a Mixamo "Idle*.fbx", or another
+        // "Pistol Idle*.fbx", into RailTracer/Mixamo and it joins in, imported in place and looping).
+        static void FillIdleSet()
+        {
+            const string path = Dir + "IdleSet.asset";
+            var set = AssetDatabase.LoadAssetAtPath<IdleSet>(path);
+            if (!set) { set = ScriptableObject.CreateInstance<IdleSet>(); AssetDatabase.CreateAsset(set, path); }
+            var mixamo = Directory.GetFiles(Mixamo, "*.fbx").Select(f => f.Replace('\\', '/')).ToArray();
+            var relaxed = new[] { Clip(Masc + "Idle/A_Idle_Standing_Masc.fbx"),
+                    Clip("Assets/SourceFiles/StarterAssets/ThirdPersonController/Character/Animations/Stand--Idle.anim.fbx") }
+                .Concat(mixamo.Where(f => Path.GetFileName(f).StartsWith("Idle")).Select(f => MixamoClip(f, true, inPlace: false)))
+                .Where(c => c).ToArray();
+            var armed = mixamo.Where(f => Path.GetFileName(f).StartsWith("Pistol Idle")).Select(f => MixamoClip(f, true, inPlace: false))
+                .Where(c => c).ToArray();
+            if (set.relaxed.SequenceEqual(relaxed) && set.armed.SequenceEqual(armed)) return;
+            set.relaxed = relaxed;
+            set.armed = armed;
+            EditorUtility.SetDirty(set);
+            AssetDatabase.SaveAssets();
+            Debug.Log($"Rail Tracer: IdleSet has {relaxed.Length} relaxed and {armed.Length} armed idles.");
         }
 
         // Unaware enemies stand relaxed: a "Relaxed" state on Synty's standing idle, swapped with the pistol "Idle"

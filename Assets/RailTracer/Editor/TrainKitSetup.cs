@@ -17,7 +17,7 @@ namespace RailTracer
 
         static void OnPostprocessAllAssets(string[] imported, string[] deleted, string[] moved, string[] movedFrom)
         {
-            if (imported.Concat(deleted).Concat(moved).Any(p => p.StartsWith(Folder) && p.EndsWith(".fbx")))
+            if (imported.Concat(deleted).Concat(moved).Any(p => p.StartsWith(Folder) && (p.EndsWith(".fbx") || p.EndsWith(".mat"))))
                 EditorApplication.delayCall += Refresh;
         }
 
@@ -28,8 +28,11 @@ namespace RailTracer
             var modules = AssetDatabase.FindAssets("t:Model", new[] { Folder })
                 .Select(g => AssetDatabase.LoadAssetAtPath<GameObject>(AssetDatabase.GUIDToAssetPath(g)))
                 .Where(m => m).OrderBy(m => m.name).ToArray();
+            var materials = AssetDatabase.FindAssets("t:Material", new[] { Folder })
+                .Select(g => AssetDatabase.LoadAssetAtPath<Material>(AssetDatabase.GUIDToAssetPath(g)))
+                .Where(m => m).OrderBy(m => m.name).ToArray();
             var kit = AssetDatabase.LoadAssetAtPath<TrainKit>(KitPath);
-            if (kit && kit.modules != null && kit.modules.SequenceEqual(modules)) return;
+            if (kit && kit.modules != null && kit.modules.SequenceEqual(modules) && kit.materials != null && kit.materials.SequenceEqual(materials)) return;
             if (!kit)
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(KitPath));
@@ -37,9 +40,10 @@ namespace RailTracer
                 AssetDatabase.CreateAsset(kit, KitPath);
             }
             kit.modules = modules;
+            kit.materials = materials;
             EditorUtility.SetDirty(kit);
             AssetDatabase.SaveAssets();
-            Debug.Log($"Rail Tracer: train kit lists {modules.Length} modules.");
+            Debug.Log($"Rail Tracer: train kit lists {modules.Length} modules and {materials.Length} materials.");
         }
     }
 }

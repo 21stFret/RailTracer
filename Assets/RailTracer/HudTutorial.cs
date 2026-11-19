@@ -313,7 +313,11 @@ namespace RailTracer
             SketchCap(buttons, "Space", 14);
             tut.gameObject.SetActive(false);
 
-            // Pause menu (19.27): a centre card at least 400 wide, PAUSED, the lines, an ESC key hint.
+            // Pause menu (19.27): a centre card at least 400 wide, PAUSED, the lines, an ESC key hint. Behind it the
+            // screen heavily dimmed, not quite black (PauseDim).
+            pauseDim = Img(root, new Color(0.02f, 0.012f, 0.016f, PauseDim), 0f).gameObject;
+            pauseDim.name = "Pause Dim";
+            pauseDim.SetActive(false);
             pause = Rect("Pause", root, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(400, 100));
             CardShape(pause);
             IgnoreLayout(pause);
@@ -421,7 +425,10 @@ namespace RailTracer
             pauseHintWords.text = escWord ?? "";
             pauseClose.SetActive(closable);
             pause.gameObject.SetActive(on);
+            pauseDim.SetActive(on);
         }
+        GameObject pauseDim;
+        const float PauseDim = 0.82f; // the dim's opacity behind the pause card
 
         // items: the menu's lines ("Label	note": a note after a tab), the one under the mouse hovered. Returns its index, or -1.
         public int RefreshPause(string[] items, Vector2 screen)

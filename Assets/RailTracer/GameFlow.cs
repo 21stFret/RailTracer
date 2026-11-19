@@ -451,36 +451,45 @@ namespace RailTracer
 
         // The train the menu train shows (Journey picks it; otherwise the live car's).
         int shownTrain;
-        // Which slot of the shown train the live carriage sits in (the menu train is laid out round it); -1 = none of
-        // them (an endless or walk-through car, or a car of another train: it sits just before the shown train).
-        int LiveSlot => walking || endless || Train.TrainOf(carIndex) != shownTrain ? -1 : carIndex % Train.TrainCars;
+        // Journey lays every train out as a row, train 1 on top, the next below it, like one long train wrapped round:
+        // stepping between trains glides the camera up and down. Elsewhere only the anchor row is built.
+        const float RowGap = 9f; // metres between the rows
+        bool allRows;
+        int anchorRow;           // the row at the live car's height (its train; an endless or walk-through car: the shown one)
+        float RowY(int t) => (anchorRow - t) * RowGap;
+        // Which slot of its train the live carriage sits in (the menu train is laid out round it, in every row); -1 =
+        // none (an endless or walk-through car: it sits just before slot 0).
+        int LiveSlot => walking || endless || Train.TrainOf(carIndex) != anchorRow ? -1 : carIndex % Train.TrainCars;
         float SlotX(int k) => (k - LiveSlot) * Pitch;
         int NextDemo => System.Array.IndexOf(save.cleared, false) is int i && i >= 0 ? i : Train.Cars; // across all three trains
         bool TrainOpen(int t) => t * Train.TrainCars <= NextDemo; // its first car cleared or next to play
 
         // The shown train's five cars side by side, empty (no people, no props), the live car's slot left to the live
         // car. Lit by progress: red lamps cleared, white the next to play, dark the cars ahead.
-        void BuildMenuTrain()
+        void BuildMenuTrain(bool rows = false)
         {
             if (menuTrain) Destroy(menuTrain);
             menuCars.Clear();
             statusLamps.Clear();
             settingLamps.Clear();
+            allRows = rows;
+            anchorRow = !walking && !endless ? Train.TrainOf(Mathf.Min(carIndex, Train.Cars - 1)) : shownTrain;
             menuTrain = new GameObject("Menu Train");
             var kit = useTrainKit ? Resources.Load<TrainKit>("Kit/TrainKit") : null;
+            for (int row = 0; row < Train.Trains; row++)
             for (int k = 0; k < Train.TrainCars; k++)
             {
-                int g = shownTrain * Train.TrainCars + k;
-                var t = new GameObject("Car " + (k + 1)).transform;
+                if (!rows && row != anchorRow) continue;
+                int g = row * Train.TrainCars + k;
+                var t = new GameObject($"Train {row + 1} Car {k + 1}").transform;
                 t.SetParent(menuTrain.transform, false);
-                t.localPosition = new Vector3(SlotX(k), 0f, 0f);
-                menuCars.Add((t, SlotX(k)));
+                t.localPosition = new Vector3(SlotX(k), RowY(row), 0f);
                 var lit = new List<Light>();
-                statusLamps.Add(lit);
-                if (k != LiveSlot && kit)
+                if (row == anchorRow) { menuCars.Add((t, SlotX(k))); statusLamps.Add(lit); } // the Options car is in this row
+                if ((row != anchorRow || k != LiveSlot) && kit)
                 {
                     var def = Train.Demo(g);
-                    BuildKitCarriage(kit, new Carriage(def.map, tuning, 1), def.map, def.kind, t, false);
+                    BuildKitCarriage(kit, new Carriage(def.map, tuning, 1), def.map, def.kind, t, false, row, def.name);
                 }
                 bool cleared = save.cleared[g], next = g == NextDemo;
                 if (!cleared && !next) continue;
@@ -514,9 +523,8 @@ namespace RailTracer
         // The menu train shows train `t` (rebuilt if it was showing another).
         void ShowTrain(int t)
         {
-            if (t == shownTrain && menuTrain) return;
             shownTrain = t;
-            BuildMenuTrain();
+            if (!allRows || !menuTrain) BuildMenuTrain(true); // every row, once; then stepping only moves the camera
         }
 
         // Where the Options screen looks: the car after the live one (before it, from the last).
@@ -560,8 +568,9 @@ namespace RailTracer
                 // Side-on, closed in on the picked car (its neighbours still in view, to pick them).
                 float mid = (journeyPick >= 0 ? SlotX(journeyPick) : (SlotX(0) + SlotX(Train.TrainCars - 1)) / 2f) + (Map[0].Length - 1) / 2f;
                 float back = journeyPick >= 0 ? journeyZoom : 95f;
-                var look = new Vector3(mid, 0.6f, -2f);
-                var pos = new Vector3(mid + drift * back / 95f, 7f * back / 95f + 1f, -2f - back);
+                float y = allRows ? RowY(shownTrain) : 0f;
+                var look = new Vector3(mid, 0.6f + y, -2f);
+                var pos = new Vector3(mid + drift * back / 95f, 7f * back / 95f + 1f + y, -2f - back);
                 return (pos, Quaternion.LookRotation(look - pos));
             }
             int slot = LiveSlot >= 0 ? LiveSlot : -1;
@@ -616,13 +625,14 @@ namespace RailTracer
         // into the car that was picked.
         void Dive(System.Action setUp, int slot = -1)
         {
-            float from = slot >= 0 ? SlotX(slot) : 0f; // the live car always sits at 0
+            // The live car always sits at 0; the picked car may be in another row.
+            var from = slot >= 0 ? new Vector3(SlotX(slot), allRows ? RowY(shownTrain) : 0f, 0f) : Vector3.zero;
             setUp?.Invoke();
-            if (Mathf.Abs(from) > 0.01f)
+            if (from.sqrMagnitude > 1e-4f)
             {
-                BuildMenuTrain();
-                cam.transform.position -= new Vector3(from, 0f, 0f);
-                menuCamPos -= new Vector3(from, 0f, 0f);
+                BuildMenuTrain(allRows);
+                cam.transform.position -= from;
+                menuCamPos -= from;
             }
             StartCoroutine(Enter());
         }
@@ -673,7 +683,7 @@ namespace RailTracer
                     var names = Enumerable.Range(0, Train.TrainCars).Select(k => $"{k + 1}  {Train.Demo(first + k).name}").ToArray();
                     var screenAt = Enumerable.Range(0, Train.TrainCars).Select(k =>
                     {
-                        var p = cam.WorldToScreenPoint(new Vector3(SlotX(k) + 12.5f, -0.6f, -4.6f));
+                        var p = cam.WorldToScreenPoint(new Vector3(SlotX(k) + 12.5f, -0.6f + RowY(shownTrain), -4.6f));
                         return new Vector2(p.x, p.y);
                     }).ToArray();
                     int over = hud.RefreshJourney(screenAt, names, states, journeyPick, at);
@@ -684,14 +694,19 @@ namespace RailTracer
                     bool cleared = save.cleared[pickAt], isNext = pickAt == next;
                     bool resumable = isNext && save.run != null && !save.run.endless && save.run.car == pickAt;
                     string action = cleared ? "Replay" : isNext ? (resumable ? "Continue" : "Board") : "Not yet";
-                    string trainLine = $"Train {shownTrain + 1} of {Train.Trains}: {Train.TrainNames[shownTrain]}{(open ? "" : " (locked)")}";
+                    // Every train is a line of its own (the shown one bright); a locked one can be looked at, not played.
+                    var trainLines = Enumerable.Range(0, Train.Trains)
+                        .Select(t => $"Train {t + 1}\t{Train.TrainNames[t]}{(TrainOpen(t) ? "" : " (locked)")}");
                     var info = $"<b>{journeyPick + 1}. {pick.name}</b>\n{pick.blurb}\n\nBest ticket: {Ticket(save.best[pickAt])}" +
                                (open ? "" : $"\n\nClear {Train.TrainNames[shownTrain - 1]} to board this train.");
-                    int hit = hud.RefreshMenu(false, "Journey", new[] { action, trainLine, "Back" }, new[] { cleared || isNext, true, true }, info, at, held);
-                    if (back || (click && (hit == 2 || hit == -2))) { screen = MenuScreen.Start; break; }
-                    if (click && hit == 1) // the next train along (wrapping round); a locked one shown dark, not playable
+                    var lines = new[] { action }.Concat(trainLines).Append("Back").ToArray();
+                    var on = lines.Select((_, i) => i != 0 || cleared || isNext).ToArray();
+                    int hit = hud.RefreshMenu(false, "Journey", lines, on, info, at, held, 1 + shownTrain);
+                    int backAt = lines.Length - 1;
+                    if (back || (click && (hit == backAt || hit == -2))) { screen = MenuScreen.Start; break; }
+                    if (click && hit >= 1 && hit < backAt && hit - 1 != shownTrain) // another train: the camera glides up or down to it
                     {
-                        int t = (shownTrain + 1) % Train.Trains;
+                        int t = hit - 1;
                         ShowTrain(t);
                         journeyPick = TrainOpen(t) ? Mathf.Clamp(next - t * Train.TrainCars, 0, Train.TrainCars - 1) : 0;
                         break;
@@ -924,6 +939,12 @@ namespace RailTracer
                             break;
                         }
                     }
+                    // Each table shape has three looks (_B, _C: its chairs and settings laid differently), one per table.
+                    if (model != null && model.StartsWith("Dining_Table"))
+                    {
+                        string look = model + new[] { "", "_B", "_C" }[(hash >> 5 & 0x7fffffff) % 3];
+                        if (kit.Get(look)) model = look;
+                    }
                     var prefab = model != null ? kit.Get(model) : null;
                     if (!prefab) continue;
                     var go = Instantiate(prefab, parent);
@@ -937,13 +958,63 @@ namespace RailTracer
                     {
                         var bulb = new GameObject("Lamp Bulb").transform;
                         bulb.SetParent(go.transform, false);
-                        bulb.localPosition = new Vector3(model == "Dining_Table_2" ? 0.5f : 0f, tableLampHeight, 0f);
+                        bulb.localPosition = new Vector3(model.StartsWith("Dining_Table_2") ? 0.5f : 0f, tableLampHeight, 0f);
                         bulbs.Add(bulb);
                     }
                     done.UnionWith(group);
                 }
             return done;
         }
+
+        // Each train's own look (19.33): its wallpaper and curtains swapped in by material name (train 1 keeps the kit's
+        // gold-on-black stripes and red velvet; train 2 green paper and ivory curtains; train 3 navy and old gold).
+        // And the bar's drinking glasses made see-through (the kit's materials are opaque).
+        static readonly string[][] TrainMaterials =
+        {
+            new string[0],
+            new[] { "Trn_Wallpaper", "Trn_Wallpaper_Green", "Trn_Curtain", "Trn_Curtain_White" },
+            new[] { "Trn_Wallpaper", "Trn_Wallpaper_Navy", "Trn_Curtain", "Trn_Curtain_Gold" },
+        };
+        Material seeThroughGlass;
+        void TrainLook(TrainKit kit, Transform parent, int train)
+        {
+            var swaps = new Dictionary<string, Material>();
+            var pairs = TrainMaterials[Mathf.Clamp(train, 0, TrainMaterials.Length - 1)];
+            for (int i = 0; i + 1 < pairs.Length; i += 2)
+                if (kit.Mat(pairs[i + 1]) is Material m) swaps[pairs[i]] = m;
+            foreach (var r in parent.GetComponentsInChildren<Renderer>(true))
+            {
+                var mats = r.sharedMaterials;
+                bool changed = false;
+                for (int i = 0; i < mats.Length; i++)
+                {
+                    if (!mats[i]) continue;
+                    if (swaps.TryGetValue(mats[i].name, out var to)) { mats[i] = to; changed = true; }
+                    else if (mats[i].name == "Trn_BarGlass") { mats[i] = SeeThrough(mats[i]); changed = true; }
+                }
+                if (changed) r.sharedMaterials = mats;
+            }
+        }
+
+        // A transparent copy of a URP Lit material (alpha blended, no depth write), made once.
+        Material SeeThrough(Material m)
+        {
+            if (seeThroughGlass) return seeThroughGlass;
+            var g = seeThroughGlass = new Material(m) { name = m.name + " (see-through)" };
+            g.SetFloat("_Surface", 1f);
+            g.SetFloat("_Blend", 0f);
+            g.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            g.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            g.SetFloat("_ZWrite", 0f);
+            g.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            g.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+            g.SetOverrideTag("RenderType", "Transparent");
+            var c = g.HasProperty("_BaseColor") ? g.GetColor("_BaseColor") : Color.white;
+            c.a = glassAlpha;
+            if (g.HasProperty("_BaseColor")) g.SetColor("_BaseColor", c);
+            return g;
+        }
+        [Range(0f, 1f)] public float glassAlpha = 0.35f; // the bar's drinking glasses: how much of them shows
 
         // The 4-connected tiles of `ch` around `start`.
         static HashSet<Cell> TileGroup(string[] map, Cell start, char ch)

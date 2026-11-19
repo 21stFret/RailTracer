@@ -7,7 +7,9 @@ namespace RailTracer
     public class TrainKit : ScriptableObject
     {
         public GameObject[] modules;
+        public Material[] materials; // every kit material (the per-train curtains and wallpapers are swapped in by name)
 
         public GameObject Get(string name) => modules == null ? null : System.Array.Find(modules, m => m && m.name == name);
+        public Material Mat(string name) => materials == null ? null : System.Array.Find(materials, m => m && m.name == name);
     }
 }

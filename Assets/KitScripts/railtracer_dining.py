@@ -937,7 +937,8 @@ def make_texture_set(entry, style, n=512, seed=1):
 
 
 
-(WOOD, WOODDARK, BRASS, CREAM, VELVET, LEATHER, IRON, GLASS, LINEN, PORCELAIN, SHADE) = set_palette([
+(WOOD, WOODDARK, BRASS, CREAM, VELVET, LEATHER, IRON, GLASS, LINEN, PORCELAIN, SHADE,
+ BARGLASS, BOTTLE, LABEL, LABEL_RED) = set_palette([
     ("Trn_Wood",       (0.45, 0.24, 0.12), 0.0, 0.6, {"tex": "wood", "tile": 2.0, "planks": 1, "rings": 14, "seams": False}),
     ("Trn_WoodDark",   (0.20, 0.10, 0.05), 0.0, 0.6, {"tex": "wood", "tile": 1.0, "planks": 2}),
     ("Trn_Brass",      (0.95, 0.70, 0.25), 1.0, 0.3, {"tex": "brushed", "tile": 0.5}),
@@ -949,7 +950,12 @@ def make_texture_set(entry, style, n=512, seed=1):
     # new for the dining car
     ("Trn_Linen",      (0.48, 0.39, 0.26), 0.0, 1.0, {"tex": "fabric", "tile": 0.5}),  # warm oatmeal (sRGB ~ #B8A88C), matt: the plates stand out
     ("Trn_Porcelain",  (0.93, 0.92, 0.88), 0.0, 0.25, {"tex": "plain", "tile": 0.5}),
-    ("Trn_Shade",      (0.03, 0.16, 0.07), 0.0, 0.6)])                                  # lamp shades: dark green, smooth, matt, untextured
+    ("Trn_Shade",      (0.03, 0.16, 0.07), 0.0, 0.6),                                   # lamp shades: dark green, smooth, matt, untextured
+    # the bar: drinking glasses (pale, glossy; Game.cs makes them see-through), green bottle glass, paper labels
+    ("Trn_BarGlass",   (0.60, 0.68, 0.66), 0.0, 0.03),
+    ("Trn_BottleGreen", (0.025, 0.14, 0.05), 0.0, 0.06),
+    ("Trn_Label",      (0.78, 0.70, 0.52), 0.0, 0.85, {"tex": "plain", "tile": 0.5}),
+    ("Trn_LabelRed",   (0.42, 0.04, 0.05), 0.0, 0.85, {"tex": "plain", "tile": 0.5})])
 
 
 # ---------------------------------------------------------------- Unity-axis helpers
@@ -976,11 +982,15 @@ def tube_w(mb, w0, w1, u, y, r, slot, segs=10):
 
 
 def box_f(mb, ou, ow, fu, fw, f0, f1, s0, s1, y0, y1, slot):
-    """Box in a chair's frame: f along the facing (fu, fw) (cardinal), s across it."""
-    su, sw = fw, -fu
-    us = [ou + fu * f + su * s for f in (f0, f1) for s in (s0, s1)]
-    ws = [ow + fw * f + sw * s for f in (f0, f1) for s in (s0, s1)]
-    R(mb, min(us), max(us), min(ws), max(ws), y0, y1, slot)
+    """Box in a chair's frame: f along the facing (fu, fw) (any unit direction), s across it."""
+    flat(mb, ou, ow, fu, fw, [(f0, s0), (f0, s1), (f1, s1), (f1, s0)], y0, y1, slot)
+
+
+def turned(fu, fw, deg):
+    """The facing (fu, fw) turned by deg degrees."""
+    import math
+    c, s = math.cos(math.radians(deg)), math.sin(math.radians(deg))
+    return fu * c - fw * s, fu * s + fw * c
 
 
 def chair(mb, ou, ow, fu, fw):
@@ -1057,16 +1067,23 @@ def fork(mb, ou, ow, fu, fw, y):
                                   (0.066, s - 0.0013)], y, y + 0.003, BRASS)
 
 
-def setting(mb, u, w, fu, fw, y):
+def setting(mb, u, w, fu, fw, y, rng=None):
     """A place setting in front of a chair facing (fu, fw): a rimmed dinner plate, the brass fork to its left and the
-    brass knife to its right, the cup and saucer above the knife, clear of the plate (cup centre 21 cm from the plate's)."""
-    pu, pw = u + fu * 0.2, w + fw * 0.2
+    brass knife to its right, the cup and saucer above the knife, clear of the plate (cup centre 21 cm from the plate's).
+    rng: laid by hand, not by machine - the whole setting turned a few degrees and nudged, each piece a little more."""
+    j = (lambda a: rng.uniform(-a, a)) if rng else (lambda a: 0.0)
+    fu, fw = turned(fu, fw, j(6.0))
     su, sw = fw, -fu                                                   # to the sitter's right
+    pf, ps = 0.2 + j(0.025), j(0.02)
+    pu, pw = u + fu * pf + su * ps, w + fw * pf + sw * ps
     L(mb, [(0.07, y), (0.075, y + 0.006), (0.115, y + 0.012), (0.12, y + 0.02), (0.112, y + 0.02),
            (0.07, y + 0.012), (0.0, y + 0.012)], pu, pw, PORCELAIN, segs=28)
-    fork(mb, pu - su * 0.155, pw - sw * 0.155, fu, fw, y)
-    knife(mb, pu + su * 0.155, pw + sw * 0.155, fu, fw, y)
-    cu, cw = pu + fu * 0.15 + su * 0.15, pw + fw * 0.15 + sw * 0.15
+    o = 0.155 + j(0.012)
+    fork(mb, pu - su * o + fu * j(0.015), pw - sw * o + fw * j(0.015), *turned(fu, fw, j(7.0)), y)
+    o = 0.155 + j(0.012)
+    knife(mb, pu + su * o + fu * j(0.015), pw + sw * o + fw * j(0.015), *turned(fu, fw, j(7.0)), y)
+    cf, cs = 0.15 + j(0.02), 0.15 + j(0.02)
+    cu, cw = pu + fu * cf + su * cs, pw + fw * cf + sw * cs
     L(mb, [(0.03, y), (0.048, y + 0.004), (0.055, y + 0.01), (0.05, y + 0.01), (0.0, y + 0.006)],
       cu, cw, PORCELAIN, segs=20)                                      # saucer
     L(mb, [(0.022, y + 0.008), (0.03, y + 0.016), (0.036, y + 0.06), (0.032, y + 0.06), (0.0, y + 0.018)],
@@ -1080,10 +1097,20 @@ def pedestal(mb, u, w, top):
     L(mb, [(0.045, 0.06), (0.045, top)], u, w, WOODDARK, segs=12)
 
 
-def square_table(name, tiles, chairs, settings=True, lamps=None):
+def seated_chair(mb, rng, u, w, fu, fw):
+    """A chair as people left it: about half pushed in square, the rest turned 5-14 degrees and pulled out up to 8 cm."""
+    if rng.random() < 0.5:
+        out = rng.uniform(0.0, 0.08)
+        fu2, fw2 = turned(fu, fw, rng.choice((-1, 1)) * rng.uniform(5.0, 14.0))
+        chair(mb, u - fu * out, w - fw * out, fu2, fw2)
+    else:
+        chair(mb, u, w, fu, fw)
+
+
+def square_table(name, tiles, chairs, settings=True, lamps=None, seed=SEED):
     """Tables made of 1 m tiles (Unity (u, w) tile centres, the pivot tile first): a dark wood top per tile
     under one linen cloth, a pedestal per tile, the cloth hanging 12 cm on the outside edges."""
-    a = Asset(name, seed=SEED)
+    a = Asset(name, seed=seed)
     S, P = a.S, a.P
     H = TABLE_HEIGHT
     cells = set(tiles)
@@ -1108,32 +1135,37 @@ def square_table(name, tiles, chairs, settings=True, lamps=None):
                 z = w + dw * (e + 0.005)
                 R(S, u0 - 0.005, u1 + 0.005, min(z, z + dw * 0.006), max(z, z + dw * 0.006), H - 0.13, H - 0.001, LINEN)
     for (u, w, fu, fw) in chairs:
-        chair(P, u, w, fu, fw)
+        seated_chair(P, a.rng, u, w, fu, fw)
         if settings:
-            setting(P, u - fu * 0.04, w - fw * 0.04, fu, fw, H)   # the plate 0.26 in from the table edge side, wherever the chair is
+            setting(P, u - fu * 0.04, w - fw * 0.04, fu, fw, H, a.rng)   # the plate 0.26 in from the table edge side, wherever the chair is
     for (u, w) in (lamps or tiles[:1]):
         lamp(P, u, w, H)
         a.anchors.append((-u, -w, H + 0.25))          # the bulb: the game may light it
     return a.finish(anchors=True)
 
 
-def table_1():
-    return square_table("Dining_Table_1", [(0, 0)], [(-0.42, 0, 1, 0), (0.42, 0, -1, 0)])
+# Every table comes in three looks (the same shape, its chairs and settings laid differently): <name>, <name>_B,
+# <name>_C. The game picks one per table.
+VARIANTS = (("", 0), ("_B", 101), ("_C", 202))
 
 
-def table_2():
-    return square_table("Dining_Table_2", [(0, 0), (1, 0)], [(-0.42, 0, 1, 0), (1.42, 0, -1, 0)], lamps=[(0.5, 0)])
+def table_1(v="", k=0):
+    return square_table("Dining_Table_1" + v, [(0, 0)], [(-0.42, 0, 1, 0), (0.42, 0, -1, 0)], seed=SEED + k)
 
 
-def table_l():
+def table_2(v="", k=0):
+    return square_table("Dining_Table_2" + v, [(0, 0), (1, 0)], [(-0.42, 0, 1, 0), (1.42, 0, -1, 0)], lamps=[(0.5, 0)], seed=SEED + k)
+
+
+def table_l(v="", k=0):
     # corner (0,0), arms (1,0) and (0,-1); chairs at the arm ends and inside the arms, facing out of the corner
     tiles = [(0, 0), (1, 0), (0, -1)]
     chairs = [(1.42, 0, -1, 0), (0, -1.42, 0, 1), (0.95, -0.42, 0, 1), (0.42, -0.95, -1, 0)]
-    return square_table("Dining_Table_L", tiles, chairs, lamps=[(0, 0)])
+    return square_table("Dining_Table_L" + v, tiles, chairs, lamps=[(0, 0)], seed=SEED + k)
 
 
-def table_round():
-    a = Asset("Dining_Table_Round", seed=SEED)
+def table_round(v="", k=0):
+    a = Asset("Dining_Table_Round" + v, seed=SEED + k)
     S, P = a.S, a.P
     H, r = TABLE_HEIGHT, 0.66
     L(S, [(0.32, 0.0), (0.32, 0.035), (0.1, 0.07)], 0, 0, WOODDARK, segs=28, cap_top=False)
@@ -1143,8 +1175,8 @@ def table_round():
     L(S, [(r + 0.005, H - 0.001), (r + 0.012, H - 0.14)], 0, 0, LINEN, segs=48, cap_bottom=False, cap_top=False)  # drop
     for (fu, fw) in ((1, 0), (-1, 0), (0, 1), (0, -1)):
         cu, cw = -fu * 0.66, -fw * 0.66
-        chair(P, cu, cw, fu, fw)
-        setting(P, -fu * 0.48, -fw * 0.48, fu, fw, H)
+        seated_chair(P, a.rng, cu, cw, fu, fw)
+        setting(P, -fu * 0.66, -fw * 0.66, fu, fw, H, a.rng)          # the plate's centre 0.46 out: near the edge
     lamp(P, 0, 0, H)
     a.anchors.append((0.0, 0.0, H + 0.25))
     return a.finish(anchors=True)
@@ -1243,8 +1275,7 @@ def bar_l():
     for y in (0.94, 1.38):
         u = inner + 0.42
         while u < end - 0.12:
-            h = rng.uniform(0.2, 0.3)
-            L(P, [(0.03, y), (0.03, y + h), (0.011, y + h + 0.06), (0.011, y + h + 0.09)], u, sb0 + 0.14, GLASS, segs=10)
+            bottle(P, rng, u, sb0 + 0.14, y, rng.uniform(0.2, 0.3), 0.03)
             u += rng.uniform(0.1, 0.17)
     # on the counter: beer taps facing the bartender, a cash register at the far end, glasses, a bottle or two
     ty = top + 0.05
@@ -1257,10 +1288,31 @@ def bar_l():
     R(P, 2.95, 3.35, -0.02, 0.28, ty, ty + 0.18, BRASS)                                       # register, keys to the back
     R(P, 3.0, 3.3, -0.02, 0.18, ty + 0.18, ty + 0.3, BRASS)
     for (u, w) in ((2.1, -0.12), (2.3, -0.16), (2.45, -0.1), (0.3, -0.14), (-0.2, 0.7), (-0.05, 1.0)):
-        L(P, [(0.03, ty), (0.035, ty + 0.11)], u, w, GLASS, segs=12, cap_top=False)
+        tumbler(P, u, w, ty)
     for u in (0.55, 0.68):
-        L(P, [(0.032, ty), (0.032, ty + 0.26), (0.011, ty + 0.32), (0.011, ty + 0.36)], u, 0.1, GLASS, segs=12)
+        bottle(P, rng, u, 0.1, ty, 0.26, 0.032)
     return a.finish()
 
 
-run([table_1, table_2, table_l, table_round, cart, bar_l], spacing=4.0)
+def tumbler(mb, u, w, y):
+    """A drinking glass with a real wall (3-4 mm) and a thick base, so it reads from every side, inside and out."""
+    L(mb, [(0.03, y), (0.035, y + 0.11), (0.0315, y + 0.11), (0.027, y + 0.012)], u, w, BARGLASS, segs=16)
+
+
+def bottle(mb, rng, u, w, y, h, r):
+    """A green glass bottle (body r, shoulder, neck) with a paper label round the body (cream or red at random)
+    and a seal of the other colour on the neck."""
+    L(mb, [(r, y), (r, y + h), (r * 0.37, y + h + 0.06), (r * 0.37, y + h + 0.09)], u, w, BOTTLE, segs=14)
+    lab = LABEL if rng.random() < 0.65 else LABEL_RED
+    L(mb, [(r + 0.0015, y + h * 0.22), (r + 0.0015, y + h * 0.68)], u, w, lab, segs=14)
+    L(mb, [(r * 0.37 + 0.0015, y + h + 0.065), (r * 0.37 + 0.0015, y + h + 0.092)], u, w, LABEL_RED if lab == LABEL else LABEL, segs=10)
+
+
+def _variant(fn, v, k):
+    def build():
+        return fn(v, k)
+    build.__name__ = fn.__name__ + v
+    return build
+
+
+run([_variant(fn, v, k) for fn in (table_1, table_2, table_l, table_round) for v, k in VARIANTS] + [cart, bar_l], spacing=4.0)

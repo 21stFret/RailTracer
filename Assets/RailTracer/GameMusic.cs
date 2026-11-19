@@ -16,6 +16,7 @@ namespace RailTracer
     {
         [Header("Music")]
         public float musicVolume = 0.6f;
+        [Range(0f, 1f)] public float pauseMusic = 0.35f; // the music's level while the pause card is up
         public float musicFade = 2.5f;     // seconds to fade in or out
         public float musicWindDown = 1.6f; // seconds for the record to run down when the music's stopped
         [Range(0f, 1f)] public float musicInCar = 0.25f; // the gramophone's level (right beside it) as a share of the menu's
@@ -85,6 +86,7 @@ namespace RailTracer
             muffle.cutoffFrequency = 22000f * Mathf.Pow(musicMuffle / 22000f, music.spatialBlend);       // the gramophone's tone with it
             music.pitch = Mathf.MoveTowards(music.pitch, playing && c.musicStopped ? 0f : 1f, dt / musicWindDown);
             float target = !playing ? musicVolume : here ? musicVolume * musicInCar : 0f;
+            if (choice != null) target *= pauseMusic; // the pause / board / demo complete card: quieter
             musicLevel = Mathf.MoveTowards(musicLevel, target, dt * musicVolume / musicFade);
             music.volume = musicLevel * music.pitch * save.settings.musicVolume; // the Options music volume (master: AudioListener.volume)
             if (gramophoneRecord) gramophoneRecord.RotateAround(centre, gramophone.up, recordRpm * 6f * music.pitch * dt);

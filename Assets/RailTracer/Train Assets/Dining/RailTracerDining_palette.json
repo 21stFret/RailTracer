@@ -155,6 +155,62 @@
       "albedo": "Trn_Shade_albedo.png",
       "normal": "Trn_Shade_normal.png",
       "mask": "Trn_Shade_mask.png"
+    },
+    {
+      "name": "Trn_BarGlass",
+      "color": [
+        0.6,
+        0.68,
+        0.66
+      ],
+      "metallic": 0.0,
+      "roughness": 0.03,
+      "tile": 1.0,
+      "albedo": "Trn_BarGlass_albedo.png",
+      "normal": "Trn_BarGlass_normal.png",
+      "mask": "Trn_BarGlass_mask.png"
+    },
+    {
+      "name": "Trn_BottleGreen",
+      "color": [
+        0.025,
+        0.14,
+        0.05
+      ],
+      "metallic": 0.0,
+      "roughness": 0.06,
+      "tile": 1.0,
+      "albedo": "Trn_BottleGreen_albedo.png",
+      "normal": "Trn_BottleGreen_normal.png",
+      "mask": "Trn_BottleGreen_mask.png"
+    },
+    {
+      "name": "Trn_Label",
+      "color": [
+        0.78,
+        0.7,
+        0.52
+      ],
+      "metallic": 0.0,
+      "roughness": 0.85,
+      "tile": 0.5,
+      "albedo": "Trn_Label_albedo.png",
+      "normal": "Trn_Label_normal.png",
+      "mask": "Trn_Label_mask.png"
+    },
+    {
+      "name": "Trn_LabelRed",
+      "color": [
+        0.42,
+        0.04,
+        0.05
+      ],
+      "metallic": 0.0,
+      "roughness": 0.85,
+      "tile": 0.5,
+      "albedo": "Trn_LabelRed_albedo.png",
+      "normal": "Trn_LabelRed_normal.png",
+      "mask": "Trn_LabelRed_mask.png"
     }
   ]
 }

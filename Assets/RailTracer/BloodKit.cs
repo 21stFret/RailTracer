@@ -13,6 +13,10 @@ namespace RailTracer
         public GameObject[] gutBursts;
         public GameObject[] screens; // UI overlays shown when you're hit
         public float splashLife = 4f, screenLife = 1.5f;
+        [Tooltip("Gore chunks per gut burst, against the RVFX prefab's own count.")]
+        public float gutCount = 2f;
+        [Tooltip("Size of each gore chunk, against the RVFX prefab's own.")]
+        public float gutSize = 0.5f;
 
         [Header("Persistent projected decals")]
         public GameObject[] decals;
@@ -44,11 +48,32 @@ namespace RailTracer
                 if (towards > 0f) dir -= 2f * towards * toCam;
             }
             var rot = Quaternion.LookRotation(dir.sqrMagnitude > 1e-4f ? dir : Vector3.forward);
-            var splash = Spawn(gore && goreSplashes.Length > 0 ? goreSplashes : splashes, pos, rot, parent);
+            var splash = GutSpawn(gore && goreSplashes.Length > 0 ? goreSplashes : splashes, pos, rot, parent);
             if (splash) Destroy(splash, splashLife);
             if (!gore) return;
-            var guts = Spawn(gutBursts, pos, rot, null); // the chunks it throws clean themselves up
+            var guts = GutSpawn(gutBursts, pos, rot, null); // the chunks it throws clean themselves up
             if (guts) Destroy(guts, splashLife);
+        }
+
+        // Spawn for effects that may throw gore chunks: RVFX's spawner throws them as it's enabled, so the effect is
+        // made under an inactive holder and its count and sizes set (gutCount, gutSize) before it wakes.
+        GameObject GutSpawn(GameObject[] set, Vector3 pos, Quaternion rot, Transform parent)
+        {
+            var holder = new GameObject("Gut Holder");
+            holder.SetActive(false);
+            var fx = Spawn(set, pos, rot, holder.transform);
+            if (fx)
+            {
+                foreach (var gut in fx.GetComponentsInChildren<BloodVFX.EffectController>(true))
+                {
+                    gut.spawnNumber = Mathf.RoundToInt(gut.spawnNumber * gutCount);
+                    gut.minScale *= gutSize;
+                    gut.maxScale *= gutSize;
+                }
+                fx.transform.SetParent(parent, true);
+            }
+            Destroy(holder);
+            return fx;
         }
 
         // A stain on whatever surface is at `surface`, projected along `facing`

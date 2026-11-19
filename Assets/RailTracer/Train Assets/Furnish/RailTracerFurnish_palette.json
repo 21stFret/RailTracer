@@ -1,0 +1,132 @@
+{
+  "kit": "RailTracerFurnish",
+  "style": "pbr",
+  "materials": [
+    {
+      "name": "Trn_Wood",
+      "color": [
+        0.45,
+        0.24,
+        0.12
+      ],
+      "metallic": 0.0,
+      "roughness": 0.6,
+      "tile": 2.0,
+      "albedo": "Trn_Wood_albedo.png",
+      "normal": "Trn_Wood_normal.png",
+      "mask": "Trn_Wood_mask.png"
+    },
+    {
+      "name": "Trn_WoodDark",
+      "color": [
+        0.2,
+        0.1,
+        0.05
+      ],
+      "metallic": 0.0,
+      "roughness": 0.6,
+      "tile": 1.0,
+      "albedo": "Trn_WoodDark_albedo.png",
+      "normal": "Trn_WoodDark_normal.png",
+      "mask": "Trn_WoodDark_mask.png"
+    },
+    {
+      "name": "Trn_Brass",
+      "color": [
+        0.95,
+        0.7,
+        0.25
+      ],
+      "metallic": 1.0,
+      "roughness": 0.3,
+      "tile": 0.5,
+      "albedo": "Trn_Brass_albedo.png",
+      "normal": "Trn_Brass_normal.png",
+      "mask": "Trn_Brass_mask.png"
+    },
+    {
+      "name": "Trn_Curtain",
+      "color": [
+        0.4,
+        0.03,
+        0.05
+      ],
+      "metallic": 0.0,
+      "roughness": 0.9,
+      "tile": 0.5,
+      "albedo": "Trn_Curtain_albedo.png",
+      "normal": "Trn_Curtain_normal.png",
+      "mask": "Trn_Curtain_mask.png"
+    },
+    {
+      "name": "Trn_Curtain_White",
+      "color": [
+        0.78,
+        0.74,
+        0.66
+      ],
+      "metallic": 0.0,
+      "roughness": 0.9,
+      "tile": 0.5,
+      "albedo": "Trn_Curtain_White_albedo.png",
+      "normal": "Trn_Curtain_White_normal.png",
+      "mask": "Trn_Curtain_White_mask.png"
+    },
+    {
+      "name": "Trn_Curtain_Gold",
+      "color": [
+        0.55,
+        0.36,
+        0.07
+      ],
+      "metallic": 0.0,
+      "roughness": 0.85,
+      "tile": 0.5,
+      "albedo": "Trn_Curtain_Gold_albedo.png",
+      "normal": "Trn_Curtain_Gold_normal.png",
+      "mask": "Trn_Curtain_Gold_mask.png"
+    },
+    {
+      "name": "Trn_Blind",
+      "color": [
+        0.06,
+        0.2,
+        0.09
+      ],
+      "metallic": 0.0,
+      "roughness": 0.95,
+      "tile": 0.5,
+      "albedo": "Trn_Blind_albedo.png",
+      "normal": "Trn_Blind_normal.png",
+      "mask": "Trn_Blind_mask.png"
+    },
+    {
+      "name": "Trn_Wallpaper_Green",
+      "color": [
+        0.01,
+        0.045,
+        0.02
+      ],
+      "metallic": 0.0,
+      "roughness": 0.75,
+      "tile": 1.0,
+      "albedo": "Trn_Wallpaper_Green_albedo.png",
+      "normal": "Trn_Wallpaper_Green_normal.png",
+      "mask": "Trn_Wallpaper_Green_mask.png"
+    },
+    {
+      "name": "Trn_Wallpaper_Navy",
+      "color": [
+        0.008,
+        0.014,
+        0.045
+      ],
+      "metallic": 0.0,
+      "roughness": 0.75,
+      "tile": 1.0,
+      "albedo": "Trn_Wallpaper_Navy_albedo.png",
+      "normal": "Trn_Wallpaper_Navy_normal.png",
+      "mask": "Trn_Wallpaper_Navy_mask.png"
+    }
+  ]
+}
