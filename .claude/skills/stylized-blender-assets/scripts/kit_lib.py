@@ -163,6 +163,7 @@ class MB:
         self.pid, self.npieces = [], 0      # piece id per face (used by the z-fighting check)
         self.vertical = False               # while True, added pieces get vertical grain (UVs turned on side faces)
         self.vert = set()                   # piece ids with vertical grain
+        self.soft = set()                   # piece ids shaded smooth all over, whatever the smoothing angle (rbox)
         self.along_y = False                # while True, added pieces run along Y: grain along Y on their flat tops too
         self.runy = set()                   # piece ids running along Y
 
@@ -185,6 +186,7 @@ class MB:
         self.m += other.m
         self.pid += [self.npieces + p for p in other.pid]
         self.vert |= {self.npieces + p for p in other.vert}
+        self.soft |= {self.npieces + p for p in other.soft}
         self.runy |= {self.npieces + p for p in other.runy}
         self.npieces += other.npieces
 
@@ -196,6 +198,7 @@ class MB:
         self.m += other.m
         self.pid += [self.npieces + p for p in other.pid]
         self.vert |= {self.npieces + p for p in other.vert}
+        self.soft |= {self.npieces + p for p in other.soft}
         self.runy |= {self.npieces + p for p in other.runy}
         self.npieces += other.npieces
 
@@ -302,7 +305,62 @@ class MB:
             mod.angle_limit = radians(50)
             bpy.ops.object.modifier_apply(modifier=mod.name)
         shade(obj, smooth_angle)
+        sharp = obj.data.attributes.get("sharp_edge")
+        if self.soft and sharp:                     # rounded pieces: no sharp edges, so coarse steps still read round
+            keys = set()
+            for poly, pid in zip(obj.data.polygons, self.pid):
+                if pid in self.soft:
+                    keys.update(poly.edge_keys)
+            for e in obj.data.edges:
+                if e.key in keys:
+                    sharp.data[e.index].value = False
         return obj
+
+def rbox(mb, lo, hi, r, slot, puff=0.0, puff_axis=2, puff_sign=1, xf=None, k=2, skip=()):
+    """Rounded box from corner lo to hi (3-tuples): every edge and corner rounded with radius r in k steps, shaded
+    smooth all over (MB.soft), so 45-degree steps read round. puff domes the face on puff_axis / puff_sign outward by
+    up to `puff` at its centre (a cushion), easing to nothing at its rounded edges. xf maps a local point to world.
+    skip: faces (axis, sign) left out where they're buried (in a frame, the floor): each takes half its rounded edges
+    with it, so bury the box at least r * 0.3 past that face. Otherwise one closed, welded piece."""
+    c = [(a + b) / 2 for a, b in zip(lo, hi)]
+    h = [(b - a) / 2 - r for a, b in zip(lo, hi)]                  # the flat part's half sizes
+    def ticks(i):
+        mid = [-h[i], 0.0, h[i]] if puff else [-h[i], h[i]]
+        return sorted({round(t, 6) for t in [-h[i] - r * (k - m) / k for m in range(k)] + mid + [h[i] + r * m / k for m in range(1, k + 1)]})  # a fully round side: no zero-width rows
+    T = [ticks(i) for i in range(3)]
+    index, verts, faces = {}, [], []
+    def vert(q):
+        key = tuple(round(v, 7) for v in q)
+        if key not in index:
+            inner = [max(-h[i], min(h[i], q[i])) for i in range(3)]
+            d = [q[i] - inner[i] for i in range(3)]
+            n = sqrt(sum(v * v for v in d)) or 1.0
+            p = [c[i] + inner[i] + r * d[i] / n for i in range(3)]
+            if puff and q[puff_axis] * puff_sign > 0:
+                f = 1.0
+                for i in range(3):
+                    if i != puff_axis:
+                        f *= 1 - (inner[i] / h[i]) ** 2 if h[i] > 0 else 0.0
+                p[puff_axis] += puff_sign * puff * f
+            index[key] = len(verts)
+            verts.append(tuple(xf(p)) if xf else tuple(p))
+        return index[key]
+    for a in range(3):
+        b, e = [i for i in range(3) if i != a]
+        for sg in (-1, 1):
+            if (a, sg) in skip:
+                continue
+            for i in range(len(T[b]) - 1):
+                for j in range(len(T[e]) - 1):
+                    quad = []
+                    for ib, je in ((i, j), (i + 1, j), (i + 1, j + 1), (i, j + 1)):
+                        q = [0.0, 0.0, 0.0]
+                        q[a], q[b], q[e] = sg * (h[a] + r), T[b][ib], T[e][je]
+                        quad.append(vert(q))
+                    faces.append(quad)
+    mb.soft.add(mb.npieces)
+    mb.add(verts, faces, slot)
+
 
 def place(kh, kv, x, y, z, yaw=0.0):
     """Transform for an upright sub-piece: kh = width scale, kv = height scale."""

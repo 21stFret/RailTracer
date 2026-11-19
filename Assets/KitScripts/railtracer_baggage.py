@@ -6,12 +6,15 @@ Same palette as the train kit (Trn_*), plus Trn_Pine (crate boards) and Trn_Canv
 Sized to the game's 1 m tiles. Pivot = floor level at the centre of the tile (the cage: the centre of its
 block). Directions are UNITY local axes (the FBX maps Blender (x, y, z) to Unity (-x, z, -y)).
 
-  Crate_Stack_A / _B / _C  1 tile, full cover (blocks walking and sight): pine shipping crates, dark frame boards,
-                      iron corner plates, shipping labels. A: a 0.94 m crate with a 0.72 m one on top (1.68 m);
+  Crate_Stack_A / _B / _C  1 tile, full cover (blocks walking and sight): pine shipping crates with softly rounded
+                      edges, dark frame boards, a rounded iron cap on all eight corners, shipping labels; the pine's
+                      boards run the whole width (no end joints). A: a 0.94 m crate with a 0.72 m one on top (1.68 m);
                       B: two 0.86 m crates, the top one turned (1.74 m); C: a 0.94 m crate, a parcel bundle and a
-                      small box on top (1.5 m). Square-ish, so the game may turn them in 90 degree steps.
-  Mail_Sacks_A / _B   1 tile, half cover: canvas mail sacks tied at the neck, five to a pile, four at the base and
-                      one on top. A: four lying, one across them (0.56 m); B: four standing, one lying over them (0.77 m).
+                      small box on top (1.35 m). A crate on top sits on the caps below. Square-ish, so the game may
+                      turn them in 90 degree steps.
+  Mail_Sacks_A / _B   1 tile, half cover: canvas mail sacks tied at the neck (smooth outlines, the lying ones slumped),
+                      five to a pile, four at the base and one on top. A: four lying, one across them (0.47 m);
+                      B: four standing, one lying over them (0.70 m).
   Safe_Cage           3 x 2 tiles, pivot at the block's centre, its back to the wall at +Z: heavy iron bars on the
                       three room sides (front at -Z, both ends), a beam frame on top, a barred door with a brass
                       padlock in the front, and the safe inside against the wall. See-through, like the rules say.
@@ -200,6 +203,11 @@ class MB:
     def __init__(self):
         self.v, self.f, self.m = [], [], []
         self.pid, self.npieces = [], 0      # piece id per face (used by the z-fighting check)
+        self.vertical = False               # while True, added pieces get vertical grain (UVs turned on side faces)
+        self.vert = set()                   # piece ids with vertical grain
+        self.soft = set()                   # piece ids shaded smooth all over, whatever the smoothing angle (rbox)
+        self.along_y = False                # while True, added pieces run along Y: grain along Y on their flat tops too
+        self.runy = set()                   # piece ids running along Y
 
     def add(self, verts, faces, slot=0):
         o = len(self.v)
@@ -207,6 +215,10 @@ class MB:
         self.f += [[i + o for i in face] for face in faces]
         self.m += [slot] * len(faces)
         self.pid += [self.npieces] * len(faces)
+        if self.vertical:
+            self.vert.add(self.npieces)
+        if self.along_y:
+            self.runy.add(self.npieces)
         self.npieces += 1
 
     def merge(self, other, mat4):
@@ -215,6 +227,9 @@ class MB:
         self.f += [[i + o for i in face] for face in other.f]
         self.m += other.m
         self.pid += [self.npieces + p for p in other.pid]
+        self.vert |= {self.npieces + p for p in other.vert}
+        self.soft |= {self.npieces + p for p in other.soft}
+        self.runy |= {self.npieces + p for p in other.runy}
         self.npieces += other.npieces
 
     def merge_mirror_x(self, other):
@@ -224,6 +239,9 @@ class MB:
         self.f += [[i + o for i in reversed(face)] for face in other.f]
         self.m += other.m
         self.pid += [self.npieces + p for p in other.pid]
+        self.vert |= {self.npieces + p for p in other.vert}
+        self.soft |= {self.npieces + p for p in other.soft}
+        self.runy |= {self.npieces + p for p in other.runy}
         self.npieces += other.npieces
 
     def box(self, center, size, slot=0, rot=None):
@@ -302,16 +320,17 @@ class MB:
         if uv:
             uvl = mesh.uv_layers.new(name="UVMap")
             verts = mesh.vertices
-            for poly in mesh.polygons:
+            for poly, pid in zip(mesh.polygons, self.pid):
                 nx, ny, nz = (abs(c) for c in poly.normal)
+                up = pid in self.vert            # vertical grain: u runs up the side faces
                 for li in poly.loop_indices:
                     co = verts[mesh.loops[li].vertex_index].co
                     if nz >= nx and nz >= ny:
-                        uvl.data[li].uv = (co.x, co.y)
+                        uvl.data[li].uv = (co.y, co.x) if pid in self.runy else (co.x, co.y)
                     elif nx >= ny:
-                        uvl.data[li].uv = (co.y, co.z)
+                        uvl.data[li].uv = (co.z, co.y) if up else (co.y, co.z)
                     else:
-                        uvl.data[li].uv = (co.x, co.z)
+                        uvl.data[li].uv = (co.z, co.x) if up else (co.x, co.z)
         obj = bpy.data.objects.new(name, mesh)
         bpy.context.collection.objects.link(obj)
         activate(obj)
@@ -328,7 +347,62 @@ class MB:
             mod.angle_limit = radians(50)
             bpy.ops.object.modifier_apply(modifier=mod.name)
         shade(obj, smooth_angle)
+        sharp = obj.data.attributes.get("sharp_edge")
+        if self.soft and sharp:                     # rounded pieces: no sharp edges, so coarse steps still read round
+            keys = set()
+            for poly, pid in zip(obj.data.polygons, self.pid):
+                if pid in self.soft:
+                    keys.update(poly.edge_keys)
+            for e in obj.data.edges:
+                if e.key in keys:
+                    sharp.data[e.index].value = False
         return obj
+
+def rbox(mb, lo, hi, r, slot, puff=0.0, puff_axis=2, puff_sign=1, xf=None, k=2, skip=()):
+    """Rounded box from corner lo to hi (3-tuples): every edge and corner rounded with radius r in k steps, shaded
+    smooth all over (MB.soft), so 45-degree steps read round. puff domes the face on puff_axis / puff_sign outward by
+    up to `puff` at its centre (a cushion), easing to nothing at its rounded edges. xf maps a local point to world.
+    skip: faces (axis, sign) left out where they're buried (in a frame, the floor): each takes half its rounded edges
+    with it, so bury the box at least r * 0.3 past that face. Otherwise one closed, welded piece."""
+    c = [(a + b) / 2 for a, b in zip(lo, hi)]
+    h = [(b - a) / 2 - r for a, b in zip(lo, hi)]                  # the flat part's half sizes
+    def ticks(i):
+        mid = [-h[i], 0.0, h[i]] if puff else [-h[i], h[i]]
+        return sorted({round(t, 6) for t in [-h[i] - r * (k - m) / k for m in range(k)] + mid + [h[i] + r * m / k for m in range(1, k + 1)]})  # a fully round side: no zero-width rows
+    T = [ticks(i) for i in range(3)]
+    index, verts, faces = {}, [], []
+    def vert(q):
+        key = tuple(round(v, 7) for v in q)
+        if key not in index:
+            inner = [max(-h[i], min(h[i], q[i])) for i in range(3)]
+            d = [q[i] - inner[i] for i in range(3)]
+            n = sqrt(sum(v * v for v in d)) or 1.0
+            p = [c[i] + inner[i] + r * d[i] / n for i in range(3)]
+            if puff and q[puff_axis] * puff_sign > 0:
+                f = 1.0
+                for i in range(3):
+                    if i != puff_axis:
+                        f *= 1 - (inner[i] / h[i]) ** 2 if h[i] > 0 else 0.0
+                p[puff_axis] += puff_sign * puff * f
+            index[key] = len(verts)
+            verts.append(tuple(xf(p)) if xf else tuple(p))
+        return index[key]
+    for a in range(3):
+        b, e = [i for i in range(3) if i != a]
+        for sg in (-1, 1):
+            if (a, sg) in skip:
+                continue
+            for i in range(len(T[b]) - 1):
+                for j in range(len(T[e]) - 1):
+                    quad = []
+                    for ib, je in ((i, j), (i + 1, j), (i + 1, j + 1), (i, j + 1)):
+                        q = [0.0, 0.0, 0.0]
+                        q[a], q[b], q[e] = sg * (h[a] + r), T[b][ib], T[e][je]
+                        quad.append(vert(q))
+                    faces.append(quad)
+    mb.soft.add(mb.npieces)
+    mb.add(verts, faces, slot)
+
 
 def place(kh, kv, x, y, z, yaw=0.0):
     """Transform for an upright sub-piece: kh = width scale, kv = height scale."""
@@ -709,8 +783,9 @@ def _grid(n):
 # ---------------------------------------------------------------- recipes
 # Each returns (tone, height, rough_offset, cavity): tone ~ -1..1 brightness variation,
 # height 0..1 for the normal map, rough_offset -1..1, cavity 0..1 (1 = open, 0 = crevice).
-def r_wood(n, s, st, planks=4, rings=10, seams=True):
-    """Planks along u. seams=False -> continuous veneer (grain only, no joints)."""
+def r_wood(n, s, st, planks=4, rings=10, seams=True, joints=True):
+    """Planks along u. seams=False -> continuous veneer (grain only, no joints). joints=False -> planks run the
+    whole tile with no end joints (crate boards, short panels)."""
     u, v = _grid(n)
     warp = fnoise(n, s + 1, p=1.4, sx=6) - 0.5
     grain = _np.sin(2 * _np.pi * (rings * v * planks + 2.5 * warp))
@@ -722,7 +797,7 @@ def r_wood(n, s, st, planks=4, rings=10, seams=True):
     fv = (v * planks) % 1.0
     seam = _np.minimum(fv, 1 - fv) < 0.012
     jd = _np.abs(((u - joint) + 0.5) % 1.0 - 0.5) < 0.004
-    seams = (seam | jd) if seams else _np.zeros_like(seam)
+    seams = ((seam | jd) if joints else seam) if seams else _np.zeros_like(seam)
     tone = 0.30 * grain * st["detail"] + 0.35 * ptint + 0.6 * fibre * st["fine"]
     tone = _np.where(seams, -1.0, tone)
     height = 0.5 + 0.15 * grain * st["detail"] + 0.3 * fibre * st["fine"]
@@ -925,8 +1000,8 @@ def make_texture_set(entry, style, n=512, seed=1):
 # PIECE
 # ======================================================================
 
+# Generated by stylized-blender-assets. Run in Blender (Scripting tab > Run Script) or:
 # kit_lib is pasted above this by scripts/assemble.py. Do not import it.
-
 
 
 (WOODDARK, BRASS, CREAM, LEATHER, IRON, PINE, CANVAS) = set_palette([
@@ -936,7 +1011,7 @@ def make_texture_set(entry, style, n=512, seed=1):
     ("Trn_Leather",    (0.40, 0.22, 0.10), 0.0, 0.7, {"tex": "leather", "tile": 0.5}),
     ("Trn_Iron",       (0.18, 0.20, 0.22), 0.6, 0.5, {"tex": "painted_metal", "tile": 2.0}),
     # new for the baggage hold
-    ("Trn_Pine",       (0.52, 0.37, 0.20), 0.0, 0.75, {"tex": "wood", "tile": 1.0, "planks": 5}),
+    ("Trn_Pine",       (0.52, 0.37, 0.20), 0.0, 0.75, {"tex": "wood", "tile": 1.0, "planks": 5, "joints": False}),
     ("Trn_Canvas",     (0.50, 0.44, 0.31), 0.0, 0.95, {"tex": "fabric", "tile": 0.5})])
 
 
@@ -950,27 +1025,33 @@ def L(mb, profile, u, w, slot, segs=24, **kw):
     mb.lathe(profile, segs=segs, slot=slot, center=(-u, -w, 0.0), **kw)
 
 
+def RB(mb, u0, u1, w0, w1, y0, y1, r, slot, k=2):
+    """Rounded box in Unity axes (rbox, edges and corners rounded with radius r, shaded smooth)."""
+    rbox(mb, (-u1, -w1, y0), (-u0, -w0, y1), r, slot, k=k)
+
+
 def crate(mb, rng, u, w, su, sw, y0, h, label=True):
-    """A shipping crate su x sw x h standing at height y0, centred on (u, w): pine body, dark frame boards proud
-    1 cm on every face (bands round the bottom and top, posts up the corners between them), three battens on the
-    lid, iron corner plates, a cream shipping label on one side."""
+    """A shipping crate su x sw x h standing at height y0, centred on (u, w): a pine body with softly rounded edges,
+    dark frame boards proud 1 cm (bands round the bottom and top, posts up the corners between them, each with a
+    small round-over), a rounded iron cap over all eight corners (1 cm proud of the lid: what a crate on top sits
+    on), a cream shipping label on one side. The pine's boards run the whole width (Trn_Pine: no end joints)."""
     hu, hw = su / 2, sw / 2
     y1 = y0 + h
-    R(mb, u - hu, u + hu, w - hw, w + hw, y0, y1, PINE)
+    RB(mb, u - hu, u + hu, w - hw, w + hw, y0, y1, 0.03, PINE)
     b = 0.085                                                    # board width
     for (a0, a1) in ((y0 + 0.004, y0 + b), (y1 - b, y1 - 0.004)):    # bands (no shared top or bottom)
-        R(mb, u - hu - 0.01, u + hu + 0.01, w - hw - 0.01, w + hw + 0.01, a0, a1, WOODDARK)
-    for du in (-1, 1):                                           # corner posts, deeper than the bands
+        RB(mb, u - hu - 0.01, u + hu + 0.01, w - hw - 0.01, w + hw + 0.01, a0, a1, 0.008, WOODDARK, k=1)
+    c = 0.11                                                     # corner cap size along each edge
+    for du in (-1, 1):
         for dw in (-1, 1):
             cu, cw = u + du * hu, w + dw * hw
-            R(mb, min(cu, cu - du * b) - (0.012 if du < 0 else 0), max(cu, cu - du * b) + (0.012 if du > 0 else 0),
-              min(cw, cw - dw * b) - (0.012 if dw < 0 else 0), max(cw, cw - dw * b) + (0.012 if dw > 0 else 0),
-              y0 + b, y1 - b, WOODDARK)
-            # iron plate over the top corner (on the lid, 3 mm proud)
-            R(mb, min(cu, cu - du * 0.12), max(cu, cu - du * 0.12), min(cw, cw - dw * 0.12), max(cw, cw - dw * 0.12),
-              y1, y1 + 0.004, IRON)
-    for k in (-0.3, 0.0, 0.3):                                   # lid battens across
-        R(mb, u - hu + 0.14, u + hu - 0.14, w + k * sw - 0.04, w + k * sw + 0.04, y1, y1 + 0.012, WOODDARK)
+            uu = sorted((cu - du * b, cu + du * 0.012))          # corner posts, deeper than the bands
+            ww = sorted((cw - dw * b, cw + dw * 0.012))
+            RB(mb, uu[0], uu[1], ww[0], ww[1], y0 + b - 0.01, y1 - b + 0.01, 0.008, WOODDARK, k=1)
+            uu = sorted((cu - du * c, cu + du * 0.02))           # iron caps, wrapping post, bands and lid edge
+            ww = sorted((cw - dw * c, cw + dw * 0.02))
+            RB(mb, uu[0], uu[1], ww[0], ww[1], y1 - c, y1 + 0.01, 0.018, IRON)
+            RB(mb, uu[0], uu[1], ww[0], ww[1], y0 + 0.003, y0 + c, 0.018, IRON)
     if label:
         lu = u + rng.uniform(-0.12, 0.12)
         lh = y0 + h * rng.uniform(0.35, 0.55)
@@ -987,44 +1068,68 @@ def parcel(mb, u, w, su, sw, h, y0, slot=CANVAS):
 def crate_a():
     a = Asset("Crate_Stack_A", seed=SEED)
     crate(a.S, a.rng, 0.0, 0.0, 0.94, 0.94, 0.0, 0.94)
-    crate(a.S, a.rng, 0.06, -0.04, 0.72, 0.72, 0.946, 0.72, label=False)
+    crate(a.S, a.rng, 0.06, -0.04, 0.72, 0.72, 0.952, 0.72, label=False)
     return a.finish()
 
 
 def crate_b():
     a = Asset("Crate_Stack_B", seed=SEED + 1)
     crate(a.S, a.rng, 0.0, 0.0, 0.92, 0.8, 0.0, 0.86)
-    crate(a.S, a.rng, -0.03, 0.02, 0.78, 0.88, 0.866, 0.86, label=False)     # turned the other way
+    crate(a.S, a.rng, -0.03, 0.02, 0.78, 0.88, 0.872, 0.86, label=False)     # turned the other way
     return a.finish()
 
 
 def crate_c():
     a = Asset("Crate_Stack_C", seed=SEED + 2)
     crate(a.S, a.rng, 0.0, 0.0, 0.94, 0.94, 0.0, 0.94)
-    parcel(a.P, -0.18, 0.1, 0.42, 0.34, 0.22, 0.958)
-    crate(a.P, a.rng, 0.2, -0.16, 0.36, 0.4, 0.958, 0.32, label=False)
-    parcel(a.P, -0.14, 0.12, 0.3, 0.24, 0.16, 1.188, slot=CREAM)
+    parcel(a.P, -0.18, 0.1, 0.42, 0.34, 0.22, 0.952)
+    crate(a.P, a.rng, 0.2, -0.16, 0.36, 0.4, 0.952, 0.32, label=False)
+    parcel(a.P, -0.14, 0.12, 0.3, 0.24, 0.16, 1.182, slot=CREAM)
     return a.finish()
 
 
+def smooth(pts, steps=4):
+    """Catmull-Rom through a lathe profile's (r, z) points: `steps` points per span, so the sack's outline curves."""
+    out = []
+    P = [pts[0]] + list(pts) + [pts[-1]]
+    for i in range(1, len(P) - 2):
+        p0, p1, p2, p3 = P[i - 1], P[i], P[i + 1], P[i + 2]
+        for k in range(steps):
+            t = k / steps
+            out.append(tuple(0.5 * (2 * p1[j] + (-p0[j] + p2[j]) * t + (2 * p0[j] - 5 * p1[j] + 4 * p2[j] - p3[j]) * t * t
+                                    + (-p0[j] + 3 * p1[j] - 3 * p2[j] + p3[j]) * t ** 3) for j in range(2)))
+    out.append(pts[-1])
+    return out
+
+
+SACK_SEGS = 32
+
+
 def sack_standing(mb, u, w, h=0.6, r=0.24):
-    L(mb, [(r * 0.6, 0.0), (r, 0.08), (r * 1.03, h * 0.45), (r * 0.82, h * 0.78), (r * 0.25, h * 0.9),
-           (r * 0.22, h * 0.94), (r * 0.36, h)], u, w, CANVAS, segs=18)
-    L(mb, [(r * 0.27, h * 0.89), (r * 0.27, h * 0.95)], u, w, LEATHER, segs=14)           # the tie
+    L(mb, smooth([(r * 0.55, 0.0), (r * 0.92, 0.04), (r, 0.12), (r * 1.03, h * 0.45), (r * 0.84, h * 0.74),
+                  (r * 0.42, h * 0.86), (r * 0.24, h * 0.9), (r * 0.26, h * 0.95), (r * 0.36, h)]), u, w, CANVAS,
+      segs=SACK_SEGS)
+    L(mb, [(r * 0.29, h * 0.89), (r * 0.31, h * 0.915), (r * 0.29, h * 0.94)], u, w, LEATHER, segs=24)   # the tie
+
+
+SAG = 0.85      # lying sacks slump: their height squashed to this
 
 
 def sack_lying(mb, u, w, y, yaw, length=0.72, r=0.2):
-    """A sack lying on its side along `yaw` (degrees, 0 = along Unity x), its body resting at height y."""
-    m = Matrix.Rotation(radians(yaw), 3, 'Z') @ Matrix.Rotation(radians(-90), 3, 'Y')
-    prof = [(r * 0.5, 0.0), (r, 0.08), (r * 1.02, length * 0.55), (r * 0.6, length * 0.85), (r * 0.18, length * 0.93),
-            (r * 0.3, length)]
+    """A sack lying on its side along `yaw` (degrees, 0 = along Unity x), slumped (SAG), its body resting at
+    height y."""
+    m = (Matrix.Diagonal((1.0, 1.0, SAG)) @ Matrix.Rotation(radians(yaw), 3, 'Z')
+         @ Matrix.Rotation(radians(-90), 3, 'Y'))
+    prof = smooth([(r * 0.45, 0.0), (r * 0.85, 0.03), (r, 0.1), (r * 1.02, length * 0.55), (r * 0.7, length * 0.8),
+                   (r * 0.3, length * 0.9), (r * 0.18, length * 0.93), (r * 0.3, length)])
     # centred on (u, w): the lathe starts at its base, so shift back half a length along the lying axis
     import math
     du, dw = math.cos(math.radians(yaw)), math.sin(math.radians(yaw))
     cu, cw = u - du * length / 2, w - dw * length / 2
-    mb.lathe(prof, segs=16, slot=CANVAS, center=(-cu, -cw, y + r * 1.02), mat3=m)
-    mb.lathe([(r * 0.21, length * 0.89), (r * 0.21, length * 0.95)], segs=12, slot=LEATHER,
-             center=(-cu, -cw, y + r * 1.02), mat3=m)
+    cy = y + r * 1.04 * SAG      # the smoothed outline bulges a touch past r
+    mb.lathe(prof, segs=SACK_SEGS, slot=CANVAS, center=(-cu, -cw, cy), mat3=m)
+    mb.lathe([(r * 0.21, length * 0.89), (r * 0.23, length * 0.915), (r * 0.21, length * 0.94)], segs=24,
+             slot=LEATHER, center=(-cu, -cw, cy), mat3=m)
 
 
 def sacks_a():
@@ -1032,7 +1137,7 @@ def sacks_a():
     a = Asset("Mail_Sacks_A", seed=SEED + 3)
     for (u, w, yaw) in ((-0.24, -0.2, 184), (0.24, -0.2, -3), (-0.24, 0.2, 176), (0.24, 0.2, 2)):   # necks outward
         sack_lying(a.S, u, w, 0.0, yaw, 0.48, 0.14)
-    sack_lying(a.S, 0.02, 0.0, 0.25, 88, 0.64, 0.15)
+    sack_lying(a.S, 0.02, 0.0, 0.2, 88, 0.64, 0.15)
     return a.finish()
 
 
@@ -1041,7 +1146,7 @@ def sacks_b():
     a = Asset("Mail_Sacks_B", seed=SEED + 4)
     for (u, w, h) in ((-0.22, -0.22, 0.46), (0.22, -0.22, 0.44), (-0.22, 0.22, 0.43), (0.22, 0.22, 0.46)):
         sack_standing(a.S, u, w, h, 0.18)
-    sack_lying(a.S, 0.0, 0.0, 0.42, 6, 0.62, 0.17)
+    sack_lying(a.S, 0.0, 0.0, 0.4, 6, 0.62, 0.17)
     return a.finish()
 
 

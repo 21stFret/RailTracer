@@ -42,8 +42,9 @@ def _grid(n):
 # ---------------------------------------------------------------- recipes
 # Each returns (tone, height, rough_offset, cavity): tone ~ -1..1 brightness variation,
 # height 0..1 for the normal map, rough_offset -1..1, cavity 0..1 (1 = open, 0 = crevice).
-def r_wood(n, s, st, planks=4, rings=10, seams=True):
-    """Planks along u. seams=False -> continuous veneer (grain only, no joints)."""
+def r_wood(n, s, st, planks=4, rings=10, seams=True, joints=True):
+    """Planks along u. seams=False -> continuous veneer (grain only, no joints). joints=False -> planks run the
+    whole tile with no end joints (crate boards, short panels)."""
     u, v = _grid(n)
     warp = fnoise(n, s + 1, p=1.4, sx=6) - 0.5
     grain = _np.sin(2 * _np.pi * (rings * v * planks + 2.5 * warp))
@@ -55,7 +56,7 @@ def r_wood(n, s, st, planks=4, rings=10, seams=True):
     fv = (v * planks) % 1.0
     seam = _np.minimum(fv, 1 - fv) < 0.012
     jd = _np.abs(((u - joint) + 0.5) % 1.0 - 0.5) < 0.004
-    seams = (seam | jd) if seams else _np.zeros_like(seam)
+    seams = ((seam | jd) if joints else seam) if seams else _np.zeros_like(seam)
     tone = 0.30 * grain * st["detail"] + 0.35 * ptint + 0.6 * fibre * st["fine"]
     tone = _np.where(seams, -1.0, tone)
     height = 0.5 + 0.15 * grain * st["detail"] + 0.3 * fibre * st["fine"]
