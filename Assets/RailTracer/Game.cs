@@ -432,6 +432,7 @@ namespace RailTracer
                 var look = Instantiate(baked, root);
                 look.name = "Car Look";
                 kitBuilt = onKit = true;
+                AddBoothTables(look.transform, trainKit, Map);
                 WakeLook(look.transform, trainKit, lookTrain, c.H, true);
             }
             else
@@ -577,6 +578,28 @@ namespace RailTracer
         // way TrainCarBuilder does: modules run along the shell's local +Z (walls from z = 0.5, end caps outside),
         // side A on local -X. The shell is turned so local +Z runs along the game's +X: cell (x, y) is at local
         // (y - 2, 0, x + 1). Checked z-fighting-free with the kit's joint_check (partition on a joint, racks clear).
+        // Booth tables ('t', 19.42) came after Second and First class were baked: a baked look without them gets them
+        // here, on its "Train Car" shell as BuildKitCarriage places them, and any baked prop standing on a table's tile (an
+        // umbrella by the window) is hidden. Re-baking the car makes this a no-op.
+        static void AddBoothTables(Transform look, TrainKit kit, string[] map)
+        {
+            var model = kit ? kit.Get("Table_Booth") : null;
+            var shell = look.Find("Train Car");
+            var tiles = Enumerable.Range(0, map.Length).SelectMany(y => Enumerable.Range(0, map[y].Length).Where(x => map[y][x] == 't').Select(x => (x, y))).ToList();
+            if (!model || !shell || tiles.Count == 0 || look.GetComponentsInChildren<Transform>(true).Any(t => t.name.StartsWith("Table_Booth"))) return;
+            foreach (var (x, y) in tiles)
+            {
+                var table = Instantiate(model, shell);
+                table.transform.localPosition = new Vector3(y - 2f, 0f, x + 1f);
+            }
+            foreach (Transform prop in look)
+            {
+                if (!prop.name.StartsWith("Prop_")) continue;
+                var p = look.InverseTransformPoint(prop.position); // carriage space: tile (x, y) at (x, 0, -y)
+                if (tiles.Any(t => Mathf.Abs(p.x - t.x) < 0.5f && Mathf.Abs(p.z + t.y) < 0.5f)) prop.gameObject.SetActive(false);
+            }
+        }
+
         bool BuildKitCarriage(TrainKit kit, Carriage car, string[] map, CarKind kind, Transform parent, bool live, int train = 0, string carName = null)
         {
             if (!kit || car.H != 5) return false; // the kit's interior is exactly 5 m (rows) wide
@@ -694,6 +717,10 @@ namespace RailTracer
                             else windowTables.Add(t.transform);
                         }
                 }
+            // Booth tables ('t', Second and First class): symmetric, standing on their tile.
+            for (int x = 0; x < car.W; x++)
+                for (int y = 0; y < car.H; y++)
+                    if (At(x, y) == 't' && kit.Get("Table_Booth")) Place("Table_Booth", y - 2f, x + 1f, 0f);
             // The gramophone ('G', one per car), its back (local +Z) to the nearer side wall: against the wall, or beside
             // the window seat it shares a bank with. The live car's plays the music.
             for (int x = 0; x < car.W; x++)

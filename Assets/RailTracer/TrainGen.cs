@@ -18,9 +18,10 @@ namespace RailTracer
         // (19.35): `banks` is the chance each booth place is filled, minBanks counts single banks.
         // enemies: how many (0 = 8 to 10 at random), toughs of them heavies; banks: the chance each seat bank is
         // there; minBanks: at least this many banks (missing ones added at random, so cars that already have enough are
-        // unchanged); luggage: how many stacks (min, max exclusive). The defaults are the original generator.
+        // unchanged); luggage: how many stacks (min, max exclusive); tables: the chance each booth side gets a table.
+        // The defaults are the original generator.
         public static (string[] map, int[][] spawns, Dictionary<int, Cell[]> patrols) Make(Random rng, int enemies = 0, int toughs = 2,
-            double banks = 0.85, int luggageMin = 3, int luggageMax = 6, int minBanks = 0)
+            double banks = 0.85, int luggageMin = 3, int luggageMax = 6, int minBanks = 0, double tables = 0)
         {
             var g = new char[W, H];
             for (int x = 0; x < W; x++) for (int y = 0; y < H; y++) g[x, y] = '.';
@@ -113,6 +114,19 @@ namespace RailTracer
                 .Where(t => (g[t.x, t.y] == '.' || g[t.x, t.y] == '_') && !booths.Contains(t.x) && !placed.Contains(t)).ToList();
             var spotsG = inBank.Count > 0 && (byWall.Count == 0 || rng.Next(2) == 0) ? inBank : byWall;
             if (spotsG.Count > 0) { var (gx, gy) = spotsG[rng.Next(spotsG.Count)]; g[gx, gy] = 'G'; }
+
+            // Booth tables ('t', 19.42; Second and First class): a pedestal table on a window-row floor tile between a
+            // booth's two facing banks, clear of anyone placed; seat rules (half cover). Drawn last, so the rest of the car
+            // comes out the same as without them (and cars without tables are unchanged).
+            if (tables > 0)
+                for (int k = 0; k + 1 < seatCols.Count; k += 2)
+                    foreach (int y in new[] { 0, H - 1 })
+                    {
+                        int x0 = seatCols[k], x1 = seatCols[k + 1];
+                        if (x1 - x0 != 3 || g[x0, y] != 'S' || g[x1, y] != 'S' || rng.NextDouble() >= tables) continue;
+                        var free = new[] { x0 + 1, x0 + 2 }.Where(x => g[x, y] == '.' && !placed.Contains((x, y))).ToList();
+                        if (free.Count > 0) g[free[rng.Next(free.Count)], y] = 't';
+                    }
 
             var map = new string[H];
             for (int y = 0; y < H; y++)

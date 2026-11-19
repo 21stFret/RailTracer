@@ -621,10 +621,10 @@ namespace RailTracer
             int W = m[0].Length, H = m.Length;
             char At(int x, int y) => x < 0 || y < 0 || x >= W || y >= H ? '#' : m[y][x];
             string where = $"car {i + 1} ({car.name})";
-            Check(m.All(r => r.Length == W) && m.SelectMany(r => r).All(ch => "._PSLlWGTODBMXxC".IndexOf(ch) >= 0), where + ": a known piece on every tile");
+            Check(m.All(r => r.Length == W) && m.SelectMany(r => r).All(ch => "._PSLlWGTODBMXxCt".IndexOf(ch) >= 0), where + ": a known piece on every tile");
             Check(Enumerable.Range(1, W - 1).All(x => At(x, 2) == '.' || At(x, 2) == 'D' || (i == 3 && At(x, 2) == 'X')), where + ": the aisle clear"); // the baggage hold's one crate in the aisle
             Check(m.SelectMany(r => r).Count(ch => ch == 'G') == 1, where + ": one gramophone");
-            string allowed = car.kind == CarKind.Passenger ? "SLlWG" : car.kind == CarKind.Dining ? "TODBG" : "MXxCG";
+            string allowed = car.kind == CarKind.Passenger ? "SLlWGt" : car.kind == CarKind.Dining ? "TODBG" : "MXxCG";
             Check(m.SelectMany(r => r).All(ch => ch == '.' || ch == '_' || ch == 'P' || allowed.IndexOf(ch) >= 0), where + ": only its kind's pieces");
             for (int x = 0; x < W; x++)
             {
@@ -647,6 +647,10 @@ namespace RailTracer
             for (int k = 0; k + 1 < seatCols.Count; k += 2)
                 for (int x = seatCols[k] + 1; x < seatCols[k + 1]; x++)
                     Check("Ll".IndexOf(At(x, 0)) < 0 && "Ll".IndexOf(At(x, H - 1)) < 0, where + $": no luggage in the booth at {x}");
+            var boothCols = Enumerable.Range(0, seatCols.Count / 2).SelectMany(k => Enumerable.Range(seatCols[2 * k] + 1, seatCols[2 * k + 1] - seatCols[2 * k] - 1)).ToHashSet();
+            for (int x = 0; x < W; x++)
+                for (int y = 0; y < H; y++)
+                    if (At(x, y) == 't') Check((y == 0 || y == H - 1) && boothCols.Contains(x), where + $": table at {x},{y} on a window row in a booth");
             // Multi-tile pieces.
             var seen = new HashSet<Cell>();
             var tables = new List<HashSet<Cell>>();

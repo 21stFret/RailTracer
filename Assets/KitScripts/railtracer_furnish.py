@@ -1064,7 +1064,45 @@ def table_window():
     return a.finish(anchors=True)
 
 
-PAINT_ZC = 1.40          # every painting centred at eye level: under a Lamp_Wall (shade bottom ~1.96) and over the dado (0.78)
+def plate(mb, pts, z0, z1, slot):
+    """A flat convex plate: outline pts (x, y) from height z0 to z1."""
+    n = len(pts)
+    verts = [(x, y, z0) for x, y in pts] + [(x, y, z1) for x, y in pts]
+    faces = [list(reversed(range(n))), list(range(n, 2 * n))]
+    faces += [[i, (i + 1) % n, n + (i + 1) % n, n + i] for i in range(n)]
+    mb.add(verts, faces, slot)
+
+
+def round_square(half, r, steps=4):
+    """A square of half size `half` with corners rounded at radius r (convex outline, counter-clockwise)."""
+    pts = []
+    for cx, cy, a0 in ((half - r, half - r, 0), (r - half, half - r, 90), (r - half, r - half, 180), (half - r, r - half, 270)):
+        for k in range(steps + 1):
+            a = math.radians(a0 + 90 * k / steps)
+            pts.append((cx + r * math.cos(a), cy + r * math.sin(a)))
+    return pts
+
+
+def table_booth():
+    """1 x 1 tile booth table (Second and First class, map tile 't', half cover): pivot at the tile centre on the floor,
+    symmetric, so any turn fits. A walnut-veneer top 0.62 m square with rounded corners, top surface 0.72 (under the
+    0.80 sill) with a brass edge band, on a brass pedestal: a domed round foot (0.40 across), the column with a bead
+    halfway, a collar and a square plate under the top."""
+    a = Asset("Table_Booth", seed=SEED)
+    S = a.S
+    plate(S, round_square(0.31, 0.07), 0.685, 0.72, WOOD)                      # top
+    plate(S, round_square(0.315, 0.075), 0.692, 0.712, BRASS)                  # brass edge band round it
+    plate(S, round_square(0.12, 0.02), 0.672, 0.688, BRASS)                    # plate under the top
+    S.lathe([(0.0, 0.0), (0.20, 0.0), (0.20, 0.012), (0.17, 0.022), (0.11, 0.045), (0.06, 0.07), (0.034, 0.085)],
+            segs=32, slot=BRASS)                                               # domed foot
+    S.cylinder(0.028, 0.07, 0.68, BRASS, segs=20)                              # column
+    S.lathe([(0.028, 0.365), (0.040, 0.375), (0.044, 0.385), (0.040, 0.395), (0.028, 0.405)], segs=20, slot=BRASS,
+            cap_bottom=False, cap_top=False)                                   # bead
+    S.lathe([(0.028, 0.62), (0.036, 0.63), (0.05, 0.66), (0.05, 0.676)], segs=20, slot=BRASS, cap_bottom=False)  # collar
+    return a.finish()
+
+
+PAINT_ZC = 1.40         # every painting centred at eye level: under a Lamp_Wall (shade bottom ~1.96) and over the dado (0.78)
 
 
 def framed(name, W, H, fw, art):
@@ -1152,4 +1190,4 @@ def painting_large():
     return framed("Painting_Large", 0.96, 0.70, 0.070, art)
 
 
-run([curtains_large, blind_small, table_window, painting_small, painting_medium, painting_large], spacing=3.0)
+run([curtains_large, blind_small, table_window, table_booth, painting_small, painting_medium, painting_large], spacing=3.0)

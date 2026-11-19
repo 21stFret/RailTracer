@@ -178,7 +178,7 @@ namespace RailTracer
         // Map: '.' floor, 'S' seat (half cover), 'L' luggage / 'W' wall (full cover), 'P' player start.
         // Edge rows are windows, middle-row ends are doors; on the edge rows '_' (floor) and 'l' (luggage) have a
         // plain wall behind them instead of a window. Dining car and baggage hold: 'T' table, 'O' round table,
-        // 'D' dining cart, 'B' bar, 'M' mail sack, 'G' gramophone (seat rules; the gramophone and the bar stand against plain wall); 'X' crate ('x' with plain wall behind; luggage rules); 'C' the safe's cage (blocks
+        // 'D' dining cart, 'B' bar, 'M' mail sack, 'G' gramophone, 't' booth table (seat rules; the gramophone and the bar stand against plain wall); 'X' crate ('x' with plain wall behind; luggage rules); 'C' the safe's cage (blocks
         // walking and leaps like a wall, but you can see through it).
         public Carriage(string[] map, Tuning t, int seed)
         {
@@ -194,7 +194,7 @@ namespace RailTracer
                 for (int x = 0; x < W; x++)
                 {
                     char ch = map[y][x];
-                    seat[x, y] = "STBMODG".IndexOf(ch) >= 0;
+                    seat[x, y] = "STBMODGt".IndexOf(ch) >= 0;
                     solid[x, y] = "LlWXx".IndexOf(ch) >= 0;
                     blankWall[x, y] = "_lxBG".IndexOf(ch) >= 0; // a bar or the gramophone stands against plain wall
                     if (ch == 'G') gramophone = new Cell(x, y);

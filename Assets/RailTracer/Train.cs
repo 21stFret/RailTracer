@@ -80,9 +80,9 @@ namespace RailTracer
         // Endless cars always have at least this many seat banks (of about 16 places), for cover.
         public const int EndlessMinBanks = 8;
 
-        static CarDef Generated(string name, string blurb, int seed, int enemies, int toughs, double banks = 0.85, int luggageMin = 3, int luggageMax = 6, int minBanks = 0)
+        static CarDef Generated(string name, string blurb, int seed, int enemies, int toughs, double banks = 0.85, int luggageMin = 3, int luggageMax = 6, int minBanks = 0, double tables = 0)
         {
-            var (map, spawns, patrols) = TrainGen.Make(new Random(seed), enemies, toughs, banks, luggageMin, luggageMax, minBanks);
+            var (map, spawns, patrols) = TrainGen.Make(new Random(seed), enemies, toughs, banks, luggageMin, luggageMax, minBanks, tables);
             return new CarDef { name = name, blurb = blurb, kind = CarKind.Passenger, map = map, spawns = spawns, patrols = patrols };
         }
 
@@ -115,18 +115,19 @@ namespace RailTracer
         public static CarDef Demo(int i) => demo[i] ??= MakeDemo(i);
 
         // The target turns per Journey car: the level solver's results (train 1: 18.40, its generated cars 2 and 5 again
-        // in 19.35 with booth seating; trains 2 and 3: 19.21; seed 1). Rerun it after changing a car.
-        static readonly int[] Targets = { 11, 8, 11, 9, 15, 10, 9, 9, 12, 10, 9, 8, 10, 11, 14 };
+        // in 19.35 with booth seating, and again in 19.42 with booth tables; trains 2 and 3: 19.21; seed 1). Rerun it
+        // after changing a car.
+        static readonly int[] Targets = { 11, 8, 11, 9, 16, 10, 9, 9, 12, 10, 9, 8, 10, 11, 14 };
 
         static CarDef MakeDemo(int i)
         {
             var car = i switch
             {
                 0 => First(),
-                1 => Generated("Second class", "The same booths, a little more room between them.", 2002, 8, 1, banks: 0.6, luggageMin: 1, luggageMax: 3), // 7 guards, 1 heavy
+                1 => Generated("Second class", "The same booths, a little more room between them.", 2002, 8, 1, banks: 0.6, luggageMin: 1, luggageMax: 3, tables: 0.75), // 7 guards, 1 heavy
                 2 => Dining(),
                 3 => Baggage(),
-                4 => Generated("First class", "The last car. Whoever's left is waiting here.", 5005, 11, 3), // 8 guards, 3 heavies
+                4 => Generated("First class", "The last car. Whoever's left is waiting here.", 5005, 11, 3, tables: 0.75), // 8 guards, 3 heavies
                 5 => Hand("Pullman car", "Plush booths and a long walk to the far door. The minder waits by the partition.", CarKind.Passenger, PullmanMap, Pullman),
                 6 => Hand("Restaurant car", "Supper is served: tables down both sides and waiters working the aisle.", CarKind.Dining, RestaurantMap, Restaurant),
                 7 => Hand("Smoking car", "Every booth taken, the partition right by the door. Plenty of cover, plenty of eyes.", CarKind.Passenger, SmokingMap, Smoking),
