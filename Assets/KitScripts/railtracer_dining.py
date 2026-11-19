@@ -208,6 +208,7 @@ class MB:
     def __init__(self):
         self.v, self.f, self.m = [], [], []
         self.pid, self.npieces = [], 0      # piece id per face (used by the z-fighting check)
+        self.soft = set()                   # piece ids shaded smooth all over, whatever the smoothing angle (rbox)
 
     def add(self, verts, faces, slot=0):
         o = len(self.v)
@@ -223,6 +224,7 @@ class MB:
         self.f += [[i + o for i in face] for face in other.f]
         self.m += other.m
         self.pid += [self.npieces + p for p in other.pid]
+        self.soft |= {self.npieces + p for p in other.soft}
         self.npieces += other.npieces
 
     def merge_mirror_x(self, other):
@@ -232,6 +234,7 @@ class MB:
         self.f += [[i + o for i in reversed(face)] for face in other.f]
         self.m += other.m
         self.pid += [self.npieces + p for p in other.pid]
+        self.soft |= {self.npieces + p for p in other.soft}
         self.npieces += other.npieces
 
     def box(self, center, size, slot=0, rot=None):
@@ -336,6 +339,15 @@ class MB:
             mod.angle_limit = radians(50)
             bpy.ops.object.modifier_apply(modifier=mod.name)
         shade(obj, smooth_angle)
+        sharp = obj.data.attributes.get("sharp_edge")
+        if self.soft and sharp:                     # rounded pieces: no sharp edges, so coarse steps still read round
+            keys = set()
+            for poly, pid in zip(obj.data.polygons, self.pid):
+                if pid in self.soft:
+                    keys.update(poly.edge_keys)
+            for e in obj.data.edges:
+                if e.key in keys:
+                    sharp.data[e.index].value = False
         return obj
 
 def place(kh, kv, x, y, z, yaw=0.0):
@@ -993,16 +1005,17 @@ def turned(fu, fw, deg):
     return fu * c - fw * s, fu * s + fw * c
 
 
-def rbox(mb, lo, hi, r, slot, puff=0.0, puff_axis=2, puff_sign=1, xf=None, k=3):
-    """Rounded box from corner lo to hi (3-tuples): every edge and corner rounded with radius r in k steps (30 deg
-    at k = 3, under the 32 deg smoothing angle). puff domes the face on puff_axis / puff_sign outward by up to `puff`
-    at its centre (a cushion), easing to nothing at its rounded edges. xf maps a local point to world (default none).
-    One closed, welded piece."""
+def rbox(mb, lo, hi, r, slot, puff=0.0, puff_axis=2, puff_sign=1, xf=None, k=2, skip=()):
+    """Rounded box from corner lo to hi (3-tuples): every edge and corner rounded with radius r in k steps, shaded
+    smooth all over (MB.soft), so 45-degree steps read round. puff domes the face on puff_axis / puff_sign outward by
+    up to `puff` at its centre (a cushion), easing to nothing at its rounded edges. xf maps a local point to world.
+    skip: faces (axis, sign) left out where they're buried (in a frame, the floor): each takes half its rounded edges
+    with it, so bury the box at least r * 0.3 past that face. Otherwise one closed, welded piece."""
     c = [(a + b) / 2 for a, b in zip(lo, hi)]
     h = [(b - a) / 2 - r for a, b in zip(lo, hi)]                  # the flat part's half sizes
     def ticks(i):
         mid = [-h[i], 0.0, h[i]] if puff else [-h[i], h[i]]
-        return [-h[i] - r * (k - m) / k for m in range(k)] + mid + [h[i] + r * m / k for m in range(1, k + 1)]
+        return sorted({round(t, 6) for t in [-h[i] - r * (k - m) / k for m in range(k)] + mid + [h[i] + r * m / k for m in range(1, k + 1)]})  # a fully round side: no zero-width rows
     T = [ticks(i) for i in range(3)]
     index, verts, faces = {}, [], []
     def vert(q):
@@ -1024,6 +1037,8 @@ def rbox(mb, lo, hi, r, slot, puff=0.0, puff_axis=2, puff_sign=1, xf=None, k=3):
     for a in range(3):
         b, e = [i for i in range(3) if i != a]
         for sg in (-1, 1):
+            if (a, sg) in skip:
+                continue
             for i in range(len(T[b]) - 1):
                 for j in range(len(T[e]) - 1):
                     quad = []
@@ -1032,6 +1047,7 @@ def rbox(mb, lo, hi, r, slot, puff=0.0, puff_axis=2, puff_sign=1, xf=None, k=3):
                         q[a], q[b], q[e] = sg * (h[a] + r), T[b][ib], T[e][je]
                         quad.append(vert(q))
                     faces.append(quad)
+    mb.soft.add(mb.npieces)
     mb.add(verts, faces, slot)
 
 def chair(mb, ou, ow, fu, fw):
@@ -1045,9 +1061,9 @@ def chair(mb, ou, ow, fu, fw):
     def xf(p):                                                                      # chair frame (f, s, height) -> Blender
         f, s_, z = p
         return (-(ou + fu * f + su * s_), -(ow + fw * f + sw * s_), z)
-    rbox(mb, (-0.20, -0.20, 0.43), (0.20, 0.20, 0.48), 0.025, VELVET, puff=0.012, xf=xf)         # domed cushion
+    rbox(mb, (-0.20, -0.20, 0.43), (0.20, 0.20, 0.48), 0.025, VELVET, puff=0.012, xf=xf, skip=[(2, -1)])  # domed cushion
     rbox(mb, (-0.24, -0.20, 0.42), (-0.19, 0.20, 0.95), 0.022, WOODDARK, xf=xf)                 # back, rounded
-    rbox(mb, (-0.20, -0.16, 0.56), (-0.165, 0.16, 0.88), 0.015, VELVET, puff=0.012, puff_axis=0, xf=xf)  # back pad
+    rbox(mb, (-0.20, -0.16, 0.56), (-0.165, 0.16, 0.88), 0.015, VELVET, puff=0.012, puff_axis=0, xf=xf, skip=[(0, -1)])  # back pad
 
 
 def lamp(mb, u, w, y):

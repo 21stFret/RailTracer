@@ -856,7 +856,7 @@ namespace RailTracer
                 Put("Prop_Umbrella", at + new Vector3(0f, 0f, yaw == 0f ? -0.31f : 0.31f), yaw);
             }
 
-            // Seat arms (two per seat, top at 0.66 m) and cushions (top at 0.46 m), in the seat's own space. Doubles: arms
+            // Seat arms (two per seat, the velvet roll's crown at 0.68 m) and cushions (domed: 0.48 m at the middle), in the seat's own space. Doubles: arms
             // at local x +-0.96, two cushions at +-0.465. Singles (Seat_Single, 1 m): arms at +-0.46, one cushion at 0.
             bool Single(Transform t) => t.name.StartsWith("Seat_Single");
             var arms = seats.SelectMany(t => (Single(t) ? new[] { -0.46f, 0.46f } : new[] { -0.96f, 0.96f }).Select(x => (t, x))).OrderBy(_ => rng.Next()).ToList();
@@ -868,7 +868,7 @@ namespace RailTracer
             {
                 var (t, x) = cushions[s++];
                 var rot = Quaternion.Euler(0f, t.eulerAngles.y + Rand(-35f, 35f) + (rng.Next(2) == 0 ? 0f : 180f), 0f) * Quaternion.Euler(-90f, 0f, 0f);
-                var centre = t.TransformPoint(new Vector3(x + Rand(-0.1f, 0.1f), 0.46f, -0.05f + Rand(-0.08f, 0.08f)));
+                var centre = t.TransformPoint(new Vector3(x + Rand(-0.1f, 0.1f), 0.48f, -0.05f + Rand(-0.08f, 0.08f)));
                 var lengthways = rot * Vector3.up; // the case's height, lying along the seat
                 var brief = Put("Prop_Briefcase", centre - lengthways * 0.165f + Vector3.up * 0.07f, 0f);
                 if (brief) brief.transform.rotation = rot;
@@ -887,7 +887,7 @@ namespace RailTracer
             for (int n = Mathf.Min(arms.Count - 2, More(6, 11)); a < n; a++) // leave a couple of arms for newspapers
             {
                 var (t, x) = arms[a];
-                var tray = Put("Prop_Ashtray_Cigar", t.TransformPoint(new Vector3(x, 0.66f, -0.36f)), t.eulerAngles.y + (rng.Next(2) == 0 ? 90f : -90f));
+                var tray = Put("Prop_Ashtray_Cigar", t.TransformPoint(new Vector3(x, 0.68f, -0.36f)), t.eulerAngles.y + (rng.Next(2) == 0 ? 90f : -90f));
                 if (tray && rng.NextDouble() >= 0.6) tray.name += Empty; // about 6 in 10 lit
             }
             // The smoking car's window tables: an ashtray on each, sometimes two (Table_Window's top at 0.69 m, the
@@ -904,12 +904,12 @@ namespace RailTracer
                 if (rng.NextDouble() < 0.3 && a < arms.Count)
                 {
                     var (t, x) = arms[a++];
-                    Put("Prop_Newspaper", t.TransformPoint(new Vector3(x, 0.66f, -0.06f)), t.eulerAngles.y + 90f + Rand(-10f, 10f));
+                    Put("Prop_Newspaper", t.TransformPoint(new Vector3(x, 0.68f, -0.06f)), t.eulerAngles.y + 90f + Rand(-10f, 10f));
                 }
                 else if (s < cushions.Count)
                 {
                     var (t, x) = cushions[s++];
-                    Put("Prop_Newspaper", t.TransformPoint(new Vector3(x + Rand(-0.15f, 0.15f), 0.46f, -0.05f + Rand(-0.1f, 0.1f))), t.eulerAngles.y + Rand(-30f, 30f));
+                    Put("Prop_Newspaper", t.TransformPoint(new Vector3(x + Rand(-0.15f, 0.15f), 0.48f, -0.05f + Rand(-0.1f, 0.1f))), t.eulerAngles.y + Rand(-30f, 30f));
                 }
             }
         }

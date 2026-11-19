@@ -220,6 +220,7 @@ class MB:
     def __init__(self):
         self.v, self.f, self.m = [], [], []
         self.pid, self.npieces = [], 0      # piece id per face (used by the z-fighting check)
+        self.soft = set()                   # piece ids shaded smooth all over, whatever the smoothing angle (rbox)
         self.vertical = False               # while True, added pieces get vertical grain (UVs turned on side faces)
         self.vert = set()                   # piece ids with vertical grain
         self.along_y = False                # while True, added pieces run along Y: grain along Y on their flat tops too
@@ -243,6 +244,7 @@ class MB:
         self.f += [[i + o for i in face] for face in other.f]
         self.m += other.m
         self.pid += [self.npieces + p for p in other.pid]
+        self.soft |= {self.npieces + p for p in other.soft}
         self.vert |= {self.npieces + p for p in other.vert}
         self.runy |= {self.npieces + p for p in other.runy}
         self.npieces += other.npieces
@@ -254,6 +256,7 @@ class MB:
         self.f += [[i + o for i in reversed(face)] for face in other.f]
         self.m += other.m
         self.pid += [self.npieces + p for p in other.pid]
+        self.soft |= {self.npieces + p for p in other.soft}
         self.vert |= {self.npieces + p for p in other.vert}
         self.runy |= {self.npieces + p for p in other.runy}
         self.npieces += other.npieces
@@ -361,6 +364,15 @@ class MB:
             mod.angle_limit = radians(50)
             bpy.ops.object.modifier_apply(modifier=mod.name)
         shade(obj, smooth_angle)
+        sharp = obj.data.attributes.get("sharp_edge")
+        if self.soft and sharp:                     # rounded pieces: no sharp edges, so coarse steps still read round
+            keys = set()
+            for poly, pid in zip(obj.data.polygons, self.pid):
+                if pid in self.soft:
+                    keys.update(poly.edge_keys)
+            for e in obj.data.edges:
+                if e.key in keys:
+                    sharp.data[e.index].value = False
         return obj
 
 def place(kh, kv, x, y, z, yaw=0.0):
@@ -1344,16 +1356,17 @@ PARTS = [module("Partition_Door", partition)]
 
 
 # ---------------------------------------------------------------- seat
-def rbox(mb, lo, hi, r, slot, puff=0.0, puff_axis=2, puff_sign=1, xf=None, k=3):
-    """Rounded box from corner lo to hi (3-tuples): every edge and corner rounded with radius r in k steps (30 deg
-    at k = 3, under the 32 deg smoothing angle). puff domes the face on puff_axis / puff_sign outward by up to `puff`
-    at its centre (a cushion), easing to nothing at its rounded edges. xf maps a local point to world (default none).
-    One closed, welded piece."""
+def rbox(mb, lo, hi, r, slot, puff=0.0, puff_axis=2, puff_sign=1, xf=None, k=2, skip=()):
+    """Rounded box from corner lo to hi (3-tuples): every edge and corner rounded with radius r in k steps, shaded
+    smooth all over (MB.soft), so 45-degree steps read round. puff domes the face on puff_axis / puff_sign outward by
+    up to `puff` at its centre (a cushion), easing to nothing at its rounded edges. xf maps a local point to world.
+    skip: faces (axis, sign) left out where they're buried (in a frame, the floor): each takes half its rounded edges
+    with it, so bury the box at least r * 0.3 past that face. Otherwise one closed, welded piece."""
     c = [(a + b) / 2 for a, b in zip(lo, hi)]
     h = [(b - a) / 2 - r for a, b in zip(lo, hi)]                  # the flat part's half sizes
     def ticks(i):
         mid = [-h[i], 0.0, h[i]] if puff else [-h[i], h[i]]
-        return [-h[i] - r * (k - m) / k for m in range(k)] + mid + [h[i] + r * m / k for m in range(1, k + 1)]
+        return sorted({round(t, 6) for t in [-h[i] - r * (k - m) / k for m in range(k)] + mid + [h[i] + r * m / k for m in range(1, k + 1)]})  # a fully round side: no zero-width rows
     T = [ticks(i) for i in range(3)]
     index, verts, faces = {}, [], []
     def vert(q):
@@ -1375,6 +1388,8 @@ def rbox(mb, lo, hi, r, slot, puff=0.0, puff_axis=2, puff_sign=1, xf=None, k=3):
     for a in range(3):
         b, e = [i for i in range(3) if i != a]
         for sg in (-1, 1):
+            if (a, sg) in skip:
+                continue
             for i in range(len(T[b]) - 1):
                 for j in range(len(T[e]) - 1):
                     quad = []
@@ -1383,6 +1398,7 @@ def rbox(mb, lo, hi, r, slot, puff=0.0, puff_axis=2, puff_sign=1, xf=None, k=3):
                         q[a], q[b], q[e] = sg * (h[a] + r), T[b][ib], T[e][je]
                         quad.append(vert(q))
                     faces.append(quad)
+    mb.soft.add(mb.npieces)
     mb.add(verts, faces, slot)
 
 def seat_bank(name, W, places):
@@ -1394,20 +1410,20 @@ def seat_bank(name, W, places):
     ai = W - 0.08                                                     # the arms' inner faces
     S.rect(-ai, ai, -0.38, 0.35, 0.0, 0.30, SLOT_WOODDARK)            # base / kick
     S.rect(-(W - 0.15), W - 0.15, -0.50, -0.47, 0.15, 0.80, SLOT_WOODDARK)  # rear panel (seen from behind)
-    rbox(S, (-W, -0.48, -0.04), (W, -0.37, 0.95), 0.035, SLOT_WOOD)    # back frame (rounded bottom under the floor)
+    rbox(S, (-W, -0.48, -0.04), (W, -0.37, 0.95), 0.035, SLOT_WOOD, skip=[(2, -1)])  # back frame (bottom under the floor)
     S.cylinder(0.03, -W + 0.01, W - 0.01, SLOT_BRASS, segs=16, center=(0, -0.425, 0.95),
                mat3=Matrix.Rotation(radians(90), 3, 'Y'))             # brass top rail
     for sg in (1, -1):
         x0, x1 = sx(sg, ai, W)
-        rbox(S, (x0, -0.38, -0.04), (x1, 0.48, 0.60), 0.02, SLOT_WOOD)  # arm
+        rbox(S, (x0, -0.38, -0.04), (x1, 0.48, 0.60), 0.02, SLOT_WOOD, skip=[(2, -1)])  # arm
         rbox(S, (min(x0, x1) - (0.01 if sg > 0 else 0), -0.40, 0.57), (max(x0, x1) + (0.01 if sg < 0 else 0), 0.50, 0.68),
-             0.045, SLOT_VELVET, puff=0.012)                          # padded arm roll
+             0.045, SLOT_VELVET)                                      # padded arm roll (round across: top 0.68)
     edge = ai - 0.005
     spans = [sx(sg, 0.01, edge) for sg in (1, -1)] if places == 2 else [(-edge, edge)]
     for x0, x1 in spans:
-        rbox(S, (x0, -0.38, 0.28), (x1, 0.48, 0.46), 0.05, SLOT_VELVET, puff=0.02)              # seat cushion
+        rbox(S, (x0, -0.40, 0.28), (x1, 0.48, 0.46), 0.05, SLOT_VELVET, puff=0.02, skip=[(1, -1)])  # seat cushion (dome 0.48)
         bx0, bx1 = x0 + 0.01, x1 - 0.01
-        rbox(S, (bx0, -0.38, 0.47), (bx1, -0.22, 0.94), 0.05, SLOT_VELVET, puff=0.025, puff_axis=1)  # back cushion
+        rbox(S, (bx0, -0.40, 0.47), (bx1, -0.22, 0.94), 0.05, SLOT_VELVET, puff=0.025, puff_axis=1, skip=[(1, -1)])  # back cushion
     return a.finish()
 
 def seat_double():
