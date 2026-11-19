@@ -993,16 +993,61 @@ def turned(fu, fw, deg):
     return fu * c - fw * s, fu * s + fw * c
 
 
+def rbox(mb, lo, hi, r, slot, puff=0.0, puff_axis=2, puff_sign=1, xf=None, k=3):
+    """Rounded box from corner lo to hi (3-tuples): every edge and corner rounded with radius r in k steps (30 deg
+    at k = 3, under the 32 deg smoothing angle). puff domes the face on puff_axis / puff_sign outward by up to `puff`
+    at its centre (a cushion), easing to nothing at its rounded edges. xf maps a local point to world (default none).
+    One closed, welded piece."""
+    c = [(a + b) / 2 for a, b in zip(lo, hi)]
+    h = [(b - a) / 2 - r for a, b in zip(lo, hi)]                  # the flat part's half sizes
+    def ticks(i):
+        mid = [-h[i], 0.0, h[i]] if puff else [-h[i], h[i]]
+        return [-h[i] - r * (k - m) / k for m in range(k)] + mid + [h[i] + r * m / k for m in range(1, k + 1)]
+    T = [ticks(i) for i in range(3)]
+    index, verts, faces = {}, [], []
+    def vert(q):
+        key = tuple(round(v, 7) for v in q)
+        if key not in index:
+            inner = [max(-h[i], min(h[i], q[i])) for i in range(3)]
+            d = [q[i] - inner[i] for i in range(3)]
+            n = sqrt(sum(v * v for v in d)) or 1.0
+            p = [c[i] + inner[i] + r * d[i] / n for i in range(3)]
+            if puff and q[puff_axis] * puff_sign > 0:
+                f = 1.0
+                for i in range(3):
+                    if i != puff_axis:
+                        f *= 1 - (inner[i] / h[i]) ** 2 if h[i] > 0 else 0.0
+                p[puff_axis] += puff_sign * puff * f
+            index[key] = len(verts)
+            verts.append(tuple(xf(p)) if xf else tuple(p))
+        return index[key]
+    for a in range(3):
+        b, e = [i for i in range(3) if i != a]
+        for sg in (-1, 1):
+            for i in range(len(T[b]) - 1):
+                for j in range(len(T[e]) - 1):
+                    quad = []
+                    for ib, je in ((i, j), (i + 1, j), (i + 1, j + 1), (i, j + 1)):
+                        q = [0.0, 0.0, 0.0]
+                        q[a], q[b], q[e] = sg * (h[a] + r), T[b][ib], T[e][je]
+                        quad.append(vert(q))
+                    faces.append(quad)
+    mb.add(verts, faces, slot)
+
 def chair(mb, ou, ow, fu, fw):
     """Dining chair, its seat centre at (ou, ow), the sitter facing (fu, fw): wood frame, velvet seat
-    and back pad. Seat 0.42 square, top 0.47; back 0.95. Footprint: f -0.24..0.21, s -0.21..0.21."""
+    and back pad, all rounded, the velvet domed. Seat 0.42 square, cushion top 0.48 (0.49 at its dome); back 0.95. Footprint: f -0.24..0.21, s -0.21..0.21."""
     for f in (-0.19, 0.17):
         for s in (-0.18, 0.18):
             box_f(mb, ou, ow, fu, fw, f - 0.02, f + 0.02, s - 0.02, s + 0.02, 0.0, 0.42, WOODDARK)
     box_f(mb, ou, ow, fu, fw, -0.21, 0.21, -0.21, 0.21, 0.42, 0.44, WOODDARK)       # seat board
-    box_f(mb, ou, ow, fu, fw, -0.19, 0.19, -0.19, 0.19, 0.44, 0.47, VELVET)         # cushion
-    box_f(mb, ou, ow, fu, fw, -0.24, -0.19, -0.2, 0.2, 0.44, 0.95, WOODDARK)        # back
-    box_f(mb, ou, ow, fu, fw, -0.19, -0.17, -0.16, 0.16, 0.56, 0.88, VELVET)        # back pad
+    su, sw = fw, -fu
+    def xf(p):                                                                      # chair frame (f, s, height) -> Blender
+        f, s_, z = p
+        return (-(ou + fu * f + su * s_), -(ow + fw * f + sw * s_), z)
+    rbox(mb, (-0.20, -0.20, 0.43), (0.20, 0.20, 0.48), 0.025, VELVET, puff=0.012, xf=xf)         # domed cushion
+    rbox(mb, (-0.24, -0.20, 0.42), (-0.19, 0.20, 0.95), 0.022, WOODDARK, xf=xf)                 # back, rounded
+    rbox(mb, (-0.20, -0.16, 0.56), (-0.165, 0.16, 0.88), 0.015, VELVET, puff=0.012, puff_axis=0, xf=xf)  # back pad
 
 
 def lamp(mb, u, w, y):

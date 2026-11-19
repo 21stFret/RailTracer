@@ -222,6 +222,8 @@ class MB:
         self.pid, self.npieces = [], 0      # piece id per face (used by the z-fighting check)
         self.vertical = False               # while True, added pieces get vertical grain (UVs turned on side faces)
         self.vert = set()                   # piece ids with vertical grain
+        self.along_y = False                # while True, added pieces run along Y: grain along Y on their flat tops too
+        self.runy = set()                   # piece ids running along Y
 
     def add(self, verts, faces, slot=0):
         o = len(self.v)
@@ -231,6 +233,8 @@ class MB:
         self.pid += [self.npieces] * len(faces)
         if self.vertical:
             self.vert.add(self.npieces)
+        if self.along_y:
+            self.runy.add(self.npieces)
         self.npieces += 1
 
     def merge(self, other, mat4):
@@ -240,6 +244,7 @@ class MB:
         self.m += other.m
         self.pid += [self.npieces + p for p in other.pid]
         self.vert |= {self.npieces + p for p in other.vert}
+        self.runy |= {self.npieces + p for p in other.runy}
         self.npieces += other.npieces
 
     def merge_mirror_x(self, other):
@@ -250,6 +255,7 @@ class MB:
         self.m += other.m
         self.pid += [self.npieces + p for p in other.pid]
         self.vert |= {self.npieces + p for p in other.vert}
+        self.runy |= {self.npieces + p for p in other.runy}
         self.npieces += other.npieces
 
     def box(self, center, size, slot=0, rot=None):
@@ -334,7 +340,7 @@ class MB:
                 for li in poly.loop_indices:
                     co = verts[mesh.loops[li].vertex_index].co
                     if nz >= nx and nz >= ny:
-                        uvl.data[li].uv = (co.x, co.y)
+                        uvl.data[li].uv = (co.y, co.x) if pid in self.runy else (co.x, co.y)
                     elif nx >= ny:
                         uvl.data[li].uv = (co.z, co.y) if up else (co.y, co.z)
                     else:
@@ -1078,7 +1084,9 @@ def moulding(mb, prof, origin, run, out, up, a0, a1, m0=0, m1=0, by='d', slot=No
     for e in (0, n):                                                              # each end: strips front to back
         for i in range(m - 1):
             faces.append([e + i, e + i + 1, e + n - 2 - i, e + n - 1 - i])
+    mb.along_y = abs(run[1]) > 0.5           # its tops (the dado's nose, the crown's ogee) grain along the run, not across
     mb.add(verts, faces, slot)
+    mb.along_y = False
 
 def casing(mb, origin_face, out, along, c, w, bottom, top, m_bottom=0):
     """A cased opening (window or door) on a wall face: two jambs (vertical grain) and a head, mitred at the top
@@ -1336,37 +1344,85 @@ PARTS = [module("Partition_Door", partition)]
 
 
 # ---------------------------------------------------------------- seat
-def seat_double():
-    a = Asset("Seat_Double", seed=2)
+def rbox(mb, lo, hi, r, slot, puff=0.0, puff_axis=2, puff_sign=1, xf=None, k=3):
+    """Rounded box from corner lo to hi (3-tuples): every edge and corner rounded with radius r in k steps (30 deg
+    at k = 3, under the 32 deg smoothing angle). puff domes the face on puff_axis / puff_sign outward by up to `puff`
+    at its centre (a cushion), easing to nothing at its rounded edges. xf maps a local point to world (default none).
+    One closed, welded piece."""
+    c = [(a + b) / 2 for a, b in zip(lo, hi)]
+    h = [(b - a) / 2 - r for a, b in zip(lo, hi)]                  # the flat part's half sizes
+    def ticks(i):
+        mid = [-h[i], 0.0, h[i]] if puff else [-h[i], h[i]]
+        return [-h[i] - r * (k - m) / k for m in range(k)] + mid + [h[i] + r * m / k for m in range(1, k + 1)]
+    T = [ticks(i) for i in range(3)]
+    index, verts, faces = {}, [], []
+    def vert(q):
+        key = tuple(round(v, 7) for v in q)
+        if key not in index:
+            inner = [max(-h[i], min(h[i], q[i])) for i in range(3)]
+            d = [q[i] - inner[i] for i in range(3)]
+            n = sqrt(sum(v * v for v in d)) or 1.0
+            p = [c[i] + inner[i] + r * d[i] / n for i in range(3)]
+            if puff and q[puff_axis] * puff_sign > 0:
+                f = 1.0
+                for i in range(3):
+                    if i != puff_axis:
+                        f *= 1 - (inner[i] / h[i]) ** 2 if h[i] > 0 else 0.0
+                p[puff_axis] += puff_sign * puff * f
+            index[key] = len(verts)
+            verts.append(tuple(xf(p)) if xf else tuple(p))
+        return index[key]
+    for a in range(3):
+        b, e = [i for i in range(3) if i != a]
+        for sg in (-1, 1):
+            for i in range(len(T[b]) - 1):
+                for j in range(len(T[e]) - 1):
+                    quad = []
+                    for ib, je in ((i, j), (i + 1, j), (i + 1, j + 1), (i, j + 1)):
+                        q = [0.0, 0.0, 0.0]
+                        q[a], q[b], q[e] = sg * (h[a] + r), T[b][ib], T[e][je]
+                        quad.append(vert(q))
+                    faces.append(quad)
+    mb.add(verts, faces, slot)
+
+def seat_bank(name, W, places):
+    """A seat bank W*2 wide (1 m deep, back at -Y): rounded wood back frame with a brass rail along its top, rounded
+    wood arms under velvet arm rolls, and per place a domed seat cushion and a domed, button-tufted back cushion.
+    Its kick base and rear panel stay square (low, and only seen from behind)."""
+    a = Asset(name, seed=2)
     S = a.S
-    S.rect(-1.0, 1.0, -0.48, -0.38, 0.0, 0.94, SLOT_WOOD)            # back frame
-    S.rect(-1.0, 1.0, -0.50, -0.36, 0.94, 1.0, SLOT_BRASS)           # brass top rail
-    S.rect(-0.85, 0.85, -0.50, -0.48, 0.15, 0.80, SLOT_WOODDARK)     # rear panel (seen from behind)
-    S.rect(-0.92, 0.92, -0.38, 0.35, 0.0, 0.30, SLOT_WOODDARK)       # base / kick
+    ai = W - 0.08                                                     # the arms' inner faces
+    S.rect(-ai, ai, -0.38, 0.35, 0.0, 0.30, SLOT_WOODDARK)            # base / kick
+    S.rect(-(W - 0.15), W - 0.15, -0.50, -0.47, 0.15, 0.80, SLOT_WOODDARK)  # rear panel (seen from behind)
+    rbox(S, (-W, -0.48, -0.04), (W, -0.37, 0.95), 0.035, SLOT_WOOD)    # back frame (rounded bottom under the floor)
+    S.cylinder(0.03, -W + 0.01, W - 0.01, SLOT_BRASS, segs=16, center=(0, -0.425, 0.95),
+               mat3=Matrix.Rotation(radians(90), 3, 'Y'))             # brass top rail
     for sg in (1, -1):
-        S.rect(*sx(sg, 0.92, 1.0), -0.38, 0.50, 0.0, 0.62, SLOT_WOOD)          # armrests
-        S.rect(*sx(sg, 0.915, 1.0), -0.38, 0.50, 0.62, 0.66, SLOT_BRASS)     # brass caps
-        S.rect(*sx(sg, 0.01, 0.92), -0.38, 0.48, 0.30, 0.46, SLOT_VELVET)      # seat cushions
-        S.rect(*sx(sg, 0.02, 0.90), -0.38, -0.26, 0.50, 0.92, SLOT_VELVET)     # back cushions
-        S.rect(*sx(sg, 0.10, 0.82), -0.26, -0.24, 0.62, 0.86, SLOT_VELVET)     # tufted panel
+        x0, x1 = sx(sg, ai, W)
+        rbox(S, (x0, -0.38, -0.04), (x1, 0.48, 0.60), 0.02, SLOT_WOOD)  # arm
+        rbox(S, (min(x0, x1) - (0.01 if sg > 0 else 0), -0.40, 0.57), (max(x0, x1) + (0.01 if sg < 0 else 0), 0.50, 0.68),
+             0.045, SLOT_VELVET, puff=0.012)                          # padded arm roll
+    edge = ai - 0.005
+    spans = [sx(sg, 0.01, edge) for sg in (1, -1)] if places == 2 else [(-edge, edge)]
+    for x0, x1 in spans:
+        rbox(S, (x0, -0.38, 0.28), (x1, 0.48, 0.46), 0.05, SLOT_VELVET, puff=0.02)              # seat cushion
+        bx0, bx1 = x0 + 0.01, x1 - 0.01
+        rbox(S, (bx0, -0.38, 0.47), (bx1, -0.22, 0.94), 0.05, SLOT_VELVET, puff=0.025, puff_axis=1)  # back cushion
+        hx, hz, cx, cz = (bx1 - bx0) / 2 - 0.05, (0.94 - 0.47) / 2 - 0.05, (bx0 + bx1) / 2, (0.47 + 0.94) / 2
+        for z in (0.62, 0.80):                                        # tufting buttons on the dome
+            for t in (-0.5, 0.0, 0.5):
+                x = cx + t * hx
+                y = -0.22 + 0.025 * (1 - ((x - cx) / hx) ** 2) * (1 - ((z - cz) / hz) ** 2)
+                S.sphere(0.011, (x, y, z), SLOT_BRASS, segs=6, rings=3)
     return a.finish()
+
+def seat_double():
+    return seat_bank("Seat_Double", 1.0, 2)
 
 def seat_single():
     """One place of Seat_Double (1 x 1 x 1 m, the same back, arms and cushions), so a bank can share its two tiles
     with a 1x1 prop (the gramophone)."""
-    a = Asset("Seat_Single", seed=2)
-    S = a.S
-    S.rect(-0.5, 0.5, -0.48, -0.38, 0.0, 0.94, SLOT_WOOD)            # back frame
-    S.rect(-0.5, 0.5, -0.50, -0.36, 0.94, 1.0, SLOT_BRASS)           # brass top rail
-    S.rect(-0.36, 0.36, -0.50, -0.48, 0.15, 0.80, SLOT_WOODDARK)     # rear panel (seen from behind)
-    S.rect(-0.42, 0.42, -0.38, 0.35, 0.0, 0.30, SLOT_WOODDARK)       # base / kick
-    for sg in (1, -1):
-        S.rect(*sx(sg, 0.42, 0.5), -0.38, 0.50, 0.0, 0.62, SLOT_WOOD)          # armrests
-        S.rect(*sx(sg, 0.415, 0.5), -0.38, 0.50, 0.62, 0.66, SLOT_BRASS)     # brass caps
-    S.rect(-0.42, 0.42, -0.38, 0.48, 0.30, 0.46, SLOT_VELVET)                # seat cushion
-    S.rect(-0.40, 0.40, -0.38, -0.26, 0.50, 0.92, SLOT_VELVET)               # back cushion
-    S.rect(-0.32, 0.32, -0.26, -0.24, 0.62, 0.86, SLOT_VELVET)               # tufted panel
-    return a.finish()
+    return seat_bank("Seat_Single", 0.5, 1)
 
 # ---------------------------------------------------------------- luggage rack
 SHELVES = (0.08, 0.70, 1.32, 1.92)    # shelf bottoms (0.04 thick)
