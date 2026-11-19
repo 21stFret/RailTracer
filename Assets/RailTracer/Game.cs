@@ -1441,6 +1441,12 @@ namespace RailTracer
             {
                 hudSlot = selected.HasValue ? (int)selected.Value : -1;
                 hover = mouse != null ? padCell : (Cell?)null;
+                if (selected == SkillId.Drag && mouse != null && mouse.click) // Drag picked on LB / RB: A grabs or drops
+                {
+                    if (!busy) c.Do(c.held != null ? "drop" : "grab");
+                    selected = null;
+                    mouse.click = false;
+                }
             }
             else
             {
@@ -1847,19 +1853,18 @@ namespace RailTracer
             if (Pad.Down(GamepadButton.Start) && !busy) OpenChoice("pause");
             if (Pad.Down(GamepadButton.RightStick)) hud.ToggleControls();
             if (Pad.Down(GamepadButton.LeftStick)) { hud.ShowLog(c.log); Time.timeScale = 0f; }
-            if (Pad.Down(GamepadButton.RightTrigger) && !busy && !walking) c.Do(c.held != null ? "drop" : "grab");
             if (Pad.Down(GamepadButton.Select)) Undo();
             if (Pad.Down(GamepadButton.North) && !busy) c.Do("crouch");
             if (Pad.Down(GamepadButton.LeftShoulder)) CycleSkill(-1);
             if (Pad.Down(GamepadButton.RightShoulder)) CycleSkill(1);
         }
 
-        // LB / RB: the previous / next skill you can use right now (not Drag, RT grabs; not Dread, it's passive).
+        // LB / RB: the previous / next skill you can use right now (not Dread, it's passive). Drag picked, A grabs or drops.
         void CycleSkill(int by)
         {
             if (c == null || busy || walking) return;
             var ids = Enumerable.Range(0, c.t.skills.Length).Select(i => (SkillId)i)
-                .Where(s => s != SkillId.Drag && s != SkillId.Dread && c.Usable(s)).ToList();
+                .Where(s => s != SkillId.Dread && c.Usable(s)).ToList();
             if (ids.Count == 0) return;
             int at = selected.HasValue ? ids.IndexOf(selected.Value) : -1;
             selected = ids[at < 0 ? (by > 0 ? 0 : ids.Count - 1) : (at + by + ids.Count) % ids.Count];
@@ -1895,10 +1900,13 @@ namespace RailTracer
                 if (kb.dKey.isPressed || kb.rightArrowKey.isPressed) pan.x += 1;
                 if (kb.wKey.isPressed || kb.upArrowKey.isPressed) pan.y += 1;
                 if (kb.sKey.isPressed || kb.downArrowKey.isPressed) pan.y -= 1;
-                // The pad's right stick: left / right pan along the car, up / down zoom.
-                var rs = Pad.RightStick;
-                if (Mathf.Abs(rs.x) > 0.2f) pan.x += rs.x;
-                if (Mathf.Abs(rs.y) > 0.2f) camDistance = Mathf.Clamp(camDistance * (1f - rs.y * padZoomSpeed * Time.deltaTime), 4f, 30f);
+            }
+            // The pad's right stick pans, as the right-drag does; with RT held, up / down zoom instead (19.58).
+            var rs = Pad.RightStick;
+            if (rs.sqrMagnitude > 0.04f)
+            {
+                if (Pad.Held(GamepadButton.RightTrigger)) camDistance = Mathf.Clamp(camDistance * (1f - rs.y * padZoomSpeed * Time.deltaTime), 4f, 30f);
+                else pan += rs;
             }
             if (pan != Vector2.zero || (mouse != null && mouse.rheld)) camTarget = null; // you took the camera
             pan *= panSpeed * camDistance * Time.deltaTime;

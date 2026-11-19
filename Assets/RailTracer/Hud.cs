@@ -451,14 +451,13 @@ namespace RailTracer
         {
             (new[] { "L stick" }, "Move the tile cursor (or the D-pad)"),
             (new[] { "A" }, "Move there; with a kill selected, act on the enemy there"),
-            (new[] { "LB / RB" }, "Previous / next skill (B cancels)"),
-            (new[] { "RT" }, "Grab or drop a body"),
+            (new[] { "LB / RB" }, "Previous / next skill (B cancels); Drag, then A, grabs or drops a body"),
             (new[] { "Y" }, "Crouch: hidden behind seats, half speed"),
             (new[] { "X" }, "Hold: end turn"),
             (new[] { "View" }, "Undo (until you act, are seen or move a body)"),
             (new[] { "LT" }, "Hold: every enemy's senses"),
             (new[] { "L3" }, "The full log (paused while open)"),
-            (new[] { "R stick" }, "Pan along the car; up and down zoom"),
+            (new[] { "R stick" }, "Pan the camera; hold RT and push up or down to zoom"),
             (new[] { "Menu" }, "Pause; restart and the main menu are in there"),
             (new[] { "R3" }, "Close this"),
         };
