@@ -13,6 +13,7 @@ namespace RailTracer
     {
         public RunSave run;                                  // null: nothing to continue
         public bool hasRun;                                  // JsonUtility never writes null, so this says whether `run` is real
+        public bool played;                                  // boarded at least once: Journey and Endless show on the start screen
         public bool[] cleared = new bool[Train.Cars];        // Journey cars (all three trains) cleared at least once
         public BestTicket[] best = new BestTicket[Train.Cars];
         public Settings settings = new Settings();
@@ -171,6 +172,7 @@ namespace RailTracer
             StopAllCoroutines();
             hopShots.Clear();
             if (hud != null) hud.shownHp = -1;
+            save.played = true;
             Build();
             AutoSave();
         }
@@ -677,9 +679,13 @@ namespace RailTracer
             {
                 case MenuScreen.Start:
                 {
-                    var items = new[] { BackdropIsEmpty ? "Board the train" : ContinueText(), "Journey", "Endless", "Options", "Quit" };
+                    // First play: just board, options and quit; Journey and Endless once you've boarded (or an older save has progress).
+                    bool firstPlay = !save.played && BackdropIsEmpty && !save.cleared.Contains(true);
+                    var items = firstPlay ? new[] { "Board the train", "Options", "Quit" }
+                        : new[] { BackdropIsEmpty ? "Board the train" : ContinueText(), "Journey", "Endless", "Options", "Quit" };
                     int hit = hud.RefreshMenu(true, null, items, null, null, at);
                     if (!click) break;
+                    if (firstPlay && hit > 0) hit += 2; // same actions, Journey and Endless skipped
                     if (hit == 0) Dive(BackdropIsEmpty ? () => StartCar(false, 0, MaxHpCarry) : (System.Action)null);
                     else if (hit == 1)
                     {
