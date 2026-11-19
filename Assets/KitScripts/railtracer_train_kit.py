@@ -1387,7 +1387,7 @@ def rbox(mb, lo, hi, r, slot, puff=0.0, puff_axis=2, puff_sign=1, xf=None, k=3):
 
 def seat_bank(name, W, places):
     """A seat bank W*2 wide (1 m deep, back at -Y): rounded wood back frame with a brass rail along its top, rounded
-    wood arms under velvet arm rolls, and per place a domed seat cushion and a domed, button-tufted back cushion.
+    wood arms under velvet arm rolls, and per place a domed seat cushion and a domed back cushion.
     Its kick base and rear panel stay square (low, and only seen from behind)."""
     a = Asset(name, seed=2)
     S = a.S
@@ -1408,12 +1408,6 @@ def seat_bank(name, W, places):
         rbox(S, (x0, -0.38, 0.28), (x1, 0.48, 0.46), 0.05, SLOT_VELVET, puff=0.02)              # seat cushion
         bx0, bx1 = x0 + 0.01, x1 - 0.01
         rbox(S, (bx0, -0.38, 0.47), (bx1, -0.22, 0.94), 0.05, SLOT_VELVET, puff=0.025, puff_axis=1)  # back cushion
-        hx, hz, cx, cz = (bx1 - bx0) / 2 - 0.05, (0.94 - 0.47) / 2 - 0.05, (bx0 + bx1) / 2, (0.47 + 0.94) / 2
-        for z in (0.62, 0.80):                                        # tufting buttons on the dome
-            for t in (-0.5, 0.0, 0.5):
-                x = cx + t * hx
-                y = -0.22 + 0.025 * (1 - ((x - cx) / hx) ** 2) * (1 - ((z - cz) / hz) ** 2)
-                S.sphere(0.011, (x, y, z), SLOT_BRASS, segs=6, rings=3)
     return a.finish()
 
 def seat_double():
