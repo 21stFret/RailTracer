@@ -884,6 +884,11 @@ namespace RailTracer
                 for (int k = 0; k + 1 < cols.Count; k += 2)
                     for (int x = cols[k] + 1; x < cols[k + 1]; x++)
                         Check(map.All(r => r[x] != 'L' && r[x] != 'l'), "train: no luggage between facing seats");
+                // Banks come in booths (19.35): the kit's facing pairs are 3 apart, and on each window row both or neither.
+                for (int k = 0; k + 1 < cols.Count; k += 2)
+                    Check(cols[k + 1] - cols[k] == 3 && new[] { 0, 4 }.All(y => (map[y][cols[k]] == 'S') == (map[y][cols[k + 1]] == 'S')),
+                        "train: seat banks in facing booths");
+                Check(cols.Count % 2 == 0, "train: no lone seat column");
                 Check(spawns.Length >= 8 && spawns.Length <= 10 && spawns.Count(s => s[5] == 1) == 2, "train: 8 to 10 passengers, two tough");
                 Check(spawns.All(s => map[s[1]][s[0]] == '.' || map[s[1]][s[0]] == '_') && spawns.Select(s => (s[0], s[1])).Distinct().Count() == spawns.Length, "train: passengers on free floor, one each");
                 Check(patrols.Values.All(r => r.All(cell => cell.y == 2 && map[2][cell.x] == '.')), "train: patrols walk the aisle");

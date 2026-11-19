@@ -114,9 +114,9 @@ namespace RailTracer
         static readonly CarDef[] demo = new CarDef[Cars];
         public static CarDef Demo(int i) => demo[i] ??= MakeDemo(i);
 
-        // The target turns per Journey car: the level solver's results (train 1: 18.40, trains 2 and 3: 19.21; seed 1).
-        // Rerun it after changing a car.
-        static readonly int[] Targets = { 11, 7, 11, 9, 24, 10, 9, 9, 12, 10, 9, 8, 10, 11, 14 };
+        // The target turns per Journey car: the level solver's results (train 1: 18.40, its generated cars 2 and 5 again
+        // in 19.35 with booth seating; trains 2 and 3: 19.21; seed 1). Rerun it after changing a car.
+        static readonly int[] Targets = { 11, 8, 11, 9, 15, 10, 9, 9, 12, 10, 9, 8, 10, 11, 14 };
 
         static CarDef MakeDemo(int i)
         {

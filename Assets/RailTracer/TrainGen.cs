@@ -5,7 +5,7 @@ using System.Linq;
 namespace RailTracer
 {
     // A new carriage and its passengers, laid out the way the hand-made one is (and the train kit expects):
-    // 26 x 5, windows on rows 0 and 4, the aisle on row 2 kept clear, seat banks two rows deep every third column,
+    // 26 x 5, windows on rows 0 and 4, the aisle on row 2 kept clear, seat banks two rows deep in facing booths,
     // one partition wall with a door in the aisle, a few luggage stacks on the window rows (never in a booth
     // between two seats facing each other), some stretches of outer wall with no windows, and a gramophone (in a seat
     // bank's aisle place or alone against the side wall). No UnityEngine, so
@@ -14,7 +14,8 @@ namespace RailTracer
     {
         public const int W = 26, H = 5, Aisle = 2;
 
-        // spawns: x, y, facing x, facing y, (unused), tough. patrols: waypoints by spawn index.
+        // spawns: x, y, facing x, facing y, (unused), tough. patrols: waypoints by spawn index. Banks come in booths
+        // (19.35): `banks` is the chance each booth place is filled, minBanks counts single banks.
         // enemies: how many (0 = 8 to 10 at random), toughs of them heavies; banks: the chance each seat bank is
         // there; minBanks: at least this many banks (missing ones added at random, so cars that already have enough are
         // unchanged); luggage: how many stacks (min, max exclusive). The defaults are the original generator.
@@ -26,23 +27,28 @@ namespace RailTracer
 
             int part = rng.Next(11, 16);
             for (int y = 0; y < H; y++) if (y != Aisle) g[part, y] = 'W';
-            var empty = new List<(int x, int top)>(); // bank places left empty
+            // Seat banks come as booths: two banks three columns apart facing each other across two free tiles, on one
+            // side of the aisle; each booth place is all there or all missing. A column left over at a section's end
+            // stays open floor, so the kit's every-other-seat-column pairing always matches the booths (no bank facing
+            // an empty floor, none paired with one across the car).
+            var empty = new List<(int x, int top)>(); // booth places left empty
             int built = 0;
+            void Booth(int x, int top) { g[x, top] = g[x, top + 1] = g[x + 3, top] = g[x + 3, top + 1] = 'S'; built += 2; }
             void Banks(int from, int to)
             {
-                for (int x = from; x <= to; x += 3)
+                for (int x = from; x + 3 <= to; x += 6)
                     foreach (int top in new[] { 0, Aisle + 1 })
-                        if (rng.NextDouble() < banks) { g[x, top] = g[x, top + 1] = 'S'; built++; }
+                        if (rng.NextDouble() < banks) Booth(x, top);
                         else empty.Add((x, top));
             }
             Banks(2, part - 2);
             Banks(part + 1, W - 3);
-            for (; built < minBanks && empty.Count > 0; built++)
+            for (; built < minBanks && empty.Count > 0;)
             {
                 int i = rng.Next(empty.Count);
                 var (x, top) = empty[i];
                 empty.RemoveAt(i);
-                g[x, top] = g[x, top + 1] = 'S';
+                Booth(x, top);
             }
 
             // Luggage on the window rows only, so every booth tile still reaches the aisle, and never between two
