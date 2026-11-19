@@ -36,7 +36,8 @@ namespace RailTracer
                     foreach (var plan in Plans(car, t, seed, hp, hist, basis))
                     {
                         var c = Load(car, t, seed, hp, hist);
-                        foreach (var cmd in plan) c.Do(cmd);
+                        if (!plan.All(c.Do)) continue; // a refused command (a kill they can see coming) isn't a plan: Do still records it
+
                         tried++;
                         if (!c.Won && !c.Lost) EnemyTurn(c);
                         if (c.Lost) continue;
