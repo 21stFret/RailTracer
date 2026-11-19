@@ -474,6 +474,7 @@ namespace RailTracer
             settingLamps.Clear();
             allRows = rows;
             anchorRow = !walking && !endless ? Train.TrainOf(Mathf.Min(carIndex, Train.Cars - 1)) : shownTrain;
+            menuRows.Clear();
             menuTrain = new GameObject("Menu Train");
             var kit = useTrainKit ? Resources.Load<TrainKit>("Kit/TrainKit") : null;
             for (int row = 0; row < Train.Trains; row++)
@@ -482,7 +483,7 @@ namespace RailTracer
                 if (!rows && row != anchorRow) continue;
                 int g = row * Train.TrainCars + k;
                 var t = new GameObject($"Train {row + 1} Car {k + 1}").transform;
-                t.SetParent(menuTrain.transform, false);
+                t.SetParent(RowRoot(row), false);
                 t.localPosition = new Vector3(SlotX(k), RowY(row), 0f);
                 var lit = new List<Light>();
                 if (row == anchorRow) { menuCars.Add((t, SlotX(k))); statusLamps.Add(lit); } // the Options car is in this row
@@ -518,6 +519,23 @@ namespace RailTracer
                 l.shadows = LightShadows.None;
                 settingLamps.Add(l);
             }
+        }
+
+        // Each train's row under its own object, so the other trains can be hidden outside Journey.
+        readonly Dictionary<int, Transform> menuRows = new Dictionary<int, Transform>();
+        Transform RowRoot(int row)
+        {
+            if (!menuRows.TryGetValue(row, out var r) || !r)
+            {
+                r = menuRows[row] = new GameObject($"Train {row + 1}").transform;
+                r.SetParent(menuTrain.transform, false);
+            }
+            return r;
+        }
+        void ShowRows(bool all)
+        {
+            foreach (var kv in menuRows)
+                if (kv.Value) kv.Value.gameObject.SetActive(all || kv.Key == anchorRow);
         }
 
         // The menu train shows train `t` (rebuilt if it was showing another).
@@ -648,6 +666,7 @@ namespace RailTracer
         void MenuStep(Keyboard kb, Mouse mouse)
         {
             MenuCamera();
+            ShowRows(screen == MenuScreen.Journey); // the other trains only in Journey
             SyncSettingLamps(screen == MenuScreen.Options || screen == MenuScreen.Controls || screen == MenuScreen.ResetData);
             var at = mouse != null ? mouse.position.ReadValue() : Vector2.zero;
             bool click = mouse != null && mouse.leftButton.wasPressedThisFrame;
@@ -972,8 +991,8 @@ namespace RailTracer
         static readonly string[][] TrainMaterials =
         {
             new string[0],
-            new[] { "Trn_Wallpaper", "Trn_Wallpaper_Green", "Trn_Curtain", "Trn_Curtain_White" },
-            new[] { "Trn_Wallpaper", "Trn_Wallpaper_Navy", "Trn_Curtain", "Trn_Curtain_Gold" },
+            new[] { "Trn_Wallpaper", "Trn_Wallpaper_Green", "Trn_Curtain", "Trn_Curtain_Green" },
+            new[] { "Trn_Wallpaper", "Trn_Wallpaper_Navy", "Trn_Curtain", "Trn_Curtain_Navy" },
         };
         Material seeThroughGlass;
         void TrainLook(TrainKit kit, Transform parent, int train)

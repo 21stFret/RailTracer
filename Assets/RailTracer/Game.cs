@@ -422,8 +422,25 @@ namespace RailTracer
                 marks[e] = (route, Line(Color.white, 0.05f));
             }
             gramophone = null; // the old car's went with it
-            bool kitBuilt = onKit = useTrainKit && BuildKitCarriage(Resources.Load<TrainKit>("Kit/TrainKit"), c, Map, car.kind, root, true,
-                endless ? 0 : Train.TrainOf(Mathf.Min(carIndex, Train.Cars - 1)), car.name);
+            // The car's look: its baked prefab (Resources/CarLooks, Alex's edits) if it has one, else built from the kit.
+            var trainKit = Resources.Load<TrainKit>("Kit/TrainKit");
+            int lookTrain = endless ? 0 : Train.TrainOf(Mathf.Min(carIndex, Train.Cars - 1));
+            var baked = useTrainKit && trainKit && c.H == 5 && LookId(walking, endless, carIndex) is string lookId ? Resources.Load<GameObject>(LookFolder + "/" + lookId) : null;
+            bool kitBuilt;
+            if (baked)
+            {
+                var look = Instantiate(baked, root);
+                look.name = "Car Look";
+                kitBuilt = onKit = true;
+                WakeLook(look.transform, trainKit, lookTrain, c.H, true);
+            }
+            else
+            {
+                var look = new GameObject("Car Look").transform;
+                look.SetParent(root, false);
+                kitBuilt = onKit = useTrainKit && BuildKitCarriage(trainKit, c, Map, car.kind, look, true, lookTrain, car.name);
+                if (kitBuilt) WakeLook(look, trainKit, lookTrain, c.H, true);
+            }
             if (!kitBuilt) BuildWhitebox();
             if (sun)
             {
@@ -593,23 +610,20 @@ namespace RailTracer
                 int run = 0;
                 void Flush()
                 {
-                    for (; run >= 2; run -= 2, s += 2f) { Wood(Panel(Place("Wall_2m_Window", 0f, s + 1f, rot))); Sash("Window_Sash_Large", s + 1f); Dress("Curtains_Large", s + 1f); }
-                    if (run == 1) { Wood(Panel(Place("Wall_1m_WindowSmall", 0f, s + 0.5f, rot))); Sash("Window_Sash_Small", s + 0.5f); Dress("Blind_Small", s + 0.5f); s += 1f; run = 0; }
+                    for (; run >= 2; run -= 2, s += 2f) { Panel(Place("Wall_2m_Window", 0f, s + 1f, rot)); Sash("Window_Sash_Large", s + 1f); Dress("Curtains_Large", s + 1f); }
+                    if (run == 1) { Panel(Place("Wall_1m_WindowSmall", 0f, s + 0.5f, rot)); Sash("Window_Sash_Small", s + 0.5f); Dress("Blind_Small", s + 0.5f); s += 1f; run = 0; }
                 }
-                // Window dressing (19.33): velvet curtains on most big windows (about 1 in 5 left bare), a green blind on
+                // Window dressing (19.33): velvet curtains on every big window, a green blind on
                 // every small one. Static, open.
                 void Dress(string module, float z)
                 {
                     if (!kit.Get(module)) return;
-                    if (module == "Curtains_Large" && (int)(z * 7 + row * 13) % 5 == 0) return;
                     Panel(Place(module, 0f, z, rot));
                 }
                 void Sash(string module, float z) // the glass in that window, on the wall's own transform
                 {
                     if (!kit.Get(module)) return; // older kit export without sashes: open windows
-                    var sash = Place(module, 0f, z, rot);
-                    if (live) sashes.Add((sash.AddComponent<SlidingWindow>(), row, z - 1f, module.EndsWith("Large") ? 1f : 0.5f)); // shell z = game x + 1
-                    Panel(sash);
+                    Panel(Place(module, 0f, z, rot)); // made to slide by WakeLook
                 }
                 GameObject Panel(GameObject wall)
                 {
@@ -623,23 +637,12 @@ namespace RailTracer
                     string solo = At(x, row) == 'S' ? "Wall_1m_Pilaster" : Part(x) || car.BlankWall(at) || car.IsCage(at) ? "Wall_1m_Solid" : null;
                     if (solo == null) { run++; continue; }
                     Flush();
-                    Wood(Panel(Place(solo, 0f, s + 0.5f, rot)));
+                    Panel(Place(solo, 0f, s + 0.5f, rot));
                     s += 1f;
                 }
                 Flush();
             }
 
-            // The camera-side wall is drawn only as shadow, so its windows get a pale glass-blue line along the floor
-            // at the wall's foot, one per window opening.
-            foreach (var (_, row, x, half) in live ? sashes : new List<(SlidingWindow, int, float, float)>())
-            {
-                if (row != car.H - 1) continue;
-                var line = Line(new Color(0.65f, 0.82f, 1f, 0.22f), 0.04f); // faint: a hint, not a give-away
-                float z = -(car.H - 1) - 0.42f;
-                line.positionCount = 2;
-                line.SetPosition(0, new Vector3(x - half + 0.08f, 0.05f, z));
-                line.SetPosition(1, new Vector3(x + half - 0.08f, 0.05f, z));
-            }
 
             var seatColumns = Enumerable.Range(0, car.W).Where(x => Enumerable.Range(0, car.H).Any(y => At(x, y) == 'S')).ToList();
             var seats = new List<Transform>();
@@ -689,8 +692,7 @@ namespace RailTracer
                 for (int y = 0; y < car.H; y++)
                     if (At(x, y) == 'G' && kit.Get("Prop_Gramophone"))
                     {
-                        var g = Place("Prop_Gramophone", y - 2f, x + 1f, y < car.H / 2 ? -90f : 90f);
-                        if (live) SetGramophone(g.transform);
+                        Place("Prop_Gramophone", y - 2f, x + 1f, y < car.H / 2 ? -90f : 90f); // the live car's plays: WakeLook
                     }
             if (kind == CarKind.Dining || kind == CarKind.Baggage)
             {
@@ -715,28 +717,9 @@ namespace RailTracer
                 var tables = bulbs.OrderBy(b => parent.InverseTransformPoint(b.position).x).ToList();
                 for (int i = 0; i < tables.Count; i += 2) TableLight(tables[i]);
             }
-            if (live && kind != CarKind.Dining && kind != CarKind.Baggage) ScatterProps(kit, seats, windowTables);
-            TrainLook(kit, parent, train);
+            if (live && kind != CarKind.Dining && kind != CarKind.Baggage) ScatterProps(kit, seats, windowTables, car, map, parent);
+            if (!live) WakeLook(parent, kit, train, car.H, false); // the menu train: looks only
             return true;
-
-            // The wood below the dado: each wall module's grain shifted at random, so the 1 and 2 m modules don't all show
-            // the same stretch of the texture (the wainscot's stiles hide the joins).
-            void Wood(GameObject wall)
-            {
-                foreach (var r in wall.GetComponentsInChildren<Renderer>())
-                {
-                    var mats = r.sharedMaterials;
-                    for (int i = 0; i < mats.Length; i++)
-                    {
-                        if (!mats[i] || mats[i].name != "Trn_Wood" || !mats[i].HasProperty("_BaseMap_ST")) continue;
-                        var st = mats[i].GetVector("_BaseMap_ST");
-                        var block = new MaterialPropertyBlock();
-                        r.GetPropertyBlock(block, i);
-                        block.SetVector("_BaseMap_ST", new Vector4(st.x, st.y, Random.value, Random.value));
-                        r.SetPropertyBlock(block, i);
-                    }
-                }
-            }
 
             // A wall lamp over a seat bank: a warm spotlight just above head height, set in from the wall and aimed
             // at the seat, plus the kit's lamp model if it has one (module name in lampModule).
@@ -744,10 +727,8 @@ namespace RailTracer
             void TableLight(Transform bulb)
             {
                 if (!live) return;
-                var light = new GameObject("Table Lamp").AddComponent<Light>();
-                lamps.Add(light);
+                var light = new GameObject("Table Lamp").AddComponent<Light>(); // counted by WakeLook
                 light.transform.SetParent(bulb, false);
-                tableLamps.Add(light);
                 light.transform.localRotation = Quaternion.Euler(90f, 0f, 0f); // straight down
                 light.type = LightType.Spot;
                 light.color = lampColor;
@@ -768,8 +749,7 @@ namespace RailTracer
                 var mount = new Vector3(x, lampHeight, wall + inward * (pilaster ? 0.04f : 0f)); // on a pilaster, or flat wall
                 var pos = model ? mount + new Vector3(0f, -0.05f, inward * 0.24f) : new Vector3(x, lampHeight, wall + inward * lampInset);
                 if (!live || !lit) { PlaceLampModel(); return; } // the menu train lights itself by progress (MenuTrain)
-                var light = new GameObject("Seat Lamp").AddComponent<Light>();
-                lamps.Add(light);
+                var light = new GameObject("Seat Lamp").AddComponent<Light>(); // counted by WakeLook
                 light.transform.SetParent(parent, false);
                 light.transform.localPosition = pos;
                 light.transform.localRotation = Quaternion.Euler(lampTilt, sideA ? 180f : 0f, 0f); // tipped down, facing into the car
@@ -797,7 +777,9 @@ namespace RailTracer
         // hat hooks on the end walls beside the doors, umbrellas in the end corners and against the side walls
         // beside the seats, briefcases standing by the seats, a steamer trunk in an end corner, ashtrays on seat
         // arms, newspapers on seats or arms. None blocks a tile; none goes on a tile someone starts on.
-        void ScatterProps(TrainKit kit, List<Transform> seats, List<Transform> windowTables = null)
+        // Props that start empty (an ashtray without its cigar, a hook without its hat) are tagged " (empty)" in their
+        // name rather than hidden here, so a baked car keeps the choice: WakeLook hides those parts and lights the rest.
+        void ScatterProps(TrainKit kit, List<Transform> seats, List<Transform> windowTables, Carriage c, string[] Map, Transform into)
         {
             var rng = new System.Random(Map.Aggregate(17, (h, row) => row.Aggregate(h, (k, ch) => unchecked(k * 31 + ch))));
             float Rand(float a, float b) => a + (float)rng.NextDouble() * (b - a);
@@ -806,8 +788,9 @@ namespace RailTracer
             {
                 var model = kit.Get(name);
                 if (!model) return null;
-                var go = Instantiate(model, root);
-                go.transform.position = at;
+                var go = Instantiate(model, into);
+                go.name = name;
+                go.transform.position = at; // world = carriage space: the look's container sits at the origin
                 go.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
                 return go;
             }
@@ -826,7 +809,7 @@ namespace RailTracer
                 for (int i = 0; i < n; i++)
                 {
                     var hook = Put("Prop_HatHook_Fedora", new Vector3(x, 0f, aisleZ + side * (0.95f + i * 0.36f)), yaw);
-                    if (hook && i != hatted && rng.NextDouble() < 0.5) HideParts(hook, "Trn_Felt", "Trn_BlackCloth");
+                    if (hook && i != hatted && rng.NextDouble() < 0.5) hook.name += Empty;
                 }
             }
             Hooks(endL + 0.12f, -90f);
@@ -897,10 +880,7 @@ namespace RailTracer
             {
                 var (t, x) = arms[a];
                 var tray = Put("Prop_Ashtray_Cigar", t.TransformPoint(new Vector3(x, 0.66f, -0.36f)), t.eulerAngles.y + (rng.Next(2) == 0 ? 90f : -90f));
-                if (!tray) continue;
-                MatteBrass(tray);
-                if (rng.NextDouble() < 0.6) Smolder(tray);
-                else HideCigar(tray);
+                if (tray && rng.NextDouble() >= 0.6) tray.name += Empty; // about 6 in 10 lit
             }
             // The smoking car's window tables: an ashtray on each, sometimes two (Table_Window's top at 0.69 m, the
             // two places at Unity local (-2.34, 0.69, +-0.15)).
@@ -909,10 +889,7 @@ namespace RailTracer
                 {
                     if (side > 0f && rng.NextDouble() < 0.5) continue;
                     var tray = Put("Prop_Ashtray_Cigar", t.TransformPoint(new Vector3(-2.34f + Rand(-0.03f, 0.03f), 0.69f, side + Rand(-0.04f, 0.04f))), t.eulerAngles.y + Rand(0f, 360f));
-                    if (!tray) continue;
-                    MatteBrass(tray);
-                    if (rng.NextDouble() < 0.6) Smolder(tray);
-                    else HideCigar(tray);
+                    if (tray && rng.NextDouble() >= 0.6) tray.name += Empty; // about 6 in 10 lit
                 }
             for (int n = More(3, 6), i = 0; i < n; i++)
             {

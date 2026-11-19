@@ -854,10 +854,17 @@ namespace RailTracer
         // Which skill box the mouse is over (-1 = none), and whether the mouse is over the HUD at all.
         public int SlotAt(Vector2 screen)
         {
+            // A tile counts where it is drawn and where it rests: a hovered tile lifts, and without its resting spot the
+            // mouse at its bottom edge would fall off it, drop it back, hover it again... (the jitter).
             for (int i = 0; i < boxes.Length; i++)
-                if (RectTransformUtility.RectangleContainsScreenPoint(boxes[i].rt, screen, null)) return i;
+            {
+                var rest = screen + Vector2.up * boxLift[i] * StackScale * hudCanvas.scaleFactor;
+                if (RectTransformUtility.RectangleContainsScreenPoint(boxes[i].rt, screen, null)
+                    || RectTransformUtility.RectangleContainsScreenPoint(boxes[i].rt, rest, null)) return i;
+            }
             return -1;
         }
+        readonly float[] boxLift = new float[8];
 
         public bool Blocks(Vector2 screen) =>
             SlotAt(screen) >= 0 || ButtonUnder(screen) != null || RectTransformUtility.RectangleContainsScreenPoint(bar, screen, null)
@@ -892,7 +899,7 @@ namespace RailTracer
                 b.frame.color = frame;
                 b.frame.gap = noTarget && !picked && !over ? 5f : 0f;
                 b.name.text = holding ? "Drop" : d.shortName;
-                float lift = picked ? 10f : over ? 4f : 0f;
+                float lift = boxLift[i] = picked ? 10f : over ? 4f : 0f;
                 b.rt.anchoredPosition = new Vector2(TileLeft + i * (TileW + TileGap) + TileW / 2f, BoxY + TileH / 2f + lift) - StackOrigin; // inside the stack
                 // What it becomes next, rising from the bottom: toward the unlock (bone, or red for skills that unlock
                 // already Bloodied), then red toward Bloodied.
