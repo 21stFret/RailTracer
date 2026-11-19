@@ -621,10 +621,13 @@ namespace RailTracer
             int W = m[0].Length, H = m.Length;
             char At(int x, int y) => x < 0 || y < 0 || x >= W || y >= H ? '#' : m[y][x];
             string where = $"car {i + 1} ({car.name})";
-            Check(m.All(r => r.Length == W) && m.SelectMany(r => r).All(ch => "._PSLlWGTODBMXxCt".IndexOf(ch) >= 0), where + ": a known piece on every tile");
-            Check(Enumerable.Range(1, W - 1).All(x => At(x, 2) == '.' || At(x, 2) == 'D' || (i == 3 && At(x, 2) == 'X')), where + ": the aisle clear"); // the baggage hold's one crate in the aisle
+            Check(m.All(r => r.Length == W) && m.SelectMany(r => r).All(ch => "._PSLlWGTODBMXxCtV".IndexOf(ch) >= 0), where + ": a known piece on every tile");
+            bool booths = m.Any(r => r.IndexOf('V') >= 0); // a booth coach: its aisle on the near side
+            int aisle = booths ? H - 1 : 2;
+            Check(Enumerable.Range(1, W - 1).All(x => At(x, aisle) == '.' || At(x, aisle) == 'D' || (i == 3 && At(x, aisle) == 'X')), where + ": the aisle clear"); // the baggage hold's one crate in the aisle
+            if (booths) BoothShape(m, where);
             Check(m.SelectMany(r => r).Count(ch => ch == 'G') == 1, where + ": one gramophone");
-            string allowed = car.kind == CarKind.Passenger ? "SLlWGt" : car.kind == CarKind.Dining ? "TODBG" : "MXxCG";
+            string allowed = car.kind == CarKind.Passenger ? "SLlWGtV" : car.kind == CarKind.Dining ? "TODBG" : "MXxCG";
             Check(m.SelectMany(r => r).All(ch => ch == '.' || ch == '_' || ch == 'P' || allowed.IndexOf(ch) >= 0), where + ": only its kind's pieces");
             for (int x = 0; x < W; x++)
             {
@@ -641,7 +644,7 @@ namespace RailTracer
             // Seat columns every third column on each side of the partition; luggage never between two that face each other.
             var seatCols = Enumerable.Range(0, W).Where(x => Enumerable.Range(0, H).Any(y => At(x, y) == 'S')).ToList();
             var parts = Enumerable.Range(0, W).Where(x => At(x, 0) == 'W').ToList();
-            if (i != 1 && i != 4) // the generated cars may skip a bank column
+            if (i != 1 && i != 4 && !booths) // the generated cars may skip a bank column; booths are their own width
                 for (int k = 0; k + 1 < seatCols.Count; k++)
                     Check(seatCols[k + 1] - seatCols[k] == 3 || parts.Any(p => seatCols[k] < p && p < seatCols[k + 1]), where + $": seat banks every third column ({seatCols[k]}, {seatCols[k + 1]})");
             for (int k = 0; k + 1 < seatCols.Count; k += 2)
@@ -863,9 +866,48 @@ namespace RailTracer
             }
         }
 
+        // A booth coach's layout (19.48): dividers walled on every row but the aisle (the last); between each pair a booth,
+        // a seat bank (rows 0-1) against each divider facing across 1 to 3 free columns; the two columns at each end open
+        // floor but for the gramophone in a window corner; nothing else.
+        static void BoothShape(string[] m, string where)
+        {
+            int W = m[0].Length, H = m.Length;
+            var dividers = Enumerable.Range(0, W).Where(x => m[0][x] == 'V').ToList();
+            Check(dividers.Count >= 2 && dividers.All(x => Enumerable.Range(0, H).All(y => m[y][x] == (y < H - 1 ? 'V' : '.'))), where + ": dividers walled but for the aisle");
+            Check(dividers[0] >= 2 && dividers[dividers.Count - 1] <= W - 3 && new[] { 0, 1, W - 2, W - 1 }.All(x => Enumerable.Range(0, H).All(y => ".PG".IndexOf(m[y][x]) >= 0)), where + ": two open columns at each end");
+            for (int k = 0; k + 1 < dividers.Count; k++)
+            {
+                int a = dividers[k], b = dividers[k + 1], gap = b - a - 3;
+                Check(gap >= 1 && gap <= 3 && new[] { a + 1, b - 1 }.All(x => m[0][x] == 'S' && m[1][x] == 'S' && m[2][x] == '.' && m[3][x] == '.')
+                    && Enumerable.Range(a + 2, gap).All(x => Enumerable.Range(0, H - 1).All(y => m[y][x] == '.')), where + $": booth {a}-{b} two facing seats, 1 to 3 apart");
+            }
+            Check(m.SelectMany(r => r).All(ch => ".PSVG".IndexOf(ch) >= 0), where + ": only booths, the aisle and the gramophone");
+        }
+
         // New trains: the right shape for the kit, every floor tile reachable, passengers on the floor and apart.
         static void Generated(Tuning t)
         {
+            for (int seed = 1; seed <= 300; seed++) // booth coaches (19.48)
+            {
+                var (map, spawns, patrols) = TrainGen.MakeBooths(new Random(seed), 10, 2);
+                Check(map.Length == 5 && map.All(r => r.Length == TrainGen.W) && map[2][0] == 'P', "booths: 26 x 5, you start by the door");
+                BoothShape(map, $"booths {seed}");
+                var seen = new HashSet<(int, int)> { (0, 2) };
+                var todo = new Queue<(int x, int y)>(seen);
+                while (todo.Count > 0)
+                {
+                    var (x, y) = todo.Dequeue();
+                    foreach (var (dx, dy) in new[] { (1, 0), (-1, 0), (0, 1), (0, -1) })
+                    {
+                        int nx = x + dx, ny = y + dy;
+                        if (nx >= 0 && ny >= 0 && nx < TrainGen.W && ny < 5 && map[ny][nx] == '.' && seen.Add((nx, ny))) todo.Enqueue((nx, ny));
+                    }
+                }
+                Check(map.SelectMany((r, y) => r.Select((ch, x) => (ch, x, y))).All(p => p.ch != '.' || seen.Contains((p.x, p.y))), "booths: every floor tile reachable");
+                Check(spawns.Length == 10 && spawns.Count(s => s[5] == 1) == 2 && spawns.All(s => map[s[1]][s[0]] == '.')
+                    && spawns.Select(s => (s[0], s[1])).Distinct().Count() == spawns.Length, "booths: 10 passengers on free floor, two tough");
+                Check(patrols.Values.All(r => r.All(cell => cell.y == 4 && map[4][cell.x] == '.')), "booths: patrols walk the aisle");
+            }
             for (int seed = 1; seed <= 300; seed++)
             {
                 var (map, spawns, patrols) = TrainGen.Make(new Random(seed));

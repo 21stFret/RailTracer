@@ -195,11 +195,11 @@ namespace RailTracer
                 {
                     char ch = map[y][x];
                     seat[x, y] = "STBMODGt".IndexOf(ch) >= 0;
-                    solid[x, y] = "LlWXx".IndexOf(ch) >= 0;
+                    solid[x, y] = "LlWXxV".IndexOf(ch) >= 0;
                     blankWall[x, y] = "_lxBG".IndexOf(ch) >= 0; // a bar or the gramophone stands against plain wall
                     if (ch == 'G') gramophone = new Cell(x, y);
                     cage[x, y] = ch == 'C';
-                    wall[x, y] = ch == 'W';
+                    wall[x, y] = ch == 'W' || ch == 'V'; // 'V' a booth divider: a wall (its column a partition, the aisle its door)
                     if (ch == 'P') player = new Cell(x, y);
                 }
             // Partitions: a column walled off but for one doorway (the train draws the wall on the joint after it).

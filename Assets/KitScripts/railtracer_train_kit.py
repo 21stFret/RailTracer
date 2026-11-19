@@ -1233,10 +1233,11 @@ def sash(S, w):
     S.rect(2.570, 2.580, -h + 0.03, h - 0.03, SILL + 0.03, WIN_TOP - 0.03, SLOT_GLASS)     # pane, edges in the frame
     S.rect(2.54, 2.565, -0.06, 0.06, SILL + 0.01, SILL + 0.045, SLOT_BRASS)                # pull on the bottom rail
 
-def floor_part(S, y0, y1, runner=True, under=True):
+def floor_part(S, y0, y1, runner=True, under=True, runner_at=0.0, runner_w=1.0):
+    """runner_at / runner_w: the velvet runner's centre (x) and width; the booth coach's runs down its aisle."""
     S.rect(-IN_W, IN_W, y0, y1, Z_BOT, 0.0, SLOT_WOODDARK)
     if runner:
-        S.rect(-0.5, 0.5, y0, y1, 0.0, 0.015, SLOT_VELVET)
+        S.rect(runner_at - runner_w / 2, runner_at + runner_w / 2, y0, y1, 0.0, 0.015, SLOT_VELVET)
     if under:
         S.rect(-2.3, 2.3, y0, y1, -0.6, Z_BOT, SLOT_IRON)
 
@@ -1264,6 +1265,7 @@ def module(name, fn):
 
 WALLS = [
     module("Wall_1m_Solid",       lambda S: side_wall(S, -0.5, 0.5)),
+    module("Wall_05m_Solid",      lambda S: side_wall(S, -0.25, 0.25)),   # booth coach: centres a window in an odd booth
     module("Wall_1m_Pilaster",    lambda S: side_wall(S, -0.5, 0.5, pilasters=(0.0,))),
     module("Wall_1m_WindowSmall", lambda S: side_wall(S, -0.5, 0.5, windows=[(0.0, 0.7)])),
     module("Wall_2m_Window",      lambda S: side_wall(S, -1.0, 1.0, windows=[(0.0, 1.6)])),
@@ -1281,6 +1283,7 @@ def _roof_lamp(S):
 FLOORS_ROOFS = [
     module("Floor_1m",       lambda S: floor_part(S, -0.5, 0.5)),
     module("Floor_1m_Plain", lambda S: floor_part(S, -0.5, 0.5, runner=False)),
+    module("Floor_1m_Aisle", lambda S: floor_part(S, -0.5, 0.5, runner_at=-2.0, runner_w=0.9)),  # booth coach: runner on the aisle
     module("Roof_1m",        lambda S: roof_part(S, -0.5, 0.5)),
     module("Roof_1m_Rib",    lambda S: (roof_part(S, -0.5, 0.5), rib(S, 0.0))),
     module("Roof_2m_Lamp",   _roof_lamp),
@@ -1352,7 +1355,26 @@ def partition(S):
         moulding(S, CROWN, face, (1, 0, 0), out, (0, 0, 1), -IN_W, IN_W, -1, -1)
     S.rect(-0.5, 0.5, -0.05, 0.05, 0.0, 0.012, SLOT_BRASS)                 # threshold
 
-PARTS = [module("Partition_Door", partition)]
+def booth_divider(S):
+    """Booth coach divider (19.48), across the car at y = 0 (the centre of its tile): from the +x side wall's inner face
+    to 1.5 m short of the -x wall (map rows 0-3; the aisle, row 4, stays open), 8 cm thick, 2.58 m high. Wood to the
+    chair rail and the car's wallpaper above, the side walls' baseboard and chair rail on both faces (mitred into the
+    side wall's), a capping rail, and a newel post at the aisle end. The seats on either side are pushed back 0.42 m
+    against it (Game), their backs 4 cm off its faces."""
+    X0, X1, T, TOPZ = -1.44, IN_W - 0.001, 0.04, 2.58
+    S.rect(X0, X1, -T, T, 0.0, DADO_Z, SLOT_WOOD)
+    S.rect(X0, X1, -T, T, DADO_Z, TOPZ - 0.05, SLOT_WALLPAPER)
+    S.rect(-1.42, X1, -0.06, 0.06, TOPZ - 0.05, TOPZ, SLOT_TRIM)                   # capping rail
+    for f in (1, -1):
+        for prof in (BASE, DADO):
+            moulding(S, prof, (0.0, f * T, 0.0), (1, 0, 0), (0, f, 0), (0, 0, 1), X0, IN_W, 0, -1)
+    S.rect(-1.57, -1.39, -0.09, 0.09, 0.0, 0.20, SLOT_TRIM)                         # newel: plinth,
+    S.vertical = True
+    S.rect(-1.56, -1.40, -0.08, 0.08, 0.19, 2.62, SLOT_TRIM)                         # post,
+    S.vertical = False
+    S.rect(-1.57, -1.39, -0.09, 0.09, 2.61, 2.64, SLOT_BRASS)                        # brass cap
+
+PARTS = [module("Partition_Door", partition), module("Booth_Divider", booth_divider)]
 
 
 # ---------------------------------------------------------------- seat
@@ -1608,6 +1630,29 @@ def lamp_wall():
     S.annulus(0.094, 0.108, -0.137, -0.117, SLOT_BRASS, segs=20, center=(0, sy, 0))   # brass rim, proud of the shade
     return a.finish()
 
+def rack_brass():
+    """Booth coach luggage rack (19.48), on the same transform as the Seat_Double under it (seat coords: back at -Y;
+    the seat pushed back against its divider, whose face is at y = -0.54). Brass tube: back and front rails with a
+    gallery rail over the front, five rods across as the shelf, cross ribs and gallery posts every 0.475 m, two
+    triangular brackets with wall plates. 1.9 m long, 0.35 m deep, shelf at 1.88 m (a lamp goes above it)."""
+    a = Asset("Rack_Brass", seed=4)
+    S = a.S
+    Y0, Y1, Z, L = -0.54, -0.19, 1.88, 0.95
+    along_x = Matrix.Rotation(radians(90), 3, 'Y')         # the lathe's z -> x
+    along_y = Matrix.Rotation(radians(90), 3, 'X')         # the lathe's z -> -y
+    for y, z in ((Y0 + 0.02, Z), (Y1, Z), (Y1, Z + 0.07)):  # back rail, front rail, gallery rail
+        S.cylinder(0.012, -L, L, SLOT_BRASS, segs=8, center=(0, y, z), mat3=along_x)
+    for k in range(1, 6):                                   # the shelf's rods
+        y = Y0 + 0.02 + (Y1 - Y0 - 0.02) * k / 6
+        S.cylinder(0.005, -L + 0.01, L - 0.01, SLOT_BRASS, segs=6, center=(0, y, Z - 0.006), mat3=along_x)
+    for x in (-L, -L / 2, 0.0, L / 2, L):
+        S.cylinder(0.008, -Y1, -Y0 - 0.02, SLOT_BRASS, segs=6, center=(x, 0, Z - 0.014), mat3=along_y)  # rib
+        S.cylinder(0.006, Z + 0.01, Z + 0.06, SLOT_BRASS, segs=6, center=(x, Y1, 0))                   # gallery post
+    for x in (-0.8, 0.8):                                   # brackets and their wall plates
+        S.extrude([(Y0 + 0.005, Z - 0.03), (Y0 + 0.005, Z - 0.26), (Y1 - 0.03, Z - 0.03)], 'x', x - 0.005, x + 0.005, SLOT_BRASS)
+        S.rect(x - 0.03, x + 0.03, Y0, Y0 + 0.006, Z - 0.28, Z, SLOT_BRASS)
+    return a.finish()
+
 def make_rack(name, seed, full=True):
     def build():
         a = Asset(name, seed=seed)
@@ -1620,7 +1665,7 @@ def make_rack(name, seed, full=True):
     return build
 
 
-builders = WALLS + FLOORS_ROOFS + ENDS + PARTS + [seat_double, seat_single, lamp_wall]
+builders = WALLS + FLOORS_ROOFS + ENDS + PARTS + [seat_double, seat_single, lamp_wall, rack_brass]
 builders += [make_rack(f"LuggageRack_Full_{k}", s) for k, s in zip("ABC", RACK_SEEDS)]
 builders += [make_rack("LuggageRack_Empty", 1, full=False)]
 run(builders, spacing=8.0)

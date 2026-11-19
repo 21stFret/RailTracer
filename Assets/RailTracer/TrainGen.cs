@@ -134,6 +134,60 @@ namespace RailTracer
             return (map, spawns.ToArray(), patrols);
         }
 
+        // The booth coach (19.48): booths down the far side (rows 0-3), the aisle down the near side (row 4). A booth is two
+        // seat banks (rows 0-1) facing each other across 1 to 3 free columns, between dividers ('V' on rows 0-3: walls,
+        // the aisle open, so the rules treat each as a partition with its doorway on the aisle); back-to-back booths share
+        // one. The two columns at each end stay open floor (any column left over joins the far end); the gramophone
+        // stands in the far end's window corner. Passengers as in Make, the patrols on the aisle.
+        public static (string[] map, int[][] spawns, Dictionary<int, Cell[]> patrols) MakeBooths(Random rng, int enemies, int toughs)
+        {
+            const int Aisle = H - 1;
+            var g = new char[W, H];
+            for (int x = 0; x < W; x++) for (int y = 0; y < H; y++) g[x, y] = '.';
+            void Divider(int c) { for (int y = 0; y < Aisle; y++) g[c, y] = 'V'; }
+            int at = 2;
+            Divider(at);
+            for (;;)
+            {
+                int gap = Math.Min(rng.Next(1, 4), W - 3 - at - 3); // seat, gap, seat, divider; the last divider at W - 3 at most
+                if (gap < 1) break;
+                g[at + 1, 0] = g[at + 1, 1] = g[at + gap + 2, 0] = g[at + gap + 2, 1] = 'S';
+                at += gap + 3;
+                Divider(at);
+            }
+            g[W - 1, 0] = 'G';
+
+            var placed = new List<(int x, int y)>();
+            var spawns = new List<int[]>();
+            var patrols = new Dictionary<int, Cell[]>();
+            bool Clear(int x, int y) => g[x, y] == '.' && x >= 5 && placed.All(p => Math.Max(Math.Abs(p.x - x), Math.Abs(p.y - y)) >= 2);
+            for (int i = 0; i < 2; i++)
+                for (int tries = 0; tries < 50; tries++)
+                {
+                    int span = rng.Next(2, 6), x0 = rng.Next(5, W - span);
+                    if (!Enumerable.Range(x0, span + 1).All(x => Clear(x, Aisle))) continue;
+                    patrols[spawns.Count] = new[] { new Cell(x0, Aisle), new Cell(x0 + span, Aisle) };
+                    spawns.Add(new[] { x0, Aisle, 1, 0, 0, 0 });
+                    for (int x = x0; x <= x0 + span; x++) placed.Add((x, Aisle));
+                    break;
+                }
+            foreach (var (x, y) in Tiles(g, (x, y) => true).OrderBy(_ => rng.Next()))
+            {
+                if (spawns.Count >= enemies) break;
+                if (!Clear(x, y)) continue;
+                bool booth = y != Aisle; // booth guards mostly watch the aisle
+                var (fx, fy) = booth && rng.NextDouble() < 0.7 ? (0, 1) : (rng.Next(2) == 0 ? -1 : 1, 0);
+                spawns.Add(new[] { x, y, fx, fy, 0, 0 });
+                placed.Add((x, y));
+            }
+            foreach (int i in Enumerable.Range(0, spawns.Count).OrderBy(_ => rng.Next()).Take(toughs)) spawns[i][5] = 1;
+
+            var map = new string[H];
+            for (int y = 0; y < H; y++)
+                map[y] = new string(Enumerable.Range(0, W).Select(x => x == 0 && y == H / 2 ? 'P' : g[x, y]).ToArray());
+            return (map, spawns.ToArray(), patrols);
+        }
+
         static IEnumerable<(int x, int y)> Tiles(char[,] g, Func<int, int, bool> ok)
         {
             for (int x = 0; x < W; x++)

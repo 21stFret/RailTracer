@@ -72,11 +72,12 @@ namespace RailTracer
         // characters walking on it stand on it, eased in over its edges, so their feet don't sink in.
         public float runnerHeight = 0.015f;
         bool onKit; // this car is the kit carriage (the whitebox has no runner)
+        bool boothAisle; // a booth coach: its runner down the near-side aisle (the last row), not the middle
 
         Vector3 OnRunner(Vector3 p)
         {
             if (!onKit) return p;
-            float d = Mathf.Abs(p.z + (c.H - 1) / 2f); // from the car's centreline
+            float d = Mathf.Abs(p.z + (boothAisle ? c.H - 1 : (c.H - 1) / 2f)); // from the runner's centreline
             return p + Vector3.up * runnerHeight * Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.62f, 0.38f, d));
         }
         // The demon aura (Resources/Effects/Demon Aura) round your feet: fades in with the same eased legend as the
@@ -448,6 +449,7 @@ namespace RailTracer
                 kitBuilt = onKit = useTrainKit && BuildKitCarriage(trainKit, c, Map, car.kind, look, true, lookTrain, car.name);
                 if (kitBuilt) WakeLook(look, trainKit, lookTrain, c.H, true, car.kind == CarKind.Baggage);
             }
+            boothAisle = Map.Any(r => r.IndexOf('V') >= 0);
             if (!kitBuilt) BuildWhitebox();
             if (sun)
             {
@@ -609,8 +611,10 @@ namespace RailTracer
         bool BuildKitCarriage(TrainKit kit, Carriage car, string[] map, CarKind kind, Transform parent, bool live, int train = 0, string carName = null)
         {
             if (!kit || car.H != 5) return false; // the kit's interior is exactly 5 m (rows) wide
+            bool booths = map.Any(r => r.IndexOf('V') >= 0); // a booth coach (19.48): booths on the far side, the aisle near
             var missing = new[] { "EndCap_Door", "Floor_1m", "Wall_1m_Solid", "Wall_1m_Pilaster", "Wall_1m_WindowSmall",
                 "Wall_2m_Window", "Partition_Door", "Seat_Double", "LuggageRack_Full_A", "LuggageRack_Full_B", "LuggageRack_Full_C" }
+                .Concat(booths ? new[] { "Booth_Divider", "Floor_1m_Aisle", "Wall_05m_Solid", "Rack_Brass" } : new string[0])
                 .Where(n => !kit.Get(n)).ToArray();
             if (missing.Length > 0) { Debug.LogWarning("Rail Tracer: train kit is missing " + string.Join(", ", missing) + "; using white-box."); return false; }
 
@@ -691,10 +695,32 @@ namespace RailTracer
                     foreach (var r in wall.GetComponentsInChildren<Renderer>()) r.shadowCastingMode = ShadowCastingMode.ShadowsOnly;
                     return wall;
                 }
+                // A booth coach's far wall: each booth (seat column to seat column) has one big window centred on it, plain
+                // wall either side (whole and half metres); its dividers stand against plain wall.
+                void Solid(float from, float len)
+                {
+                    for (; len >= 1f; len -= 1f, from += 1f) Panel(Place("Wall_1m_Solid", 0f, from + 0.5f, rot));
+                    if (len > 0.25f) Panel(Place("Wall_05m_Solid", 0f, from + 0.25f, rot));
+                }
                 for (int x = 0; x < car.W; x++)
                 {
                     var at = new Cell(x, row);
-                    string solo = At(x, row) == 'S' ? "Wall_1m_Pilaster" : Part(x) || car.BlankWall(at) || car.IsCage(at) ? "Wall_1m_Solid" : null;
+                    if (booths && row == 0 && At(x, 0) == 'S')
+                    {
+                        Flush();
+                        int e = x + 1;
+                        while (At(e, 0) != 'S') e++;              // the booth's other seat
+                        float pad = (e - x + 1 - 2) / 2f;
+                        Solid(s, pad);
+                        Panel(Place("Wall_2m_Window", 0f, s + pad + 1f, rot));
+                        Sash("Window_Sash_Large", s + pad + 1f);
+                        if (kind != CarKind.Baggage) Dress("Curtains_Large", s + pad + 1f);
+                        Solid(s + pad + 2f, pad);
+                        s += e - x + 1;
+                        x = e;
+                        continue;
+                    }
+                    string solo = At(x, row) == 'S' ? "Wall_1m_Pilaster" : Part(x) || At(x, row) == 'V' || car.BlankWall(at) || car.IsCage(at) ? "Wall_1m_Solid" : null;
                     if (solo == null) { run++; continue; }
                     Flush();
                     Panel(Place(solo, 0f, s + 0.5f, rot));
@@ -717,7 +743,8 @@ namespace RailTracer
             for (int x = 0; x < car.W; x++)
             {
                 float z = x + 1f;
-                Place("Floor_1m", 0f, z, 0f);
+                Place(booths ? "Floor_1m_Aisle" : "Floor_1m", 0f, z, 0f);
+                if (At(x, 0) == 'V') Place("Booth_Divider", 0f, z, 0f); // rows 0-3, from the far wall to the aisle
                 if (Part(x)) Place("Partition_Door", 0f, z + 0.5f, 0f); // on the joint after its tile
                 for (int y = 0; y < car.H; y++)
                 {
@@ -731,6 +758,7 @@ namespace RailTracer
                 if (pair < 0) continue;
                 // Seat banks two rows wide, facing each other in pairs of columns (back at the FBX's local +Z).
                 float rot = pair % 2 == 0 ? 180f : 0f;
+                if (booths) { if (At(x, 0) == 'S') BoothSeat(z, rot); continue; }
                 // A window seat on its own (its aisle place taken by a 1x1 prop): Seat_Single.
                 if (At(x, 0) == 'S' && At(x, 1) == 'S') { seats.Add(Place("Seat_Double", -1.45f, z, rot).transform); Lamp(x, true); }
                 else if (At(x, 0) == 'S' && kit.Get("Seat_Single")) { seats.Add(Place("Seat_Single", -1.95f, z, rot).transform); Lamp(x, true); }
@@ -791,6 +819,36 @@ namespace RailTracer
             if (live && kind != CarKind.Dining && kind != CarKind.Baggage) ScatterProps(kit, seats, windowTables, car, map, parent);
             if (!live) WakeLook(parent, kit, train, car.H, false, kind == CarKind.Baggage); // the menu train: looks only
             return true;
+
+            // A booth seat: pushed back 0.42 m against its divider (the back at the bank's local +Z), the brass rack over it,
+            // and its lamp on the divider above the rack: the Lamp_Wall model and, in the live car, a lit Seat Lamp aimed
+            // into the booth like the wall lamps.
+            void BoothSeat(float z, float rot)
+            {
+                float back = rot == 180f ? -0.42f : 0.42f;
+                var seat = Place("Seat_Double", -1.45f, z + back, rot).transform;
+                seats.Add(seat);
+                Place("Rack_Brass", -1.45f, z + back, rot);
+                var inward = -seat.forward;                                   // from the divider into the booth
+                var mount = seat.TransformPoint(new Vector3(0f, 2.3f, 0.54f)); // on the divider's face, over the rack
+                if (kit.Get(lampModule) is GameObject model)
+                {
+                    var lamp = Instantiate(model, parent);
+                    lamp.transform.SetPositionAndRotation(mount, Quaternion.LookRotation(inward));
+                    foreach (var r in lamp.GetComponentsInChildren<Renderer>()) r.shadowCastingMode = ShadowCastingMode.Off;
+                }
+                if (!live) return;
+                var light = new GameObject("Seat Lamp").AddComponent<Light>(); // counted by WakeLook
+                light.transform.SetParent(parent, true);
+                light.transform.SetPositionAndRotation(mount + inward * 0.24f + Vector3.down * 0.05f, Quaternion.LookRotation(inward) * Quaternion.Euler(lampTilt, 0f, 0f));
+                light.type = LightType.Spot;
+                light.color = lampColor;
+                light.intensity = wallLampIntensity;
+                light.range = wallLampRange;
+                light.spotAngle = wallLampAngle;
+                light.innerSpotAngle = wallLampInnerAngle;
+                light.shadows = lampShadows ? LightShadows.Soft : LightShadows.None;
+            }
 
             // A wall lamp over a seat bank: a warm spotlight just above head height, set in from the wall and aimed
             // at the seat, plus the kit's lamp model if it has one (module name in lampModule).

@@ -86,6 +86,13 @@ namespace RailTracer
             return new CarDef { name = name, blurb = blurb, kind = CarKind.Passenger, map = map, spawns = spawns, patrols = patrols };
         }
 
+        // A booth coach (TrainGen.MakeBooths): booths down the far side, the aisle on the near side.
+        static CarDef Booths(string name, string blurb, int seed, int enemies, int toughs)
+        {
+            var (map, spawns, patrols) = TrainGen.MakeBooths(new Random(seed), enemies, toughs);
+            return new CarDef { name = name, blurb = blurb, kind = CarKind.Passenger, map = map, spawns = spawns, patrols = patrols };
+        }
+
         static CarDef Dining() => new CarDef
         {
             name = "Dining car", blurb = "Open tables and long sightlines. Half cover only: made for loud kills and leaps.", kind = CarKind.Dining, map = DiningMap,
@@ -115,8 +122,8 @@ namespace RailTracer
         public static CarDef Demo(int i) => demo[i] ??= MakeDemo(i);
 
         // The target turns per Journey car: the level solver's results (train 1: 18.40, its generated cars 2 and 5 again
-        // in 19.35 with booth seating, and again in 19.42 with booth tables; trains 2 and 3: 19.21; seed 1). Rerun it
-        // after changing a car.
+        // in 19.35 with booth seating, and again in 19.42 with booth tables; trains 2 and 3: 19.21, the Night coach again
+        // as a booth coach in 19.48, still 9 at beam 20; seed 1). Rerun it after changing a car.
         static readonly int[] Targets = { 11, 8, 11, 9, 16, 10, 9, 9, 12, 10, 9, 8, 10, 11, 14 };
 
         static CarDef MakeDemo(int i)
@@ -133,7 +140,7 @@ namespace RailTracer
                 7 => Hand("Smoking car", "Every booth taken, the partition right by the door. Plenty of cover, plenty of eyes.", CarKind.Passenger, SmokingMap, Smoking),
                 8 => Hand("Lounge car", "A bar in the middle of the car and a crowd round it. Two carts in the aisle.", CarKind.Dining, LoungeMap, Lounge),
                 9 => Hand("Grand saloon", "The last car of the Express. Silver service, and every guest armed.", CarKind.Dining, SaloonMap, Saloon),
-                10 => Hand("Night coach", "Late passengers and the men watching them. A wall halfway down hides the far end.", CarKind.Passenger, NightMap, Night),
+                10 => Booths("Night coach", "Booths down one side, the corridor down the other. Every booth is a blind corner.", 1010, 11, 2), // 9 guards, 2 heavies
                 11 => Hand("Mail van", "Sacks of the night's post and the guards who sort it. Short sightlines, deadly corners.", CarKind.Baggage, MailMap, Mail),
                 12 => Hand("Guards' coach", "Off-duty guards in every booth, all of them armed. Take them one booth at a time.", CarKind.Passenger, GuardsMap, Guards),
                 13 => Hand("Bullion van", "The gold rides here behind its cage, and so do the men paid to keep it.", CarKind.Baggage, BullionMap, Bullion),
@@ -235,21 +242,7 @@ namespace RailTracer
 
         // ---- Train 3, the Night Freight: more baggage, no dining. ----
 
-        // Night coach: the partition halfway (column 16), banks missing here and there.
-        static readonly string[] NightMap =
-        {
-            "..S....LS..S.LS.WS..S..S__",
-            "..S.....S..S..S.WS..G..S..",
-            "P.........................",
-            "..S..S..S.....S.WS.....S..",
-            "..S..SL.S.___.S.WS.L...S..",
-        };
-        static readonly (int[][], int[][]) Night = (new[] // 9 guards, 2 heavies
-        {
-            new[] { 6, 2, 1, 0, 0 }, new[] { 5, 0, 0, 1, 0 }, new[] { 10, 1, 0, 1, 0 }, new[] { 11, 3, 0, -1, 0 }, new[] { 13, 1, 1, 0, 0 },
-            new[] { 15, 3, -1, 0, 1 }, new[] { 18, 1, 0, 1, 0 }, new[] { 20, 3, 0, -1, 0 }, new[] { 22, 0, 0, 1, 0 }, new[] { 21, 4, 0, -1, 0 },
-            new[] { 24, 2, -1, 0, 1 },
-        }, new[] { new[] { 0, 6, 2, 12, 2 }, new[] { 10, 24, 2, 18, 2 } });
+        // Night coach: a booth coach since 19.48 (TrainGen.MakeBooths, seed 1010).
 
         // Mail van: mail sacks everywhere (half cover), a few crates, short runs of window.
         static readonly string[] MailMap =
@@ -320,6 +313,8 @@ namespace RailTracer
         {
             var roll = new Random(seed ^ 0x5eed);
             int heavies = roll.Next(0, 3), guards = roll.Next(7, 10);
+            if (roll.Next(3) == 0) // about one Endless car in three is a booth coach (19.48)
+                return Booths($"Endless car {n}", "Booths down one side, the corridor down the other.", seed, guards + heavies, heavies);
             return Generated($"Endless car {n}", "Another car, another crowd.", seed, guards + heavies, heavies, minBanks: EndlessMinBanks);
         }
 
