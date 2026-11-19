@@ -127,6 +127,20 @@
       "albedo": "Trn_Glass_albedo.png",
       "normal": "Trn_Glass_normal.png",
       "mask": "Trn_Glass_mask.png"
+    },
+    {
+      "name": "Trn_Trim",
+      "color": [
+        0.13,
+        0.055,
+        0.025
+      ],
+      "metallic": 0.0,
+      "roughness": 0.32,
+      "tile": 1.0,
+      "albedo": "Trn_Trim_albedo.png",
+      "normal": "Trn_Trim_normal.png",
+      "mask": "Trn_Trim_mask.png"
     }
   ]
 }

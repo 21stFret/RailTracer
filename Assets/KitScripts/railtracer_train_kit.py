@@ -949,7 +949,7 @@ def make_texture_set(entry, style, n=512, seed=1):
 
 # ---------------------------------------------------------------- palette (names = Unity material names)
 (SLOT_WOOD, SLOT_WOODDARK, SLOT_BRASS, SLOT_CREAM,
- SLOT_VELVET, SLOT_LEATHER, SLOT_IRON, SLOT_WALLPAPER, SLOT_GLASS) = set_palette([
+ SLOT_VELVET, SLOT_LEATHER, SLOT_IRON, SLOT_WALLPAPER, SLOT_GLASS, SLOT_TRIM) = set_palette([
     #  name           linear colour        metal rough  texture recipe, metres per repeat
     ("Trn_Wood",     (0.45, 0.24, 0.12), 0.0, 0.6, {"tex": "wood", "tile": 2.0, "planks": 1, "rings": 14, "seams": False}),
     ("Trn_WoodDark", (0.20, 0.10, 0.05), 0.0, 0.6, {"tex": "wood", "tile": 1.0, "planks": 2}),
@@ -962,7 +962,15 @@ def make_texture_set(entry, style, n=512, seed=1):
      {"tex": "wallpaper", "tile": 1.0, "pattern": WALLPAPER["pattern"], "ink": WALLPAPER["ink"],
       "repeats": WALLPAPER["repeats"]}),
     # Opaque night glass: dark and glossy, so it reflects the lamps and takes blood decals (URP decals skip transparents).
-    ("Trn_Glass",    (0.010, 0.012, 0.016), 0.0, 0.05)])
+    ("Trn_Glass",    (0.010, 0.012, 0.016), 0.0, 0.05),
+    # The wall trims (19.36): dark varnished walnut, glossier than the furniture's dark wood, finer grain.
+    ("Trn_Trim",     (0.13, 0.055, 0.025), 0.0, 0.32, {"tex": "wood", "tile": 1.0, "planks": 1, "rings": 22, "seams": False})])
+
+# Moulding profiles (19.36), bottom to top: (z0, z1, depth from the wall face). Every run of a step stops where a
+# crossing wall's same step starts (at IN_W - its own depth), so corners mitre without overlapping.
+BASE_PROFILE = ((0.0, 0.115, 0.03), (0.115, 0.13, 0.036), (0.13, 0.15, 0.024))          # board, bead, stepped top
+DADO_PROFILE = ((0.72, 0.73, 0.032), (0.73, 0.752, 0.05), (0.752, 0.76, 0.04))          # cove, rail (hides 0.74), cap
+CORNICE_PROFILE = ((2.85, 2.87, 0.06), (2.87, 2.90, 0.085), (2.90, 2.94, 0.10), (2.94, 3.0, 0.12))   # to the ceiling (CEIL)
 
 # ---------------------------------------------------------------- cross-section (shared by every module)
 IN_W   = 2.5          # inner wall face
@@ -992,17 +1000,21 @@ def side_wall(S, y0, y1, windows=(), door=None, pilasters=(), trim_end=None):
     # gaps in the low trims
     sill_gaps = [(c - w / 2 - 0.10, c + w / 2 + 0.10) for c, w in windows]
     door_gap = [(door[0] - door[1] / 2 - 0.08, door[0] + door[1] / 2 + 0.08)] if door else []
-    band(S, 'y', IN_W, -1, y0, ty1, 0.0, 0.15, 0.03, SLOT_WOODDARK, gaps=door_gap)                 # baseboard
-    band(S, 'y', IN_W, -1, y0, ty1, 0.72, 0.76, 0.045, SLOT_WOODDARK, gaps=sill_gaps + door_gap)  # dado
-    wainscot(S, y0, ty1, door_gap + [(p - 0.08, p + 0.08) for p in pilasters])
+    for z0, z1, d in BASE_PROFILE:                                                                   # baseboard
+        band(S, 'y', IN_W, -1, y0, ty1, z0, z1, d, SLOT_TRIM, gaps=door_gap)
+    for z0, z1, d in DADO_PROFILE:                                                                   # dado rail
+        band(S, 'y', IN_W, -1, y0, ty1, z0, z1, d, SLOT_TRIM, gaps=sill_gaps + door_gap)
+    wainscot(S, y0, ty1, door_gap + [(p - 0.095, p + 0.095) for p in pilasters])
     for c, w in windows:
-        frame_opening(S, 'y', IN_W, -1, c, w, SILL, WIN_TOP, SLOT_WOODDARK,
+        frame_opening(S, 'y', IN_W, -1, c, w, SILL, WIN_TOP, SLOT_TRIM,
                       jamb=(0.08, 0.06), head=(0.10, 0.07), sill=(0.08, 0.08), sill_drop=0.08)
+        S.rect(IN_W - 0.075, IN_W, c - w / 2 - 0.10, c + w / 2 + 0.10, WIN_TOP + 0.10, WIN_TOP + 0.125, SLOT_TRIM)  # crown
         S.rect(2.505, 2.52, c - w / 2, c + w / 2, SILL, SILL + 0.04, SLOT_BRASS)   # brass strip in the reveal
     if door:
         c, w = door
-        frame_opening(S, 'y', IN_W, -1, c, w, 0.0, DOOR_H, SLOT_WOODDARK,
+        frame_opening(S, 'y', IN_W, -1, c, w, 0.0, DOOR_H, SLOT_TRIM,
                       jamb=(0.08, 0.06), head=(0.12, 0.07), sill=None)
+        S.rect(IN_W - 0.075, IN_W, c - w / 2 - 0.10, c + w / 2 + 0.10, DOOR_H + 0.12, DOOR_H + 0.145, SLOT_TRIM)  # crown
         S.rect(2.5, 2.65, c - w / 2, c + w / 2, 0.0, 0.012, SLOT_BRASS)            # tread plate
         S.rect(2.65, 2.95, c - w / 2, c + w / 2, -0.55, -0.50, SLOT_IRON)          # exterior step
         for s in (-1, 1):                                                          # step hangers
@@ -1012,11 +1024,20 @@ def side_wall(S, y0, y1, windows=(), door=None, pilasters=(), trim_end=None):
             S.cylinder(0.022, 0.15, 2.05, SLOT_BRASS, segs=10, center=(2.74, yr, 0))
             for za in (0.15, 2.02):                                                # rail brackets
                 S.rect(2.65, 2.74, yr - 0.015, yr + 0.015, za, za + 0.03, SLOT_BRASS)
-    for p in pilasters:
-        S.rect(2.46, 2.50, p - 0.08, p + 0.08, 0.15, 2.60, SLOT_WOODDARK)
+    for p in pilasters:                                          # a base block, the shaft with a raised panel, a capital
+        S.rect(IN_W - 0.045, IN_W, p - 0.095, p + 0.095, 0.15, 0.32, SLOT_TRIM)
+        S.rect(IN_W - 0.04, IN_W, p - 0.08, p + 0.08, 0.32, 2.45, SLOT_TRIM)
+        S.rect(IN_W - 0.045, IN_W - 0.04, p - 0.05, p + 0.05, 0.40, 2.38, SLOT_TRIM)
+        S.rect(IN_W - 0.055, IN_W, p - 0.10, p + 0.10, 2.45, 2.60, SLOT_TRIM)
     S.rect(2.45, 2.50, y0, ty1, 2.60, 2.65, SLOT_BRASS)          # picture rail
     S.rect(2.49, 2.50, y0, ty1, 2.65, 2.85, SLOT_CREAM)          # cream frieze
-    S.rect(2.38, 2.50, y0, ty1, 2.85, CEIL, SLOT_WOODDARK)       # cornice
+    for z0, z1, d in CORNICE_PROFILE:                            # cornice, stepped out to the ceiling
+        S.rect(IN_W - d, IN_W, y0, ty1, z0, z1, SLOT_TRIM)
+    k = 0                                                        # dentils under it, every 10 cm on the 1 m grid
+    while y0 + 0.05 + 0.1 * k + 0.02 <= ty1:
+        yc = y0 + 0.05 + 0.1 * k
+        S.rect(IN_W - 0.072, IN_W - 0.06, yc - 0.02, yc + 0.02, 2.853, 2.868, SLOT_TRIM)
+        k += 1
     band(S, 'y', 2.65, 1, y0, y1, 0.50, 0.55, 0.015, SLOT_BRASS, gaps=door_gap)   # exterior pinstripes
     band(S, 'y', 2.65, 1, y0, y1, 2.45, 2.50, 0.015, SLOT_BRASS)
 
@@ -1049,10 +1070,10 @@ def wainscot(S, y0, y1, gaps=()):
         for (_, p0), (p1, _) in zip(stiles, stiles[1:]):            # each panel between two stiles
             S.rect(FRONT, IN_W, p0, p1, Z0, RB, SLOT_WOOD)          # bottom rail
             S.rect(FRONT, IN_W, p0, p1, RT, Z1, SLOT_WOOD)          # top rail
-            S.rect(BEAD, IN_W, p0, p0 + BW, RB, RT, SLOT_WOODDARK)  # bead: the sides full height, top and bottom between
-            S.rect(BEAD, IN_W, p1 - BW, p1, RB, RT, SLOT_WOODDARK)
-            S.rect(BEAD, IN_W, p0 + BW, p1 - BW, RB, RB + BW, SLOT_WOODDARK)
-            S.rect(BEAD, IN_W, p0 + BW, p1 - BW, RT - BW, RT, SLOT_WOODDARK)
+            S.rect(BEAD, IN_W, p0, p0 + BW, RB, RT, SLOT_TRIM)      # bead: the sides full height, top and bottom between
+            S.rect(BEAD, IN_W, p1 - BW, p1, RB, RT, SLOT_TRIM)
+            S.rect(BEAD, IN_W, p0 + BW, p1 - BW, RB, RB + BW, SLOT_TRIM)
+            S.rect(BEAD, IN_W, p0 + BW, p1 - BW, RT - BW, RT, SLOT_TRIM)
 
 def sash(S, w):
     """Sliding sash for a window of width w in the +x side wall (wall-module coords). It sits in the wall's
@@ -1138,27 +1159,31 @@ def end_cap(S, door=True):
     def er(xa, xb, d, za, zb, slot):
         S.rect(xa, xb, face - d, face, za, zb, slot)
     if door:
-        for xa, xb in ((-2.47, -0.72), (0.72, 2.47)):
-            er(xa, xb, 0.03, 0.0, 0.15, SLOT_WOODDARK)                     # baseboard
+        for z0, z1, d in BASE_PROFILE:                                     # baseboard, each step to its own corner
+            for xa, xb in ((-(IN_W - d), -0.72), (0.72, IN_W - d)):
+                er(xa, xb, d, z0, z1, SLOT_TRIM)
         for sg in (1, -1):
-            er(*sx(sg, 0.60, 0.72), 0.06, 0.0, DOOR_H, SLOT_WOODDARK)       # door jambs
-        er(-0.72, 0.72, 0.06, DOOR_H, DOOR_H + 0.12, SLOT_WOODDARK)        # door head
+            er(*sx(sg, 0.60, 0.72), 0.06, 0.0, DOOR_H, SLOT_TRIM)          # door jambs
+        er(-0.72, 0.72, 0.06, DOOR_H, DOOR_H + 0.12, SLOT_TRIM)            # door head
+        er(-0.82, 0.82, 0.075, DOOR_H + 0.12, DOOR_H + 0.145, SLOT_TRIM)   # its crown
         er(-0.25, 0.25, 0.02, 2.46, 2.56, SLOT_BRASS)                      # car number plate
         S.rect(-0.6, 0.6, YI, YO, 0.0, 0.012, SLOT_BRASS)                  # tread plate
         panels = ((0.95, 2.25),)
     else:
-        er(-2.47, 2.47, 0.03, 0.0, 0.15, SLOT_WOODDARK)
-        er(-0.6, 0.6, 0.02, 0.30, 0.90, SLOT_WOODDARK)                    # centre panels
-        er(-0.6, 0.6, 0.02, 1.05, 2.40, SLOT_WOODDARK)
+        for z0, z1, d in BASE_PROFILE:
+            er(-(IN_W - d), IN_W - d, d, z0, z1, SLOT_TRIM)
+        er(-0.6, 0.6, 0.02, 0.30, 0.90, SLOT_TRIM)                        # centre panels
+        er(-0.6, 0.6, 0.02, 1.05, 2.40, SLOT_TRIM)
         er(-0.25, 0.25, 0.025, 2.46, 2.56, SLOT_BRASS)
         panels = ((0.95, 2.25),)
     for sg in (1, -1):
         for a0, a1 in panels:
-            er(*sx(sg, a0, a1), 0.02, 0.30, 0.90, SLOT_WOODDARK)
-            er(*sx(sg, a0, a1), 0.02, 1.05, 2.40, SLOT_WOODDARK)
+            er(*sx(sg, a0, a1), 0.02, 0.30, 0.90, SLOT_TRIM)
+            er(*sx(sg, a0, a1), 0.02, 1.05, 2.40, SLOT_TRIM)
     er(-2.45, 2.45, 0.05, 2.60, 2.65, SLOT_BRASS)                          # picture rail
     er(-2.49, 2.49, 0.01, 2.65, 2.85, SLOT_CREAM)
-    er(-2.38, 2.38, 0.12, 2.85, CEIL, SLOT_WOODDARK)                       # cornice
+    for z0, z1, d in CORNICE_PROFILE:                                      # cornice
+        er(-(IN_W - d), IN_W - d, d, z0, z1, SLOT_TRIM)
     S.rect(-IN_W, IN_W, Y0, YI, CEIL, TOP, SLOT_CREAM)                     # ceiling
     S.extrude(ROOF_PROFILE, 'y', Y0, YO, SLOT_IRON)                        # roof
 
@@ -1175,14 +1200,16 @@ def partition(S):
         def pr(xa, xb, d, za, zb, slot):
             y0_, y1_ = sorted((face, face + f * d))
             S.rect(xa, xb, y0_, y1_, za, zb, slot)
-        for sg in (1, -1):                       # each trim stops at the matching side-wall trim face
-            pr(*sx(sg, 0.62, 2.47), 0.03, 0.0, 0.15, SLOT_WOODDARK)
-            pr(*sx(sg, 0.62, 2.455), 0.045, 0.72, 0.76, SLOT_WOODDARK)
+        for sg in (1, -1):                       # each trim step stops at the matching side-wall step's face
+            for z0, z1, d in BASE_PROFILE + DADO_PROFILE:
+                pr(*sx(sg, 0.62, IN_W - d), d, z0, z1, SLOT_TRIM)
             pr(*sx(sg, 0.62, 2.45), 0.05, 2.60, 2.65, SLOT_BRASS)
         for sg in (1, -1):
-            pr(*sx(sg, 0.50, 0.62), 0.06, 0.0, DOOR_H, SLOT_WOODDARK)
-        pr(-0.62, 0.62, 0.07, DOOR_H, DOOR_H + 0.12, SLOT_WOODDARK)
-        pr(-2.38, 2.38, 0.10, 2.85, CEIL, SLOT_WOODDARK)
+            pr(*sx(sg, 0.50, 0.62), 0.06, 0.0, DOOR_H, SLOT_TRIM)
+        pr(-0.62, 0.62, 0.07, DOOR_H, DOOR_H + 0.12, SLOT_TRIM)
+        pr(-0.72, 0.72, 0.075, DOOR_H + 0.12, DOOR_H + 0.145, SLOT_TRIM)  # crown over the doorway
+        for z0, z1, d in CORNICE_PROFILE:
+            pr(-(IN_W - d), IN_W - d, min(d, 0.10), z0, z1, SLOT_TRIM)
     S.rect(-0.5, 0.5, -0.05, 0.05, 0.0, 0.012, SLOT_BRASS)                 # threshold
 
 PARTS = [module("Partition_Door", partition)]
