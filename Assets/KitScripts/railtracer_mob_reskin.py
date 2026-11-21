@@ -1,22 +1,25 @@
 """Rail Tracer mob reskin (Update 19.59): 1950s British mob on the NYC1950 pack skeletons.
 
-  SK_CH01_TeddyBoy.fbx  (guards)  CH01 body: knee-length single-breasted drape coat (Chr_Suit) with a narrow velvet
-      collar, lapels, cuffs and buttons (Chr_Velvet), cream shirt front (Chr_Shirt) and a slim tie (Chr_Velvet),
-      drainpipe trousers (CH01's own trousers pulled in below the thigh, Chr_Suit), a quiff (Chr_Hair). The fedora,
-      shirt, chain and watch are gone.
+  SK_CH01_TeddyBoy.fbx  (guards)  CH01's head, hands, legs and shoes in CH02's tailoring, restyled: CH02's shirt with
+      its tie made slim and dark (Chr_Velvet); CH02's jacket opened up single-breasted (the double-breasted fronts
+      pulled apart, the lapels narrowed with them, the front buttons swapped for three on one edge), lengthened to
+      mid-thigh with a little swing, velvet collar, lapels and cuffs (Chr_Velvet), lined so the open fronts aren't
+      see-through; drainpipe trousers (CH01's own pulled in below the thigh, Chr_Suit); a quiff (Chr_Hair, smoothed).
+      Clean-shaven (CH01's beard and moustache off). The fedora, chain, watch and CH01's shirt above the chest are gone (its lower front shows in the opening).
   SK_CH02_FlatCap.fbx   (heavies) CH02 unchanged but the fedora: a flat cap (Trn_Felt) in its place.
 
-Both stay ONE skinned mesh on the unchanged 67-bone skeleton (metres, scale 1, -Y forward, Z up), written next to the
-pack FBX they come from (the packs are gitignored: these are derived from them, so they stay out of git too).
-Garments are weighted from the body (nearest face, interpolated); the coat's skirt blends pelvis and both thighs so it
-swings instead of splitting; the cap and quiff are 100% head (they go with the head at Head Off).
+Both stay ONE skinned mesh on the unchanged 67-bone skeleton (metres, scale 1, -Y forward, Z up); CH01 and CH02 share
+that skeleton exactly, so CH02's clothes keep their own weights and UVs on CH01. Written next to the pack FBXs they
+come from (gitignored with the packs). The lengthened skirt blends pelvis and both thighs so it swings instead of
+splitting; the clothes are pushed out wherever CH01's body would poke through; the cap and quiff are 100% head (they
+go with the head at Head Off).
 
 Run:  blender -b --factory-startup --python railtracer_mob_reskin.py [-- --render <dir>]
 """
 import bpy, bmesh, math, os, sys
 from mathutils import Vector
 from mathutils.bvhtree import BVHTree
-from mathutils.interpolate import poly_3d_calc
+from mathutils.kdtree import KDTree
 
 # >>> CONFIG
 ASSETS = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -24,17 +27,14 @@ CH01 = os.path.join(ASSETS, "NYC1950_CH01", "Meshes", "SK_CH01_FullClothes.fbx")
 CH02 = os.path.join(ASSETS, "NYC1950_CH02", "Meshes", "SK_CH02_FullClothes.fbx")
 OUT01 = os.path.join(ASSETS, "NYC1950_CH01", "Meshes", "SK_CH01_TeddyBoy.fbx")
 OUT02 = os.path.join(ASSETS, "NYC1950_CH02", "Meshes", "SK_CH02_FlatCap.fbx")
-HEM_Z = 0.47          # coat hem: knee length (knee joint at 0.53)
-COAT_EASE = 0.02     # how loose the coat hangs off the body
-SHOULDER_X = 0.215    # padded shoulder half-width
-N = 40                # verts per coat ring
+HEM = 0.70         # jacket hem: mid-thigh (CH02's jacket ends at 0.89)
+STRETCH_FROM = 1.0 # the jacket below this height is stretched down to HEM (the pocket flaps sit above it)
+GAP = 0.055        # half the opening between the fronts, below the lapels
+TIE_W = 0.55       # the tie's width, as a share of CH02's
 # <<< CONFIG
 
 argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 RENDER = argv[argv.index("--render") + 1] if "--render" in argv else None
-
-ARM = ("upperarm", "lowerarm", "hand", "index", "middle", "ring", "pinky", "thumb")
-LEG = ("thigh", "calf", "foot", "ball")
 
 
 def load(path):
@@ -58,9 +58,10 @@ def mat_slot(me, name):
 
 
 def delete_faces(me, pred):
+    """pred(material name, world centre, polygon index) -> True to delete."""
     bm = bmesh.new(); bm.from_mesh(me.data)
     mats = [m.name for m in me.data.materials]
-    kill = [f for f in bm.faces if pred(mats[f.material_index], me.matrix_world @ f.calc_center_median())]
+    kill = [f for f in bm.faces if pred(mats[f.material_index], me.matrix_world @ f.calc_center_median(), f.index)]
     bmesh.ops.delete(bm, geom=kill, context='FACES')
     loose = [v for v in bm.verts if not v.link_faces]
     bmesh.ops.delete(bm, geom=loose, context='VERTS')
@@ -73,59 +74,35 @@ def dominant(me):
     return [names[max(v.groups, key=lambda g: g.weight).group] if v.groups else "" for v in me.data.vertices]
 
 
-class Source:
-    """The body before anything is removed: BVH trees of its faces (all / not arms / arms) and their weights."""
-    def __init__(self, me):
-        self.mw = me.matrix_world
-        m = me.data
-        self.groups = [g.name for g in me.vertex_groups]
-        self.co = [self.mw @ v.co for v in m.vertices]
-        self.w = [{self.groups[g.group]: g.weight for g in v.groups} for v in m.vertices]
-        self.dom = dominant(me)
-        self.mat = [m.materials[p.material_index].name for p in m.polygons]
-        self.vmat = {}
-        for p, mt in zip(m.polygons, self.mat):
-            for i in p.vertices:
-                self.vmat[i] = mt
-        self.polys = [list(p.vertices) for p in m.polygons]
-        def tree(keep):
-            idx = [i for i, p in enumerate(self.polys) if keep(i)]
-            return BVHTree.FromPolygons(self.co, [self.polys[i] for i in idx]), idx
-        isarm = lambda i: self.dom[self.polys[i][0]].startswith(ARM)
-        self.torso = tree(lambda i: not isarm(i) and self.mat[i] != "Chr_Hair" and self.mat[i] != "Trn_Felt")
-        self.arms = tree(isarm)
+def smooth01(a, b, x):
+    t = min(1.0, max(0.0, (x - a) / (b - a)))
+    return t * t * (3 - 2 * t)
 
-    def weights(self, p, which):
-        t, idx = which
-        loc, _, fi, _ = t.find_nearest(p)
-        poly = self.polys[idx[fi]]
-        ws = poly_3d_calc([self.co[i] for i in poly], loc)
-        out = {}
-        for vi, a in zip(poly, ws):
-            for g, w in self.w[vi].items():
-                out[g] = out.get(g, 0.0) + a * w
-        return out
 
-    def pts(self, keep):
-        return [c for c, d in zip(self.co, self.dom) if keep(d)]
+def mix(*pairs):
+    out = {}
+    for w, d in pairs:
+        for g, x in d.items():
+            out[g] = out.get(g, 0.0) + w * x
+    return out
 
 
 class Part:
-    """Garment geometry: verts with their weights, faces with a material name."""
+    """Geometry to add to a body mesh: verts with weights, faces with a material name and (optionally) UVs."""
     def __init__(self):
-        self.v, self.w, self.f, self.m = [], [], [], []
+        self.v, self.w, self.f, self.m, self.uv, self.isl = [], [], [], [], [], []
 
     def add_v(self, p, w):
         self.v.append(Vector(p)); self.w.append(w); return len(self.v) - 1
 
-    def face(self, idx, mat, want=None):
+    def face(self, idx, mat, want=None, uv=None, isl=None):
         """want: the direction the face should look (it is flipped to match), or None to keep the winding."""
         if want is not None:
             p = [self.v[i] for i in idx]
             nrm = (p[1] - p[0]).cross(p[2] - p[0]) + ((p[2] - p[0]).cross(p[3] - p[0]) if len(p) > 3 else Vector())
             if nrm.dot(want) < 0:
-                idx = idx[::-1]
-        self.f.append(idx); self.m.append(mat)
+                idx = idx[::-1]; uv = uv[::-1] if uv else uv
+        self.f.append(list(idx)); self.m.append(mat); self.uv.append(uv); self.isl.append(isl)
 
     def loft(self, rings, wfun, mat, closed=True, out=1):
         """rings: list of point lists (same length), quads between consecutive rings. out=1 faces away from each
@@ -142,7 +119,7 @@ class Part:
                 self.face(q, mat, want)
         return ids
 
-    def disc(self, centre, normal, r, wfun, mat, seg=8, depth=0.004):
+    def disc(self, centre, normal, r, wfun, mat, seg=10, depth=0.004):
         normal = Vector(normal).normalized()
         u = normal.orthogonal().normalized(); v = normal.cross(u)
         base = Vector(centre)
@@ -152,14 +129,31 @@ class Part:
         top = [self.add_v(p, wfun(p)) for p in rim1]
         self.face(top, mat, normal)
 
+    def normals(self):
+        """Per-vertex normals (area-weighted face normals)."""
+        n = [Vector() for _ in self.v]
+        for f in self.f:
+            p = [self.v[i] for i in f]
+            fn = Vector()
+            for k in range(1, len(p) - 1):
+                fn += (p[k] - p[0]).cross(p[k + 1] - p[0])
+            for i in f:
+                n[i] += fn
+        return [x.normalized() if x.length > 1e-12 else Vector((0, 0, 1)) for x in n]
+
+    def tree(self, faces=None):
+        fs = self.f if faces is None else [self.f[i] for i in faces]
+        return BVHTree.FromPolygons(self.v, fs)
+
     def build(self, me):
-        """Joins the part into the body mesh `me` (one skinned mesh), with its weights."""
+        """Joins the part into the body mesh `me` (one skinned mesh), with its weights and UVs."""
         if not self.v:
             return
         m = me.data
         inv = me.matrix_world.inverted()
         bm = bmesh.new(); bm.from_mesh(m)
         dl = bm.verts.layers.deform.verify()
+        uvl = bm.loops.layers.uv.active or bm.loops.layers.uv.new("DiffuseUV")
         gid = {g.name: g.index for g in me.vertex_groups}
         bv = []
         for p, w in zip(self.v, self.w):
@@ -173,82 +167,140 @@ class Part:
                 nv[dl][gid[g]] = x / tot
             bv.append(nv)
         slots = {}
-        for f, mat in zip(self.f, self.m):
+        for f, mat, uv in zip(self.f, self.m, self.uv):
             if mat not in slots:
                 slots[mat] = mat_slot(me, mat)
             try:
                 nf = bm.faces.new([bv[i] for i in f])
-                nf.material_index = slots[mat]; nf.smooth = True
             except ValueError:
-                pass  # duplicate face
+                continue  # duplicate face
+            nf.material_index = slots[mat]; nf.smooth = True
+            if uv:
+                for loop, c in zip(nf.loops, uv):
+                    loop[uvl].uv = c
         bm.to_mesh(m); bm.free()
 
 
-def ext(pts, z, dz=0.035):
-    """Half-width, front depth and back depth (about y=yc) of the points in a height slab."""
-    s = [p for p in pts if abs(p.z - z) < dz]
-    if not s:
-        return None
-    yc = (min(p.y for p in s) + max(p.y for p in s)) / 2
-    return max(abs(p.x) for p in s), yc - min(p.y for p in s), max(p.y for p in s) - yc, yc
+def grab(path, keep):
+    """The faces of a pack mesh that keep(island) takes, with their weights and UVs. An island is a connected run of
+    faces of one material: dict(n, mat, lo, hi, mean) over its face centres (world)."""
+    arm, me = load(path)
+    m = me.data; mw = me.matrix_world
+    names = [g.name for g in me.vertex_groups]
+    mats = [x.name for x in m.materials]
+    bm = bmesh.new(); bm.from_mesh(m); bm.faces.ensure_lookup_table()
+    isl = [-1] * len(bm.faces); info = []
+    for f in bm.faces:
+        if isl[f.index] >= 0:
+            continue
+        k = len(info); st = [f]; isl[f.index] = k; comp = []
+        while st:
+            g = st.pop(); comp.append(g)
+            for e in g.edges:
+                for h in e.link_faces:
+                    if isl[h.index] < 0 and h.material_index == f.material_index:
+                        isl[h.index] = k; st.append(h)
+        cs = [mw @ g.calc_center_median() for g in comp]
+        info.append(dict(id=k, n=len(comp), mat=mats[f.material_index], mean=sum(cs, Vector()) / len(cs),
+                         lo=Vector([min(c[i] for c in cs) for i in range(3)]), hi=Vector([max(c[i] for c in cs) for i in range(3)])))
+    bm.free()
+    uvd = m.uv_layers.active.data
+    part = Part(); vmap = {}
+    for p in m.polygons:
+        inf = info[isl[p.index]]
+        if not keep(inf):
+            continue
+        ids = []
+        for vi in p.vertices:
+            if vi not in vmap:
+                v = m.vertices[vi]
+                vmap[vi] = part.add_v(mw @ v.co, {names[g.group]: g.weight for g in v.groups})
+            ids.append(vmap[vi])
+        part.face(ids, inf["mat"], uv=[tuple(uvd[l].uv) for l in p.loop_indices], isl=inf)
+    return part
 
 
-def superellipse(a, bf, bb, yc, z, e=2.6, n=N):
-    """A ring around (0, yc) at height z; angle 0 = +x, front is -y."""
-    out = []
-    for i in range(n):
-        t = 2 * math.pi * i / n
-        c, s = math.cos(t), math.sin(t)
-        b = bf if s < 0 else bb
-        r = (abs(c / a) ** e + abs(s / b) ** e) ** (-1 / e)
-        out.append(Vector((r * c, yc + r * s, z)))
+def push_out(part, tree, gap, idx, reach=0.025, iters=4):
+    """Moves part verts (indices idx) out along the surface normal of `tree` until each is at least `gap` outside it;
+    each push spreads to its neighbours within `reach` (fading), so the cloth bulges rather than dimples."""
+    kd = KDTree(len(idx))
+    for j, i in enumerate(idx):
+        kd.insert(part.v[i], j)
+    kd.balance()
+    moved = 0
+    for _ in range(iters):
+        need = {}
+        for i in idx:
+            loc, nrm, _, _ = tree.find_nearest(part.v[i], 0.08)
+            if loc is None:
+                continue
+            d = (part.v[i] - loc).dot(nrm)
+            if d < gap:
+                need[i] = nrm * (gap - d)
+        if not need:
+            break
+        moved += len(need)
+        add = {}
+        for i, dv in need.items():
+            for _, j, dd in kd.find_range(part.v[i], reach):
+                k = idx[j]; cand = dv * (1 - dd / reach) if k != i else dv
+                if k not in add or cand.length > add[k].length:
+                    add[k] = cand
+        for k, dv in add.items():
+            part.v[k] = part.v[k] + dv
+    return moved
+
+
+def subdivide(part, levels=2):
+    """Catmull-Clark smoothing of a one-material, one-weight part (the quiff)."""
+    mesh = bpy.data.meshes.new("tmp")
+    mesh.from_pydata([tuple(v) for v in part.v], [], part.f)
+    ob = bpy.data.objects.new("tmp", mesh); bpy.context.scene.collection.objects.link(ob)
+    mod = ob.modifiers.new("s", 'SUBSURF'); mod.levels = levels
+    dg = bpy.context.evaluated_depsgraph_get(); ev = ob.evaluated_get(dg); em = ev.to_mesh()
+    out = Part()
+    ids = [out.add_v(v.co.copy(), dict(part.w[0])) for v in em.vertices]
+    for p in em.polygons:
+        out.face([ids[i] for i in p.vertices], part.m[0])
+    ev.to_mesh_clear(); bpy.data.objects.remove(ob)
     return out
 
 
-def lerp_keys(keys, z):
-    """keys: [(z, (a, bf, bb, yc, e)), ...] ascending; linear in z."""
-    if z <= keys[0][0]:
-        return keys[0][1]
-    for (z0, k0), (z1, k1) in zip(keys, keys[1:]):
-        if z <= z1:
-            t = (z - z0) / (z1 - z0)
-            return tuple(x + (y - x) * t for x, y in zip(k0, k1))
-    return keys[-1][1]
-
-
-def front_y(k, x):
-    """Front surface y of a coat ring with params k at offset x (|x| < a)."""
-    a, bf, bb, yc, e = k
-    q = max(0.0, 1 - abs(x / a) ** e)
-    return yc - bf * q ** (1 / e)
-
-
-def smooth01(a, b, x):
-    t = min(1.0, max(0.0, (x - a) / (b - a)))
-    return t * t * (3 - 2 * t)
-
-
-def mix(*pairs):
-    out = {}
-    for w, d in pairs:
-        for g, x in d.items():
-            out[g] = out.get(g, 0.0) + w * x
-    return out
+def skirt_weights(p, w):
+    """Below the waist: pelvis plus both thighs, more thigh lower down, blended across the middle so the skirt swings."""
+    if p.z >= 1.02:
+        return w
+    t = smooth01(1.02, HEM, p.z)
+    left = smooth01(-0.09, 0.09, p.x)
+    skirt = {"pelvis": 1 - 0.6 * t, "thigh_l": 0.6 * t * left, "thigh_r": 0.6 * t * (1 - left)}
+    k = smooth01(1.02, 0.94, p.z)
+    return mix((1 - k, w), (k, skirt))
 
 
 # ---------------------------------------------------------------------------------------------- CH01: the Teddy Boy
-def teddy_boy():
-    arm, me = load(CH01)
-    src = Source(me)
-    head = {"head": 1.0}
+def is_button(i):
+    return i["n"] <= 24 and (i["hi"] - i["lo"]).length < 0.035
 
-    torso_pts = src.pts(lambda d: d and not d.startswith(ARM) and d not in ("head",))
-    hips = ext(torso_pts, 0.93, 0.05)
+
+def is_pocket_square(i):
+    return i["lo"].z > 1.435 and i["hi"].z < 1.49 and abs(i["mean"].x) > 0.1 and 28 <= i["n"] <= 46 and i["hi"].z - i["lo"].z > 0.025
+
+
+def teddy_boy():
+    # --- CH02's jacket (not its trousers, front / cuff buttons or pocket square) and shirt with tie
+    jacket = grab(CH02, lambda i: i["mat"] == "Chr_Suit" and i["hi"].z > 1.09 and not is_button(i) and not is_pocket_square(i))
+    shirt = grab(CH02, lambda i: i["mat"] == "Chr_Shirt")
+
+    arm, me = load(CH01)
+    m = me.data; mw = me.matrix_world
+    co = [mw @ v.co for v in m.vertices]
+    dom = dominant(me)
+    head = {"head": 1.0}
+    hands = {s: bone(arm, "hand_" + s) for s in ("l", "r")}
 
     # --- drainpipes: CH01's trousers, pulled in towards each leg's centre below the thigh.
-    m = me.data
     suit = {i for p in m.polygons if m.materials[p.material_index].name == "Chr_Suit" for i in p.vertices}
-    shoe_pts = [src.co[i] for p in m.polygons if m.materials[p.material_index].name == "Chr_Shoes" for i in p.vertices]
+    shoe_pts = [co[i] for p in m.polygons if m.materials[p.material_index].name == "Chr_Shoes" for i in p.vertices]
     def leg_r(z):  # target radius (narrow, straight; never inside the shoe's collar)
         pts = [(0.80, 1.0), (0.72, 0.090), (0.53, 0.066), (0.30, 0.056), (0.0, 0.054)]
         for (z0, r0), (z1, r1) in zip(pts[1:], pts):
@@ -258,151 +310,164 @@ def teddy_boy():
         return 1.0
     shoe_r = max(abs(math.hypot(p.x - math.copysign(0.171, p.x), p.y - 0.06)) for p in shoe_pts if 0.10 < p.z < 0.13)
     for side in (1, -1):
-        ids = [i for i in suit if src.co[i].x * side > 0.01 and src.co[i].z < 0.85]
+        ids = [i for i in suit if co[i].x * side > 0.01 and co[i].z < 0.85]
         for i in ids:
-            p = src.co[i]
-            sl = [src.co[j] for j in ids if abs(src.co[j].z - p.z) < 0.02]
+            p = co[i]
+            sl = [co[j] for j in ids if abs(co[j].z - p.z) < 0.02]
             cx = sum(q.x for q in sl) / len(sl); cy = sum(q.y for q in sl) / len(sl)
             d = Vector((p.x - cx, p.y - cy)); r = d.length
             tgt = leg_r(p.z)
             if p.z < 0.16:
                 tgt = max(tgt, shoe_r + 0.004)
             if r > tgt:
-                nr = tgt + (r - tgt) * 0.15  # soft clamp: keeps a hint of the original folds
-                d *= nr / r
-                m.vertices[i].co = me.matrix_world.inverted() @ Vector((cx + d.x, cy + d.y, p.z))
+                d *= (tgt + (r - tgt) * 0.15) / r  # soft clamp: keeps a hint of the original folds
+                m.vertices[i].co = mw.inverted() @ Vector((cx + d.x, cy + d.y, p.z))
 
-    # --- off: fedora, chain, watch, the whole shirt (the coat and shirt front replace it).
-    n = delete_faces(me, lambda mat, c: mat in ("Trn_Felt", "Trn_Brass", "Chr_Shirt"))
-    print("CH01 removed faces:", n)
+    # --- off: fedora, chain, watch, CH01's shirt and vest, and the skin they covered (CH02's shirt covers it now;
+    # the wrists, neck and head stay).
+    polys = [list(p.vertices) for p in m.polygons]
+    def covered(mat, c, fi):
+        if mat in ("Trn_Felt", "Trn_Brass"):
+            return True
+        if mat == "Chr_Shirt":   # CH02's shirt stops under the chest (its jacket hid the rest): CH01's fills the opening below
+            return c.z > 1.40 or c.y > -0.03 or dom[polys[fi][0]].startswith(("upperarm", "lowerarm", "clavicle", "head"))
+        if mat == "Chr_Hair" and c.z < 1.725 and c.y < 0.03 and not (abs(c.x) > 0.062 and c.z > 1.69):
+            return True   # clean-shaven: beard and moustache off (brows and sideburns stay)
+        if mat != "Chr_Skin" or c.z > 1.585:
+            return False
+        d = dom[polys[fi][0]]
+        if d.startswith(("spine", "clavicle", "upperarm", "pelvis")):
+            return True
+        if d.startswith("lowerarm"):
+            return (c - hands[d[-1]]).length > 0.07
+        return False
+    print("CH01 removed faces:", delete_faces(me, covered))
 
-    # --- the coat body: rings from hem to neck.
-    chest = ext(torso_pts, 1.25)   # below the armpits: above, the shirt's shoulder verts read as torso
-    belly = ext(torso_pts, 1.12)
-    a0 = max(chest[0], belly[0]) + COAT_EASE
-    ah = max(a0, hips[0] + 0.012)                # the skirt has to clear the legs, which stand apart in the bind pose
-    bf0 = max(chest[1], belly[1]) + 0.012
-    bb0 = max(chest[2], belly[2]) + 0.012
-    yc0 = chest[3]
-    print('CH01 coat hips/chest/belly', [tuple(round(x, 3) for x in e) for e in (hips, chest, belly)])
-    neck = ext([p for p in src.pts(lambda d: d in ("neck_01", "spine_03", "head"))], 1.60, 0.02)
-    na = max(neck[0], 0.062) + 0.012
-    upper = src.pts(lambda d: d in ("spine_02", "spine_03", "neck_01", "clavicle_l", "clavicle_r"))
-    def fit(z, a, e, bf, bb, widen=True):
-        """A shoulder ring that never dips inside the body: depth at least the body's (all of it, skin too) + ease."""
-        x = ext(upper, z, 0.02)
-        if x:
-            a = max(a, x[0] + 0.014) if widen else a
-            bf = max(bf, yc0 - (x[3] - x[1]) + 0.014)
-            bb = max(bb, (x[3] + x[2]) - yc0 + 0.014)
-        return (z, (a, bf, bb, yc0, e))
-    def back_reach(z):
-        x = ext(upper, z, 0.015)
-        return max(neck[3] + neck[2] + 0.035, (x[3] + x[2] + 0.016) if x else 0)
-    keys = [
-        (HEM_Z, (ah + 0.02, bf0 + 0.015, bb0 + 0.02, yc0, 2.4)),  # a slight swing out at the hem
-        (0.95, (ah, bf0, bb0, yc0, 2.5)),
-        (1.30, (a0, bf0, bb0, yc0, 2.6)),                            # straight drape: no waist
-        fit(1.44, SHOULDER_X - 0.012, 2.6, bf0 - 0.005, bb0),
-        fit(1.50, SHOULDER_X, 2.6, bf0 - 0.02, bb0 - 0.01),          # padded shoulders, square
-        fit(1.545, SHOULDER_X - 0.03, 2.4, bf0 - 0.05, bb0 - 0.035),
-        (1.585, (na + 0.05, neck[1] + 0.035, back_reach(1.585) - neck[3], neck[3], 2.2)),   # deep enough at the back for the trapezius
-        (1.605, (na, neck[1] + 0.012, neck[2] + 0.012, neck[3], 2.0)),
-    ]
-    zs = [HEM_Z + i * 0.06 for i in range(int((1.42 - HEM_Z) / 0.06) + 1)] + [1.44, 1.47, 1.50, 1.525, 1.545, 1.565, 1.585, 1.605]
-    zs = sorted(set(round(z, 4) for z in zs))
+    body_faces = [list(p.vertices) for p in m.polygons if m.materials[p.material_index].name in ("Chr_Skin", "Chr_Suit", "Chr_Shoes", "Chr_Shirt")]
+    body = BVHTree.FromPolygons([mw @ v.co for v in m.vertices], body_faces)
 
-    def coat_w(p):
-        w = src.weights(p, src.torso)
-        if p.z < 1.02:  # the skirt: pelvis plus both thighs, more thigh lower down, blended across the middle
-            t = smooth01(1.02, HEM_Z, p.z)
-            left = smooth01(-0.09, 0.09, p.x)
-            skirt = {"pelvis": 1 - 0.6 * t, "thigh_l": 0.6 * t * left, "thigh_r": 0.6 * t * (1 - left)}
-            k = smooth01(1.02, 0.94, p.z)
-            w = mix((1 - k, w), (k, skirt))
-        return w
+    # --- the shirt: tie slim and dark
+    tie_isl = {id(i) for i in shirt.isl if i and abs(i["mean"].x) < 0.025 and i["lo"].y < -0.09 and i["hi"].z - i["lo"].z > 0.12 and i["lo"].z > 1.1}
+    tie_v = {v for f, i in zip(shirt.f, shirt.isl) if id(i) in tie_isl for v in f}
+    for v in tie_v:
+        p = shirt.v[v]; shirt.v[v] = Vector((p.x * TIE_W, p.y, p.z))
+    for k, i in enumerate(shirt.isl):
+        if id(i) in tie_isl:
+            shirt.m[k] = "Chr_Velvet"
+    print("CH01 tie islands", len(tie_isl), "verts", len(tie_v))
+    print("CH01 shirt pushed", push_out(shirt, body, 0.004, [i for i in range(len(shirt.v)) if i not in tie_v]))
 
-    coat = Part()
-    rings = [superellipse(*lerp_keys(keys, z)[:4], z, e=lerp_keys(keys, z)[4]) for z in zs]
-    coat.loft(rings, coat_w, "Chr_Suit")
-    # inside of the skirt (seen from below in a ragdoll / a fall) and the hem's edge
-    inner = [[Vector((p.x * 0.96, yc0 + (p.y - yc0) * 0.96, p.z)) for p in r] for r in rings if r[0].z < 1.0]
-    ids = coat.loft(inner, coat_w, "Chr_Suit", out=-1)
-    hem_out = list(range(0, N))  # first ring added = hem ring, verts 0..N-1
-    for i in range(N):
-        j = (i + 1) % N
-        coat.face([ids[0][i], ids[0][j], hem_out[j], hem_out[i]], "Chr_Suit", Vector((0, 0, -1)))
+    # --- the jacket: which bits are which
+    J = jacket
+    panels = [i for i in {id(x): x for x in J.isl}.values() if i["n"] > 200 and i["mean"].y < 0.05 and abs(i["mean"].x) < 0.25]
+    sleeves = {id(i) for i in J.isl if i["n"] > 200 and abs(i["mean"].x) > 0.3}
+    collar = {id(i) for i in J.isl if i["lo"].z >= 1.555}
+    lapels = {id(i) for i in J.isl if i["lo"].z >= 1.2 and i["hi"].z <= 1.58 and i["hi"].z - i["lo"].z > 0.1 and i["mean"].y < -0.03 and i["n"] < 90}
+    print("CH01 jacket panels %d sleeves %d collar %d lapels %d" % (len(panels), len(sleeves), len(collar), len(lapels)))
+    visl = [None] * len(J.v)
+    for f, i in zip(J.f, J.isl):
+        for v in f:
+            visl[v] = i
+    side_of = {}
+    pv = [(v, 1 if i["mean"].x > 0 else -1) for v in range(len(J.v)) for i in [visl[v]] if any(i is p for p in panels)]
+    kd = KDTree(len(pv))
+    for j, (v, s) in enumerate(pv):
+        kd.insert(J.v[v], j)
+    kd.balance()
+    for v in range(len(J.v)):
+        i = visl[v]
+        if id(i) in sleeves or id(i) in collar or J.v[v].y > 0.0:
+            continue   # only the fronts open
+        # lapels go with their own front; everything else with the panel it lies on (its own, for panel verts)
+        side_of[v] = (1 if i["mean"].x > 0 else -1) if id(i) in lapels else pv[kd.find(J.v[v])[1]][1]
+    # faces joining the two fronts (a strip running across the middle) would bridge the opening: cut them
+    keep = [k for k, f in enumerate(J.f) if len({side_of.get(v, 0) for v in f} - {0}) < 2]
+    print("CH01 faces cut across the opening:", len(J.f) - len(keep))
+    J.f, J.m, J.uv, J.isl = [J.f[k] for k in keep], [J.m[k] for k in keep], [J.uv[k] for k in keep], [J.isl[k] for k in keep]
 
-    # --- sleeves: shoulder to wrist round the arm bones, velvet cuffs.
-    for s in ("l", "r"):
-        sh = bone(arm, "upperarm_" + s); el = bone(arm, "lowerarm_" + s); wr = bone(arm, "hand_" + s)
-        # what's left under the sleeve once the shirt is gone: the arm's skin
-        armp = [c for i, (c, d) in enumerate(zip(src.co, src.dom)) if src.vmat.get(i) == "Chr_Skin" and d.startswith(("upperarm_" + s, "lowerarm_" + s, "clavicle_" + s))]
-        def rad(o, dvec, t0):
-            near = [p for p in armp if abs((p - o).dot(dvec)) < 0.03]
-            if not near:
-                return t0
-            return max(t0, max(((p - o) - dvec * (p - o).dot(dvec)).length for p in near))
-        start = sh + Vector((-0.015 if s == "l" else 0.015, 0, 0.0))
-        path = [(start, 0.0), (sh.lerp(el, 0.5), 0.0), (el, 0.0), (el.lerp(wr, 0.55), 0.0), (wr.lerp(el, 0.16), 0.0)]
-        rings_s, rads = [], []
-        for k, (o, _) in enumerate(path):
-            d = ((path[k + 1][0] if k + 1 < len(path) else o) - (path[k - 1][0] if k else o)).normalized()
-            r = max(rad(o, d, 0.035) + 0.016, 0.052)
-            r = min(max(r, 0.06 if k == 0 else 0.0), 0.075)
-            rads.append(r)
-            u = d.orthogonal().normalized(); v = d.cross(u)
-            rings_s.append([o + r * (math.cos(t) * u + math.sin(t) * v) for t in (2 * math.pi * i / 16 for i in range(16))])
-        # wrist end: the order runs shoulder->wrist; faces must face out
-        aw = lambda p: src.weights(p, src.arms)
-        coat.loft(rings_s, aw, "Chr_Suit")
-        # cuff: a velvet band over the last 5 cm, closed at the end
-        o2 = path[-1][0]; d = (path[-1][0] - path[-2][0]).normalized()
-        u = d.orthogonal().normalized(); v = d.cross(u); r = rads[-1] + 0.005
-        o1 = o2 - d * 0.05
-        ring = lambda o, rr: [o + rr * (math.cos(t) * u + math.sin(t) * v) for t in (2 * math.pi * i / 16 for i in range(16))]
-        coat.loft([ring(o1, r), ring(o2 + d * 0.004, r)], aw, "Chr_Velvet")
-        coat.loft([ring(o2 + d * 0.004, r), ring(o2 + d * 0.004, r * 0.72)], aw, "Chr_Velvet", out=d)
+    # --- open it up: each front pulled away from the middle so its edge sits GAP off centre (below the lapels, where
+    # the double-breasted fronts overlapped); the squeeze fades out towards the side seams and round to the back.
+    U0 = 0.165
+    zgrid = [0.86 + 0.02 * k for k in range(42)]
+    edge = {}
+    for s in (1, -1):
+        e = []
+        for z in zgrid:
+            us = [s * J.v[v].x for v, sv in side_of.items() if sv == s and J.v[v].y < -0.02 and abs(J.v[v].z - z) < 0.02]
+            e.append(min(us) if us else None)
+        for k in range(len(e)):
+            if e[k] is None:
+                e[k] = next((x for x in e[k:] if x is not None), None) or next(x for x in reversed(e[:k]) if x is not None)
+        for _ in range(2):
+            e = [(e[max(k - 1, 0)] + e[k] + e[min(k + 1, len(e) - 1)]) / 3 for k in range(len(e))]
+        edge[s] = e
+    def edge_at(s, z):
+        t = min(max((z - zgrid[0]) / 0.02, 0), len(zgrid) - 1.001)
+        k = int(t); return edge[s][k] + (edge[s][k + 1] - edge[s][k]) * (t - k)
+    for v, s in side_of.items():
+        p = J.v[v]; g = smooth01(0.03, -0.05, p.y)
+        u = s * p.x; ue = edge_at(s, p.z)
+        if g == 0 or ue >= GAP or u >= U0:
+            continue
+        u2 = U0 - (U0 - u) * (U0 - GAP) / (U0 - ue)
+        J.v[v] = Vector((s * (u + (u2 - u) * g), p.y, p.z))
+    print("CH01 front edges (+x, -x) at the waist:", round(edge_at(1, 1.1), 3), round(edge_at(-1, 1.1), 3))
 
-    # --- the front: cream shirt V, slim tie, velvet lapels and collar, three buttons.
-    TOP, VB = 1.60, 1.31   # V from the neck down to the top button
-    def on_front(x, z, off):
-        k = lerp_keys(keys, z)
-        return Vector((x, front_y(k, x) - off, z))
-    tw = lambda p: src.weights(p, src.torso)
-    steps = 7
-    def vband(x0f, x1f, off, mat, z0=VB, z1=TOP, cols=2):
-        """A strip on the coat front between half-widths x0f(z)..x1f(z), both sides mirrored if x0f >= 0."""
-        rows = [z0 + (z1 - z0) * i / steps for i in range(steps + 1)]
-        for sgn in ((1, -1) if x0f(z0) >= 0 else (1,)):
-            grid = [[on_front(sgn * (x0f(z) + (x1f(z) - x0f(z)) * c / cols), z, off) for c in range(cols + 1)] for z in rows]
-            gi = [[coat.add_v(p, tw(p)) for p in row] for row in grid]
-            for a, b in zip(gi, gi[1:]):
-                for c in range(cols):
-                    q = [a[c], a[c + 1], b[c + 1], b[c]]
-                    coat.face(q, mat, Vector((0, -1, 0)))
-    vw = lambda z: 0.012 + 0.06 * (z - VB) / (TOP - VB)
-    vband(lambda z: -vw(z), vw, 0.006, "Chr_Shirt", cols=4)                         # shirt front
-    vband(lambda z: vw(z), lambda z: vw(z) + 0.026, 0.009, "Chr_Velvet")            # lapels
-    tie = lambda z: 0.011 if z < TOP - 0.03 else 0.016                              # slim tie, a small knot
-    vband(lambda z: -tie(z), tie, 0.011, "Chr_Velvet", z0=VB + 0.01, z1=TOP + 0.004)
-    # collar: a narrow velvet band round the back and sides of the neck, open at the front where it runs into the lapels
-    k = keys[-1][1]
-    arc = [a for a in (2 * math.pi * i / 32 for i in range(33)) if math.sin(a) > -0.55]
-    arc.sort(key=lambda a: (a + math.pi / 2) % (2 * math.pi))   # from the right front, round the back, to the left front
-    def cpt(a, grow, z, dz_back):
-        c, sn = math.cos(a), math.sin(a)
-        b = k[1] if sn < 0 else k[2]
-        r = (abs(c / k[0]) ** 2 + abs(sn / b) ** 2) ** -0.5 * grow
-        return Vector((r * c, k[3] + r * sn, z + dz_back * max(0.0, sn) - 0.02 * max(0.0, -sn)))
-    c0 = [cpt(a, 1.04, 1.588, 0.008) for a in arc]
-    c1 = [cpt(a, 1.10, 1.612, 0.012) for a in arc]
-    coat.loft([c0, c1], tw, "Chr_Velvet", closed=False)
-    for z in (1.29, 1.20, 1.11):
-        coat.disc(on_front(0.0, z, 0.006), (0, -1, 0), 0.009, tw, "Chr_Velvet")
+    # --- longer: everything below STRETCH_FROM stretched down to HEM, swinging out a little; skirt weights
+    lo = min(p.z for p in J.v)
+    K = (STRETCH_FROM - HEM) / (STRETCH_FROM - lo)
+    for v, p in enumerate(J.v):
+        if p.z < STRETCH_FROM and id(visl[v]) not in sleeves:
+            z = STRETCH_FROM - (STRETCH_FROM - p.z) * K
+            t = smooth01(STRETCH_FROM, HEM, z)
+            J.v[v] = Vector((p.x * (1 + 0.07 * t), 0.012 + (p.y - 0.012) * (1 + 0.07 * t), z))
+            J.w[v] = skirt_weights(J.v[v], J.w[v])
 
-    # --- the quiff: a pompadour over the top of the head, rising to a forward roll over the brow (100% head).
-    hair = [p for p in src.pts(lambda d: d == "head")]
+    # --- velvet: collar, lapels, and the last 6 cm of each sleeve
+    reach = {}
+    for f, i in zip(J.f, J.isl):
+        if id(i) in sleeves:
+            c = sum((J.v[v] for v in f), Vector()) / len(f)
+            d = (c - hands["l" if c.x > 0 else "r"]).length
+            reach[id(i)] = min(reach.get(id(i), 9), d)
+    for k, (f, i) in enumerate(zip(J.f, J.isl)):
+        if id(i) in collar or id(i) in lapels:
+            J.m[k] = "Chr_Velvet"
+        elif id(i) in sleeves:
+            c = sum((J.v[v] for v in f), Vector()) / len(f)
+            if (c - hands["l" if c.x > 0 else "r"]).length < reach[id(i)] + 0.06:
+                J.m[k] = "Chr_Velvet"
+
+    # --- fit over CH01's body and the shirt
+    under = Part(); under.v = list(shirt.v); under.f = list(shirt.f)
+    off = len(under.v)
+    under.v += [mw @ v.co for v in m.vertices]; under.f += [[a + off for a in f] for f in body_faces]
+    print("CH01 jacket pushed", push_out(J, under.tree(), 0.005, list(range(len(J.v)))))
+
+    # --- lining: the inside of the fronts and the skirt, so the open coat isn't see-through
+    nrm = J.normals()
+    line_faces = [k for k, (f, i) in enumerate(zip(J.f, J.isl)) if id(i) not in sleeves and id(i) not in collar
+                  and (any(i is p for p in panels) or any(J.v[v].z < 1.05 for v in f))]
+    remap = {}
+    for k in line_faces:
+        for v in J.f[k]:
+            if v not in remap:
+                remap[v] = J.add_v(J.v[v] - nrm[v] * 0.003, J.w[v])
+    for k in line_faces:
+        J.face([remap[v] for v in reversed(J.f[k])], "Chr_Suit", uv=list(reversed(J.uv[k])) if J.uv[k] else None)
+
+    # --- three buttons down the right front (the wearer's right, -x), just in from its edge
+    jt = J.tree()
+    btn = Part()
+    for z in (1.27, 1.17, 1.07):
+        x = -(GAP + 0.02)
+        hit, n, _, _ = jt.ray_cast(Vector((x, -0.6, z)), Vector((0, 1, 0)))
+        if hit:
+            btn.disc(hit - Vector((0, 0.001, 0)), (0, -1, 0), 0.008, lambda p: skirt_weights(p, {"spine_01": 1.0}), "Chr_Velvet")
+
+    # --- the quiff: a pompadour over the top of the head, rising to a forward roll over the brow (100% head),
+    # Catmull-Clark smoothed.
+    hair = [c for c, d in zip(co, dom) if d == "head"]
     top = max(p.z for p in hair)
     crown = [p for p in hair if p.z > top - 0.05]
     y_back = max(p.y for p in crown) - 0.02
@@ -410,7 +475,7 @@ def teddy_boy():
     zb = top - 0.065
     def half_w(y):
         s = [abs(p.x) for p in hair if abs(p.y - y) < 0.012 and p.z > zb]
-        return (max(s) if s else 0.06) + 0.006
+        return (max(s) if s else 0.06) + 0.008
     q = Part()
     secs = []
     # (t along the head back->front, forward push, base / top as fractions of the height): the last rows curl the roll under
@@ -418,21 +483,22 @@ def teddy_boy():
                             (1.0, 0.012, 0.2, 0.96), (1.0, 0.026, 0.45, 0.86), (1.0, 0.033, 0.66, 0.74)]:
         y = y_back + (y_front - y_back) * t - push
         w = half_w(min(max(y, y_front), y_back)) * (1 - 0.12 * smooth01(0.6, 1.0, t)) * (1 - 0.4 * fb)
-        h = (top - zb) + 0.006 + 0.048 * smooth01(0.25, 0.9, t)
+        h = (top - zb) + 0.012 + 0.05 * smooth01(0.25, 0.9, t)
         z0, z1 = zb + fb * h, zb + ft * h
         secs.append([Vector((w * math.cos(a), y, z0 + (z1 - z0) * math.sin(a) ** 0.75))
                      for a in (math.pi * j / 12 for j in range(13))]
                     + [Vector((w * (-1 + 2 * j / 6), y, z0)) for j in range(1, 6)])   # flat underside: closes the roll
     q.loft(secs, lambda p: head, "Chr_Hair")
-    c = sum(secs[-1], Vector()) / len(secs[-1])
     for sec, want in ((secs[-1], Vector((0, -1, 0.3))), (secs[0], Vector((0, 1, 0)))):
         c = sum(sec, Vector()) / len(sec)
         ci = q.add_v(c, head); ri = [q.add_v(p, head) for p in sec]
         for j in range(len(ri)):
             q.face([ci, ri[j], ri[(j + 1) % len(ri)]], "Chr_Hair", want)
+    q = subdivide(q, 1)
 
-    coat.build(me); q.build(me)
-    print("CH01 coat+trim tris ~%d, quiff ~%d" % (2 * len(coat.f), 2 * len(q.f)))
+    for part in (shirt, J, btn, q):
+        part.build(me)
+    print("CH01 shirt tris ~%d, jacket ~%d, quiff ~%d" % tuple(sum(len(f) - 2 for f in p.f) for p in (shirt, J, q)))
     finish(arm, me, OUT01)
 
 
@@ -442,7 +508,7 @@ def flat_cap():
     m = me.data
     hat = [me.matrix_world @ m.vertices[i].co for p in m.polygons if m.materials[p.material_index].name == "Trn_Felt" for i in p.vertices]
     hair = [me.matrix_world @ m.vertices[i].co for p in m.polygons if m.materials[p.material_index].name == "Chr_Hair" for i in p.vertices]
-    n = delete_faces(me, lambda mat, c: mat == "Trn_Felt")
+    n = delete_faces(me, lambda mat, c, fi: mat == "Trn_Felt")
     print("CH02 removed fedora faces:", n)
     band = min(p.z for p in hat) + 0.024   # a flat cap sits higher than the fedora's band
     skull = [p for p in hair if p.z > band]
@@ -548,7 +614,7 @@ def render(me, base):
     cam = bpy.data.objects.new("cam", bpy.data.cameras.new("cam")); scn.collection.objects.link(cam); scn.camera = cam
     cam.data.type = 'ORTHO'
     for name, (yaw, pitch, scale, tgt) in {"front": (0, 8, 2.1, 0.95), "side": (90, 8, 2.1, 0.95), "game": (-25, 50, 2.3, 0.9),
-                                           "back": (180, 15, 2.1, 0.95), "head": (-30, 15, 0.55, 1.7)}.items():
+                                           "back": (180, 15, 2.1, 0.95), "head": (-30, 15, 0.55, 1.7), "chest": (-20, 12, 1.0, 1.3)}.items():
         cam.data.ortho_scale = scale
         y, p = math.radians(yaw), math.radians(pitch)
         d = Vector((math.sin(y) * math.cos(p), -math.cos(y) * math.cos(p), math.sin(p)))
