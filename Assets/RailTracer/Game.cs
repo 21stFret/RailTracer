@@ -3335,7 +3335,7 @@ namespace RailTracer
         // small iris disc where the lashes sit, coloured; yours glow red as the legend (the demon) takes form, with a
         // red trail behind them as you move.
         public Color browColor = new Color(0.2f, 0.12f, 0.06f);
-        public Color tracerEyeColor = new Color(0.2f, 0.45f, 0.95f), enemyEyeBlue = new Color(0.25f, 0.45f, 0.8f), enemyEyeGreen = new Color(0.25f, 0.55f, 0.3f);
+        public Color tracerEyeColor = new Color(0.12f, 0.22f, 0.42f), enemyEyeBlue = new Color(0.25f, 0.45f, 0.8f), enemyEyeGreen = new Color(0.25f, 0.55f, 0.3f);
         public Color eyeGlow = new Color(1f, 0.08f, 0.04f);
         public float irisSize = 0.011f, irisDepth = 0.003f, eyeGlowStrength = 4f, eyeTrailTime = 0.35f, eyeTrailWidth = 0.012f;
         public Vector3 irisNudge; // metres: (right, up, forward) from where the lashes put each eye; applied as characters are made
