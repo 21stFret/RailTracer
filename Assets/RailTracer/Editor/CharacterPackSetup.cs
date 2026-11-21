@@ -19,10 +19,6 @@ namespace RailTracer
     // trousers and jacket Chr_Suit (Fabric.mat copies: our weave, tinted), shoes Chr_Shoes, glasses Chr_Glasses, skin
     // Chr_Skin, beards, brows and hair Chr_Hair, eyes Chr_Eye, mouths Chr_Mouth (flat, the game's own tones). The static
     // parts' UCX_ collision hulls are dropped.
-    // The player (the conductor): Renderpeople's Eric (Assets/RailTracer/Characters/37-rp_eric_rigged_001_fbx), re-exported
-    // in metres as SK_Conductor.fbx by Assets/KitScripts/railtracer_conductor.py, flattened into our Chr_ materials like
-    // the guards (skin, hair, shirt, suit, shoes, eyes, Chr_EyeWhite); Resources/Anim/Conductor.prefab is made from it,
-    // with a ragdoll.
     // The Chr_ materials and the prefabs are made once (never overwritten: tune them freely; delete to rebuild).
     // Runs before KitModelPostprocessor, so that finds every material by name.
     class CharacterPackSetup : AssetPostprocessor
@@ -33,9 +29,7 @@ namespace RailTracer
         {
             ("Assets/NYC1950_CH01/Meshes/SK_CH01_TeddyBoy.fbx", "Assets/RailTracer/Resources/Anim/Guard.prefab"),
             ("Assets/NYC1950_CH02/Meshes/SK_CH02_FlatCap.fbx", "Assets/RailTracer/Resources/Anim/Guard_CH02.prefab"),
-            (Eric + "/SK_Conductor.fbx", "Assets/RailTracer/Resources/Anim/Conductor.prefab"),
         };
-        const string Eric = "Assets/RailTracer/Characters/37-rp_eric_rigged_001_fbx";
 
         public override int GetPostprocessOrder() => -10;
 
@@ -45,7 +39,7 @@ namespace RailTracer
         [MenuItem("Rail Tracer/Set Up Character Pack")]
         static void Make()
         {
-            var packs = new[] { "Assets/NYC1950_CH01", "Assets/NYC1950_CH02", Eric }.Where(AssetDatabase.IsValidFolder).ToArray();
+            var packs = new[] { "Assets/NYC1950_CH01", "Assets/NYC1950_CH02" }.Where(AssetDatabase.IsValidFolder).ToArray();
             if (packs.Length == 0) return;
             var lit = Shader.Find("Universal Render Pipeline/Lit");
             var fabric = AssetDatabase.LoadAssetAtPath<Material>("Assets/RailTracer/Resources/Materials/Fabric.mat");
@@ -72,7 +66,6 @@ namespace RailTracer
             Mat("Chr_Velvet", flat, new Color(0.2f, 0.195f, 0.21f), 0.35f);  // charcoal with a soft sheen: reads against the guards' black suit in the dark
             Mat("Chr_Shirt", fabric, new Color(0.85f, 0.82f, 0.74f), 0.12f);
             Mat("Chr_Suit", fabric, new Color(0.15f, 0.15f, 0.17f), 0.12f);
-            Mat("Chr_EyeWhite", flat, new Color(0.85f, 0.83f, 0.8f), 0.6f); // the conductor's eyeballs and teeth
             Object.DestroyImmediate(flat);
             if (made)
             {
