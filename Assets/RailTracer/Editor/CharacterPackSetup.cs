@@ -20,8 +20,9 @@ namespace RailTracer
     // Chr_Skin, beards, brows and hair Chr_Hair, eyes Chr_Eye, mouths Chr_Mouth (flat, the game's own tones). The static
     // parts' UCX_ collision hulls are dropped.
     // The player (the conductor): Renderpeople's Eric (Assets/RailTracer/Characters/37-rp_eric_rigged_001_fbx), re-exported
-    // in metres as SK_Conductor.fbx by Assets/KitScripts/railtracer_conductor.py, wearing Chr_Conductor (his own scanned
-    // textures); Resources/Anim/Conductor.prefab is made from it like the guards, with a ragdoll.
+    // in metres as SK_Conductor.fbx by Assets/KitScripts/railtracer_conductor.py, flattened into our Chr_ materials like
+    // the guards (skin, hair, shirt, suit, shoes, eyes, Chr_EyeWhite); Resources/Anim/Conductor.prefab is made from it,
+    // with a ragdoll.
     // The Chr_ materials and the prefabs are made once (never overwritten: tune them freely; delete to rebuild).
     // Runs before KitModelPostprocessor, so that finds every material by name.
     class CharacterPackSetup : AssetPostprocessor
@@ -71,19 +72,8 @@ namespace RailTracer
             Mat("Chr_Velvet", flat, new Color(0.2f, 0.195f, 0.21f), 0.35f);  // charcoal with a soft sheen: reads against the guards' black suit in the dark
             Mat("Chr_Shirt", fabric, new Color(0.85f, 0.82f, 0.74f), 0.12f);
             Mat("Chr_Suit", fabric, new Color(0.15f, 0.15f, 0.17f), 0.12f);
+            Mat("Chr_EyeWhite", flat, new Color(0.85f, 0.83f, 0.8f), 0.6f); // the conductor's eyeballs and teeth
             Object.DestroyImmediate(flat);
-            var dif = AssetDatabase.LoadAssetAtPath<Texture2D>(Eric + "/tex/rp_eric_rigged_001_dif.jpg");
-            if (dif && !File.Exists(Dir + "Chr_Conductor.mat"))
-            {
-                var m = new Material(lit) { name = "Chr_Conductor" };   // the scan's own colours, not tinted
-                m.SetTexture("_BaseMap", dif);
-                m.SetColor("_BaseColor", Color.white);
-                var nrm = AssetDatabase.LoadAssetAtPath<Texture2D>(Eric + "/tex/rp_eric_rigged_001_norm.jpg");
-                if (nrm) { m.SetTexture("_BumpMap", nrm); m.EnableKeyword("_NORMALMAP"); }
-                m.SetFloat("_Smoothness", 0.2f);
-                AssetDatabase.CreateAsset(m, Dir + "Chr_Conductor.mat");
-                made = true;
-            }
             if (made)
             {
                 AssetDatabase.SaveAssets();
@@ -137,12 +127,6 @@ namespace RailTracer
                 Debug.Log($"CH01 CHECK renderer {r.name}: {string.Join(", ", r.sharedMaterials.Select(m => m ? m.name : "null"))} bounds {r.bounds.size}");
             Debug.Log($"CH01 CHECK ragdoll bodies={tmp.GetComponentsInChildren<Rigidbody>(true).Length} rootMotion={ga.applyRootMotion}");
             Object.DestroyImmediate(tmp);
-        }
-
-        void OnPreprocessTexture()
-        {
-            if (assetPath == Eric + "/tex/rp_eric_rigged_001_norm.jpg")
-                ((TextureImporter)assetImporter).textureType = TextureImporterType.NormalMap;
         }
 
         void OnPreprocessModel()
