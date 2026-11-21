@@ -9,10 +9,13 @@ namespace RailTracer
     // the guards' models.
     //   SK_CH0#_FullClothes.fbx: the rigged ones (Unreal mannequin skeleton), exported from Alex's Unreal projects and
     //     split in Blender so every part already has one of our material names (the packs' clothes are atlases shared
-    //     by several parts). Imported Humanoid; Resources/Anim/Guard.prefab (CH01: shirt sleeves, chain, watch) and
-    //     Guard_CH02.prefab (CH02: double-breasted suit, tie, sunglasses, ring) are made from them, with ragdolls.
+    //     by several parts).
+    //   SK_CH01_TeddyBoy.fbx / SK_CH02_FlatCap.fbx: the 1950s British reskins made from those by
+    //     Assets/KitScripts/railtracer_mob_reskin.py (same skeleton). Imported Humanoid; Resources/Anim/Guard.prefab
+    //     (guards, the Teddy Boy: drape coat, drainpipes, quiff) and Guard_CH02.prefab (heavies: CH02's double-breasted
+    //     suit, tie, sunglasses, ring, a flat cap) are made from them, with ragdolls.
     //   SM_CH01_*.FBX: CH01's static parts in a T-pose; each dressed by its file (hat, shirt...), not its material name.
-    // Ours: hats Trn_Felt (the props kit's fedora felt), chain, watch and ring Trn_Brass, shirts and vest Chr_Shirt,
+    // Ours: hats Trn_Felt, the Teddy Boy's collar, lapels, cuffs, buttons and tie Chr_Velvet, (the props kit's fedora felt), chain, watch and ring Trn_Brass, shirts and vest Chr_Shirt,
     // trousers and jacket Chr_Suit (Fabric.mat copies: our weave, tinted), shoes Chr_Shoes, glasses Chr_Glasses, skin
     // Chr_Skin, beards, brows and hair Chr_Hair, eyes Chr_Eye, mouths Chr_Mouth (flat, the game's own tones). The static
     // parts' UCX_ collision hulls are dropped.
@@ -24,8 +27,8 @@ namespace RailTracer
         const string Dir = "Assets/RailTracer/Characters/Materials/";
         static readonly (string model, string prefab)[] Rigged =
         {
-            ("Assets/NYC1950_CH01/Meshes/SK_CH01_FullClothes.fbx", "Assets/RailTracer/Resources/Anim/Guard.prefab"),
-            ("Assets/NYC1950_CH02/Meshes/SK_CH02_FullClothes.fbx", "Assets/RailTracer/Resources/Anim/Guard_CH02.prefab"),
+            ("Assets/NYC1950_CH01/Meshes/SK_CH01_TeddyBoy.fbx", "Assets/RailTracer/Resources/Anim/Guard.prefab"),
+            ("Assets/NYC1950_CH02/Meshes/SK_CH02_FlatCap.fbx", "Assets/RailTracer/Resources/Anim/Guard_CH02.prefab"),
         };
 
         public override int GetPostprocessOrder() => -10;
@@ -60,6 +63,7 @@ namespace RailTracer
             Mat("Chr_Mouth", flat, new Color(0.45f, 0.18f, 0.17f), 0.5f);
             Mat("Chr_Shoes", flat, new Color(0.03f, 0.03f, 0.03f), 0.55f);  // Game shoesColor, polished
             Mat("Chr_Glasses", flat, new Color(0.02f, 0.02f, 0.025f), 0.92f); // dark glasses, frames and lenses
+            Mat("Chr_Velvet", flat, new Color(0.065f, 0.06f, 0.07f), 0.05f);  // matte, a shade over the guards' black suit so the collar reads
             Mat("Chr_Shirt", fabric, new Color(0.85f, 0.82f, 0.74f), 0.12f);
             Mat("Chr_Suit", fabric, new Color(0.15f, 0.15f, 0.17f), 0.12f);
             Object.DestroyImmediate(flat);

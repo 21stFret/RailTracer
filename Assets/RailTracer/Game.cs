@@ -156,13 +156,13 @@ namespace RailTracer
         float flipTime;
         readonly HashSet<Enemy> begging = new HashSet<Enemy>(); // broken enemies who have dropped to their knees
         GameObject characterModel;
-        // The guards' models (Editor/CharacterPackSetup.cs): Resources/Anim/Guard (NYC1950 CH01, shirt sleeves) and Guard_CH02
-        // (CH02, a double-breasted suit). Heavies wear CH02, so their red covers a whole suit; guards alternate between
-        // the two. Whichever is missing falls back to the other, then to the Mixamo character.
+        // The guards' models (Editor/CharacterPackSetup.cs): Resources/Anim/Guard (the Teddy Boy: drape coat, drainpipes,
+        // quiff) for guards and Guard_CH02 (CH02's double-breasted suit and a flat cap) for heavies, so their red covers a
+        // whole suit. Whichever is missing falls back to the other, then to the Mixamo character.
         GameObject guardModel, suitModel;
         GameObject GuardModel(Enemy e)
         {
-            var pick = e.tough || e.id % 2 == 0 ? suitModel ?? guardModel : guardModel ?? suitModel;
+            var pick = e.tough ? suitModel ?? guardModel : guardModel ?? suitModel;
             return pick ? pick : characterModel;
         }
         RuntimeAnimatorController enemyController, playerController;
@@ -1357,6 +1357,7 @@ namespace RailTracer
             if (slowUntil >= 0f && Time.unscaledTime >= slowUntil) { slowUntil = -1f; if (camming) Time.timeScale = 1f; } // a hit's slow motion ends
             Pad.EnsureKeyboard();
             Pad.Tick();
+            Achievements.Tick();
             hud.SetPad(Pad.Active);
             var kb = Keyboard.current;
             var mouse = Pad.Active ? PadPointer() : Pointer.FromMouse(Mouse.current);
@@ -1533,6 +1534,7 @@ namespace RailTracer
                 if (c.Won)
                 {
                     RecordClear();
+                    AchievementsForClear();
                     hud.ShowCard($"{CarLabel()} cleared", "The assassin washes up", "and steps out as the conductor.",
                         Pad.Active ? "A hold to walk on  /  Y to ride again" : "Hold Space / click to walk on  /  R to ride again", 0f, false, TicketStates());
                     hud.SetCardHold(0f);
@@ -1582,7 +1584,7 @@ namespace RailTracer
                 }
                 if (Time.unscaledTime < card.panUntil) return true;
                 card.shown = true;
-                hud.ShowTutorial(card.title, card.number, card.text, card.tip);
+                hud.ShowTutorial(card.title, card.number, Tutorial.ForPad(card.text), Tutorial.ForPad(card.tip));
             }
             hud.SetTutorialTargets(card.targets?.Invoke() ?? new Rect[0]);
             var at = mouse != null ? mouse.pos : Vector2.zero;
@@ -1640,7 +1642,9 @@ namespace RailTracer
         // move has resolved, and in the enemy turn after each enemy acts.
         void Poll()
         {
-            if (tut.Skipped || c == null) return;
+            if (c == null) return;
+            if (c.legend >= c.t.maxLegend) Achievements.Unlock(Achievements.Bloodied); // the legend bar full
+            if (tut.Skipped) return;
             foreach (var e in c.enemies)
             {
                 if (!e.InPlay) continue;

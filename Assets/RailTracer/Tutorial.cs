@@ -5,11 +5,38 @@ using UnityEngine;
 namespace RailTracer
 {
     // The tutorial: the opening walkthrough and the first-time cards (wording from the Rail Tracer tutorial script),
-    // queued and shown one at a time, with progress kept in PlayerPrefs (this machine is the save).
+    // queued and shown one at a time, with progress kept in the save file (SaveData.tutorial, so Steam Cloud carries it).
     // Game decides when events happen and what each card highlights; this only remembers and queues.
     public class Tutorial
     {
-        const string Key = "RailTracer.Tutorial.";
+        const string Key = "RailTracer.Tutorial."; // the old PlayerPrefs keys, read once by Use
+
+        // The save's flag list and how to write the save; Game hands them over each time it loads or replaces the save.
+        static List<string> flags = new List<string>();
+        static Action saved;
+
+        public static void Use(List<string> list, Action write)
+        {
+            flags = list;
+            saved = write;
+            // Older builds kept the flags in PlayerPrefs: carried over once, then the keys go.
+            bool moved = false;
+            foreach (var name in FlagNames())
+                if (PlayerPrefs.HasKey(Key + name))
+                {
+                    if (PlayerPrefs.GetInt(Key + name) == 1 && !flags.Contains(name)) flags.Add(name);
+                    PlayerPrefs.DeleteKey(Key + name);
+                    moved = true;
+                }
+            if (moved) { PlayerPrefs.Save(); saved?.Invoke(); }
+        }
+
+        static IEnumerable<string> FlagNames()
+        {
+            yield return "Skipped";
+            yield return "Walkthrough";
+            foreach (var id in FirstTime.Keys) yield return id;
+        }
 
         public class Card
         {
@@ -49,12 +76,33 @@ namespace RailTracer
             ["targeting"] = ("Targeting", "The banner shows which skill you're using. Pick a highlighted target, or press Esc to cancel."),
         };
 
+        // The cards' keyboard and mouse wording, and what the pad says instead (Steam Deck: no keyboard prompts on screen).
+        static readonly (string key, string pad)[] PadWords =
+        {
+            ("Press 1 to 8 to pick a skill.", "Press LB / RB to pick a skill."),
+            ("press Esc to cancel", "press B to cancel"),
+            ("Hover a box to read it.", "Pick one to read it."),
+            ("Hover anyone to read them in full.", "Move the cursor onto anyone to read them in full."),
+        };
+
+        public static string ForPad(string s)
+        {
+            if (s == null || !Pad.Active) return s;
+            foreach (var (key, pad) in PadWords) s = s.Replace(key, pad);
+            return s;
+        }
+
         readonly Queue<Card> queue = new Queue<Card>();
         public Card Current { get; private set; }
         public bool Active => Current != null || queue.Count > 0;
 
-        static bool Flag(string name) => PlayerPrefs.GetInt(Key + name, 0) == 1;
-        static void SetFlag(string name, bool on) { PlayerPrefs.SetInt(Key + name, on ? 1 : 0); PlayerPrefs.Save(); }
+        static bool Flag(string name) => flags.Contains(name);
+        static void SetFlag(string name, bool on)
+        {
+            if (on == flags.Contains(name)) return;
+            if (on) flags.Add(name); else flags.Remove(name);
+            saved?.Invoke();
+        }
 
         // Skip tutorial turns off every remaining card; the pause menu's Tutorial tips turns first-time cards back on.
         public bool Skipped => Flag("Skipped");
@@ -112,10 +160,8 @@ namespace RailTracer
         // Debug: forget all tutorial progress, as on a new save.
         public static void ResetAll()
         {
-            PlayerPrefs.DeleteKey(Key + "Skipped");
-            PlayerPrefs.DeleteKey(Key + "Walkthrough");
-            foreach (var id in FirstTime.Keys) PlayerPrefs.DeleteKey(Key + id);
-            PlayerPrefs.Save();
+            flags.Clear();
+            saved?.Invoke();
         }
 
         public void Clear()

@@ -1,0 +1,24 @@
+"AppBuild"
+{
+	"AppID" "5668310"
+	"Desc" "" // set per upload by upload.ps1 (-desc)
+	"ContentRoot" "..\Builds\Steam\Windows\"
+	"BuildOutput" "..\Builds\Steam\output\"
+	"SetLive" "internal" // never the default branch: that goes live by hand in Steamworks
+	"Depots"
+	{
+		"5668311" // Windows depot
+		{
+			"FileMapping"
+			{
+				"LocalPath" "*"
+				"DepotPath" "."
+				"recursive" "1"
+			}
+			"FileExclusion" "*.pdb"
+			"FileExclusion" "*_BurstDebugInformation_DoNotShip*"
+			"FileExclusion" "*_BackUpThisFolder_ButDontShipItWithYourGame*"
+			"FileExclusion" "steam_appid.txt"
+		}
+	}
+}

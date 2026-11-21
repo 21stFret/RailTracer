@@ -18,6 +18,7 @@ namespace RailTracer
         public bool[] cleared = new bool[Train.Cars];        // Journey cars (all three trains) cleared at least once
         public BestTicket[] best = new BestTicket[Train.Cars];
         public Settings settings = new Settings();
+        public List<string> tutorial = new List<string>();   // the tutorial cards had or skipped (Tutorial)
     }
 
     // The run in progress, as of the start of the current player turn: which car, its seed and the health you came
@@ -102,6 +103,8 @@ namespace RailTracer
             System.Array.Resize(ref save.best, Train.Cars);
             for (int i = 0; i < save.best.Length; i++) save.best[i] ??= new BestTicket();
             save.settings ??= new Settings();
+            save.tutorial ??= new List<string>();
+            Tutorial.Use(save.tutorial, WriteSave);
             if (!save.hasRun) save.run = null;
             if (save.run != null && (save.run.history == null || (!save.run.endless && (save.run.car < 0 || save.run.car >= Train.Cars)))) save.run = null;
         }
@@ -109,7 +112,13 @@ namespace RailTracer
         void WriteSave()
         {
             save.hasRun = save.run != null;
-            try { File.WriteAllText(SavePath, JsonUtility.ToJson(save)); }
+            // To a temp file, then swapped in: a crash mid-write leaves the old save, not a torn one (that Steam Cloud would sync).
+            try
+            {
+                string tmp = SavePath + ".tmp";
+                File.WriteAllText(tmp, JsonUtility.ToJson(save));
+                if (File.Exists(SavePath)) File.Replace(tmp, SavePath, null); else File.Move(tmp, SavePath);
+            }
             catch (System.Exception ex) { Debug.LogWarning("Rail Tracer: couldn't write the save: " + ex.Message); }
         }
 
@@ -218,8 +227,8 @@ namespace RailTracer
         void ResetData()
         {
             save = new SaveData();
+            Tutorial.Use(save.tutorial, WriteSave);
             WriteSave();
-            Tutorial.ResetAll();
             ApplySettings();
             BuildEmptyBackdrop();
             BuildMenuTrain();
@@ -237,6 +246,19 @@ namespace RailTracer
             save.cleared[carIndex] = true;
             if (t.Beats(save.best[carIndex])) save.best[carIndex] = t;
             WriteSave();
+        }
+
+        // The win card is up: the Steam achievements this clear earns (a Journey or endless car).
+        void AchievementsForClear()
+        {
+            if (walking) return;
+            int broken = c.enemies.Count(e => e.state == EnemyState.Broken || e.state == EnemyState.Fled);
+            if (c.hitsTaken == 0) Achievements.Unlock(Achievements.Untouched); // shielded hits count: not a scratch
+            if (broken >= 3) Achievements.Unlock(Achievements.BreakThree);
+            if (!c.enemies.Exists(e => e.hasSeen)) Achievements.Unlock(Achievements.Unseen);
+            if (endless) { if (carIndex >= 10) Achievements.Unlock(Achievements.Endless10); return; }
+            if (carIndex % Train.TrainCars == Train.TrainCars - 1)
+                Achievements.Unlock(new[] { Achievements.Train1, Achievements.Train2, Achievements.Train3 }[Train.TrainOf(carIndex)]);
         }
 
         static string Ticket(BestTicket b) => b == null || !b.set ? "No ticket yet" : $"{b.killed} killed, {b.broken} broken, {b.turns} turns";
@@ -758,7 +780,7 @@ namespace RailTracer
                         $"Kill cam slow motion\t{s.killCamSlowMo:0.##}x", $"Enemy turn speed\t{EnemySpeeds[Mathf.Clamp(s.enemySpeed, 0, 2)]}",
                         $"Window\t{modeName}", windowed ? $"Resolution\t{w} x {h}" : $"Resolution\t{w} x {h} (screen)", "Controls", "Back",
                     };
-                    int hit = hud.RefreshMenu(false, "Options", items, null, "Volumes: click to turn up, right-click to turn down.", at, held, -1, "Reset data");
+                    int hit = hud.RefreshMenu(false, "Options", items, null, Pad.Active ? "Volumes: right to turn up, left to turn down." : "Volumes: click to turn up, right-click to turn down.", at, held, -1, "Reset data");
                     if (click && hit == -3) { screen = MenuScreen.ResetData; break; }
                     if (back || (click && (hit == 9))) { screen = MenuScreen.Start; break; }
                     if ((click || down) && (hit == 0 || hit == 1)) // 10% steps, wrapping round

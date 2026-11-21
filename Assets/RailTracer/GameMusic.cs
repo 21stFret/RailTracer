@@ -65,7 +65,7 @@ namespace RailTracer
                 if (tracks.Length == 0) { Debug.LogWarning("Rail Tracer: no music tracks in Resources/Audio; no music."); enabledMusic = false; return; }
                 var clip = tracks[Random.Range(0, tracks.Length)];
                 ears = new GameObject("Ears").AddComponent<AudioListener>().transform;
-                foreach (var l in FindObjectsByType<AudioListener>(FindObjectsSortMode.None)) if (l.transform != ears) l.enabled = false; // one listener
+                foreach (var l in FindObjectsByType<AudioListener>()) if (l.transform != ears) l.enabled = false; // one listener
                 var cfg = AudioSettings.GetConfiguration();
                 Debug.Log($"Rail Tracer: music {clip.name} ({clip.length:0}s) fading in to {musicVolume}; " +
                           $"output {AudioSettings.outputSampleRate} Hz, {cfg.speakerMode}, master volume {AudioListener.volume}" +

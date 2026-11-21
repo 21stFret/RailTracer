@@ -37,7 +37,7 @@ namespace RailTracer
                 EditorUtility.DisplayDialog("Car Looks", "Enter Play mode first: the game builds the cars to bake.", "OK");
                 return null;
             }
-            var game = Object.FindFirstObjectByType<Game>();
+            var game = Object.FindAnyObjectByType<Game>();
             if (!game) EditorUtility.DisplayDialog("Car Looks", "No Game in the open scene.", "OK");
             return game;
         }
