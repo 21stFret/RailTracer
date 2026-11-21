@@ -155,7 +155,9 @@ namespace RailTracer
         bool stylishFlip;
         float flipTime;
         readonly HashSet<Enemy> begging = new HashSet<Enemy>(); // broken enemies who have dropped to their knees
-        GameObject characterModel;
+        GameObject characterModel, conductorModel;
+        // You: Resources/Anim/Conductor (Renderpeople's Eric, Editor/CharacterPackSetup.cs), else the Mixamo character.
+        GameObject PlayerModel => conductorModel ? conductorModel : characterModel;
         // The guards' models (Editor/CharacterPackSetup.cs): Resources/Anim/Guard (the Teddy Boy: drape coat, drainpipes,
         // quiff) for guards and Guard_CH02 (CH02's double-breasted suit and a flat cap) for heavies, so their red covers a
         // whole suit. Whichever is missing falls back to the other, then to the Mixamo character.
@@ -281,6 +283,7 @@ namespace RailTracer
         void Start()
         {
             characterModel = Resources.Load<GameObject>("Anim/Character");
+            conductorModel = Resources.Load<GameObject>("Anim/Conductor");
             guardModel = Resources.Load<GameObject>("Anim/Guard");
             suitModel = Resources.Load<GameObject>("Anim/Guard_CH02");
             enemyController = Resources.Load<RuntimeAnimatorController>("Anim/Enemy");
@@ -499,7 +502,7 @@ namespace RailTracer
             foreach (var e in c.enemies) if (e.state == EnemyState.Fled) gone.Add(e);
             if (!HasModels) return;
             playerBody.enabled = false;
-            playerAnim = Character(characterModel, new AnimatorOverrideController(playerController)); // its "Finisher" takes each takedown's clip
+            playerAnim = Character(PlayerModel, new AnimatorOverrideController(playerController)); // its "Finisher" takes each takedown's clip
             playerAnim.cullingMode = AnimatorCullingMode.AlwaysAnimate; // keeps going while hidden outside on a window hop
             Colour(playerAnim, tintedParts, conductorSuitColor);
             AddBloodOverlay(playerAnim);
@@ -2911,7 +2914,7 @@ namespace RailTracer
             Transform g;
             if (HasModels)
             {
-                var a = Character(characterModel, playerController);
+                var a = Character(PlayerModel, playerController);
                 a.enabled = false;
                 g = a.transform;
             }
@@ -3337,6 +3340,7 @@ namespace RailTracer
         public Color browColor = new Color(0.2f, 0.12f, 0.06f);
         public Color tracerEyeColor = new Color(0.12f, 0.22f, 0.42f), enemyEyeBlue = new Color(0.25f, 0.45f, 0.8f), enemyEyeGreen = new Color(0.25f, 0.55f, 0.3f);
         public Color eyeGlow = new Color(1f, 0.08f, 0.04f);
+        public float eyeballRadius = 0.0115f; // metres: eye bone (the eyeball's centre) to the iris, on models with eye bones
         public float irisSize = 0.011f, irisDepth = 0.003f, eyeGlowStrength = 4f, eyeTrailTime = 0.35f, eyeTrailWidth = 0.012f;
         public Vector3 irisNudge; // metres: (right, up, forward) from where the lashes put each eye; applied as characters are made
         internal class Eyes { public Material mat; public TrailRenderer[] trails; }
@@ -3368,19 +3372,26 @@ namespace RailTracer
         {
             var head = a.GetBoneTransform(HumanBodyBones.Head);
             var lash = a.GetComponentsInChildren<SkinnedMeshRenderer>().FirstOrDefault(r => r.name.IndexOf("Eyelash", System.StringComparison.OrdinalIgnoreCase) >= 0);
-            if (!lash) { Colour(a, new[] { "Chr_Eye" }, iris); return null; } // the guard model has real eyes: colour them
+            // The conductor (Eric) has eye bones at the eyeball centres: the irises go on the eyeballs' fronts.
+            var bones = a.GetComponentsInChildren<Transform>().Where(t => t.name == "eye_l" || t.name == "eye_r").ToList();
+            if (!lash && bones.Count < 2) { Colour(a, new[] { "Chr_Eye" }, iris); return null; } // the guard model has real eyes: colour them
             if (!head) return null;
-            var mesh = new Mesh();
-            lash.BakeMesh(mesh, true);
-            var lt = lash.transform;
-            var pts = mesh.vertices.Select(v => head.InverseTransformPoint(lt.position + lt.rotation * v)).ToList();
-            Destroy(mesh);
-            if (pts.Count < 4) return null;
             var right = head.InverseTransformDirection(a.transform.right).normalized;
             var up = head.InverseTransformDirection(a.transform.up).normalized;
             var fwd = head.InverseTransformDirection(a.transform.forward).normalized;
-            var mid = pts.Aggregate(Vector3.zero, (s, p) => s + p) / pts.Count;
             float unit = 1f / Mathf.Max(1e-4f, head.lossyScale.x);
+            List<Vector3> pts;
+            if (lash)
+            {
+                var mesh = new Mesh();
+                lash.BakeMesh(mesh, true);
+                var lt = lash.transform;
+                pts = mesh.vertices.Select(v => head.InverseTransformPoint(lt.position + lt.rotation * v)).ToList();
+                Destroy(mesh);
+                if (pts.Count < 4) return null;
+            }
+            else pts = bones.Select(t => head.InverseTransformPoint(t.position) + fwd * eyeballRadius * unit).ToList();
+            var mid = pts.Aggregate(Vector3.zero, (s, p) => s + p) / pts.Count;
             var shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
             var mat = new Material(shader) { color = iris };
             if (mat.HasProperty("_Smoothness")) mat.SetFloat("_Smoothness", 0.85f);
