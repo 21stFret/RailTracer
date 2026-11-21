@@ -312,6 +312,17 @@ namespace RailTracer
             c.StartPlayerTurn();
             Check(c.brutalWait == 0, "ready the turn after");
 
+            // A fighter who lost sight of you and only hears the kill hunts the kill, not where they last saw you.
+            c = new Carriage(new[] { "P.......", "......L." }, t, 1);
+            victim = c.Spawn(1, 0, 1, 0, 0);
+            var fighter = c.Spawn(7, 1, 1, 0, 1);
+            fighter.awareness = Awareness.Combat;
+            fighter.hasSeen = true;
+            fighter.lastKnown = new Cell(0, 1);
+            c.legend = Unlock(t, SkillId.Brutal);
+            c.Perform(Act.BrutalKill, victim);
+            Check(fighter.awareness == Awareness.Combat && fighter.lastKnown == new Cell(1, 0), "lost fighter: hunts the brutal kill");
+
             // Blood: seen like a crouched player on that tile; each enemy reacts once per stain.
             c = new Carriage(new[] { "........", "........" }, t, 1);
             c.player = new Cell(7, 0);                      // behind the seer and 2 away from it (beside a searcher, it'd notice you)

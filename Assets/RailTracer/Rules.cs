@@ -1293,7 +1293,13 @@ namespace RailTracer
                     if (startles && fresh) Startle(o);
                     else Fight(o);
                 }
-                else if (Hears(o, at, noise)) { AddTerror(o, heard); Search(o, at, Hunt.Go, Clue.Noise); }
+                else if (Hears(o, at, noise))
+                {
+                    AddTerror(o, heard);
+                    // A fighter who's lost sight of you takes the scream as you: they hunt the kill, not the old sighting.
+                    if (o.InPlay && o.awareness == Awareness.Combat) o.lastKnown = at;
+                    Search(o, at, Hunt.Go, Clue.Noise);
+                }
             }
         }
 
