@@ -4,7 +4,8 @@
       its tie made slim and dark (Chr_Velvet); CH02's jacket opened up single-breasted (the double-breasted fronts
       pulled apart, the lapels narrowed with them, the front buttons swapped for three on one edge), lengthened to
       mid-thigh with a little swing, velvet collar, lapels and cuffs (Chr_Velvet), lined so the open fronts aren't
-      see-through; drainpipe trousers (CH01's own pulled in below the thigh, Chr_Suit); a quiff (Chr_Hair, smoothed).
+      see-through; drainpipe trousers (CH01's own pulled in below the thigh, Chr_Suit); two quiffs as separate meshes
+      Hair_QuiffA / Hair_QuiffB (CH01's own hair cards swept up and forward; the game shows one per guard).
       Clean-shaven (CH01's beard and moustache off). The fedora, chain, watch and CH01's shirt above the chest are gone (its lower front shows in the opening).
   SK_CH02_FlatCap.fbx   (heavies) CH02 unchanged but the fedora: a flat cap (Trn_Felt) in its place.
 
@@ -251,21 +252,6 @@ def push_out(part, tree, gap, idx, reach=0.025, iters=4):
     return moved
 
 
-def subdivide(part, levels=2):
-    """Catmull-Clark smoothing of a one-material, one-weight part (the quiff)."""
-    mesh = bpy.data.meshes.new("tmp")
-    mesh.from_pydata([tuple(v) for v in part.v], [], part.f)
-    ob = bpy.data.objects.new("tmp", mesh); bpy.context.scene.collection.objects.link(ob)
-    mod = ob.modifiers.new("s", 'SUBSURF'); mod.levels = levels
-    dg = bpy.context.evaluated_depsgraph_get(); ev = ob.evaluated_get(dg); em = ev.to_mesh()
-    out = Part()
-    ids = [out.add_v(v.co.copy(), dict(part.w[0])) for v in em.vertices]
-    for p in em.polygons:
-        out.face([ids[i] for i in p.vertices], part.m[0])
-    ev.to_mesh_clear(); bpy.data.objects.remove(ob)
-    return out
-
-
 def skirt_weights(p, w):
     """Below the waist: pelvis plus both thighs, more thigh lower down, blended across the middle so the skirt swings."""
     if p.z >= 1.02:
@@ -277,6 +263,29 @@ def skirt_weights(p, w):
     return mix((1 - k, w), (k, skirt))
 
 
+def velvet_cuffs(me, arm, depth=0.06):
+    """The last `depth` of each jacket sleeve in velvet, split by a clean cut square to the forearm (picking whole
+    faces leaves a sawtooth of long sleeve triangles that flickers between the two dark materials)."""
+    bm = bmesh.new(); bm.from_mesh(me.data)
+    mw = me.matrix_world; inv = mw.inverted()
+    suit, velvet = mat_slot(me, "Chr_Suit"), mat_slot(me, "Chr_Velvet")
+    for s in ("l", "r"):
+        hand = bone(arm, "hand_" + s); elbow = bone(arm, "lowerarm_" + s)
+        ax = (hand - elbow).normalized()
+        sleeve = [f for f in bm.faces if f.material_index in (suit, velvet) and ((mw @ f.calc_center_median()) - hand).length < 0.2
+                  and (mw @ f.calc_center_median() - elbow).dot(ax) > 0]
+        end = max((mw @ v.co - elbow).dot(ax) for f in sleeve for v in f.verts)
+        cut = elbow + ax * (end - depth)
+        geom = list({e for f in sleeve for e in f.edges}) + sleeve + list({v for f in sleeve for v in f.verts})
+        bmesh.ops.bisect_plane(bm, geom=geom, plane_co=inv @ cut, plane_no=(inv.to_3x3() @ ax).normalized(), dist=1e-5)
+        for f in bm.faces:
+            if f.material_index in (suit, velvet):
+                c = mw @ f.calc_center_median()
+                if (c - hand).length < 0.2 and (c - elbow).dot(ax) > 0:
+                    f.material_index = velvet if (c - cut).dot(ax) > 0 else suit
+    bm.to_mesh(me.data); bm.free()
+
+
 # ---------------------------------------------------------------------------------------------- CH01: the Teddy Boy
 def is_button(i):
     return i["n"] <= 24 and (i["hi"] - i["lo"]).length < 0.035
@@ -286,10 +295,78 @@ def is_pocket_square(i):
     return i["lo"].z > 1.435 and i["hi"].z < 1.49 and abs(i["mean"].x) > 0.1 and 28 <= i["n"] <= 46 and i["hi"].z - i["lo"].z > 0.025
 
 
+def is_brow(c):
+    return c.y < -0.075 and 1.745 < c.z < 1.80
+
+
+def is_beard(c):
+    return c.z < 1.725 and c.y < 0.03 and not (abs(c.x) > 0.062 and c.z > 1.69)   # sideburns stay
+
+
+def subset(part, faces):
+    """A new Part with just these faces (and their verts)."""
+    out = Part(); vm = {}
+    for k in faces:
+        ids = []
+        for v in part.f[k]:
+            if v not in vm:
+                vm[v] = out.add_v(part.v[v], part.w[v])
+            ids.append(vm[v])
+        out.face(ids, part.m[k], uv=part.uv[k], isl=part.isl[k])
+    return out
+
+
+# (lift, forward roll, extra width, sideways sweep) at the front of the crown, fading to nothing at the back
+QUIFF_STYLES = {"A": (0.030, 0.024, 0.06, 0.0),      # a neat pompadour, rolled forward
+                "B": (0.017, 0.012, 0.12, -0.024)}   # lower and fuller, swept over to one side
+
+
+def make_quiffs():
+    """Two quiff meshes (Hair_QuiffA / Hair_QuiffB) from CH01's scalp hair: its strand cards bent by a smooth field
+    (lift and forward roll growing towards the front of the crown, nothing at the back or the sides below the temples,
+    so it blends into the existing hair), over a core: the scalp under the hair, lifted with them, in hair colour, so
+    the skin doesn't show between the lifted cards. The game shows one per guard."""
+    hair = grab(CH01, lambda i: i["mat"] == "Chr_Hair" and not is_brow(i["mean"]) and not is_beard(i["mean"]))
+    skin = grab(CH01, lambda i: i["mat"] == "Chr_Skin")
+    head = {"head": 1.0}
+    hair.w = [dict(head) for _ in hair.v]
+    top = max(p.z for p in hair.v)
+    cap = [p for p in hair.v if p.z > top - 0.03]
+    yf, yb = min(p.y for p in cap), max(p.y for p in cap)
+    yc = (yf + yb) / 2
+    kd = KDTree(len(hair.v))
+    for k, p in enumerate(hair.v):
+        kd.insert(p, k)
+    kd.balance()
+    scalp = [k for k, f in enumerate(skin.f) for c in [sum((skin.v[v] for v in f), Vector()) / len(f)]
+             if c.z > 1.74 and c.y > yf + 0.01 and kd.find(c)[2] < 0.012]
+    core = subset(skin, scalp)
+    nrm = core.normals()
+    core.v = [p + n * 0.002 for p, n in zip(core.v, nrm)]
+    core.w = [dict(head) for _ in core.v]
+    core.m = ["Chr_Hair"] * len(core.f)
+    out = {}
+    for name, (H, F, W, S) in QUIFF_STYLES.items():
+        def bend(p):
+            h = smooth01(top - 0.085, top - 0.015, p.z)          # the top of the head only
+            t = smooth01(yc + 0.045, yf + 0.004, p.y)            # 0 behind the crown -> 1 at the front hairline
+            return Vector((p.x * (1 + W * h * t) + S * h * t * t, p.y - F * h * t * t, p.z + H * h * t))
+        q = Part()
+        for src in (hair, core):
+            n = len(q.v)
+            q.v += [bend(p) for p in src.v]; q.w += [dict(w) for w in src.w]
+            for f, mt, uv in zip(src.f, src.m, src.uv):
+                q.face([v + n for v in f], mt, uv=uv)
+        out["Hair_Quiff" + name] = q
+        print("CH01 quiff %s tris %d" % (name, sum(len(f) - 2 for f in q.f)))
+    return out
+
+
 def teddy_boy():
     # --- CH02's jacket (not its trousers, front / cuff buttons or pocket square) and shirt with tie
     jacket = grab(CH02, lambda i: i["mat"] == "Chr_Suit" and i["hi"].z > 1.09 and not is_button(i) and not is_pocket_square(i))
     shirt = grab(CH02, lambda i: i["mat"] == "Chr_Shirt")
+    quiffs = make_quiffs()   # CH01's own strand cards swept up and forward (two styles), over a hair-coloured core
 
     arm, me = load(CH01)
     m = me.data; mw = me.matrix_world
@@ -331,8 +408,8 @@ def teddy_boy():
             return True
         if mat == "Chr_Shirt":   # CH02's shirt stops under the chest (its jacket hid the rest): CH01's fills the opening below
             return c.z > 1.40 or c.y > -0.03 or dom[polys[fi][0]].startswith(("upperarm", "lowerarm", "clavicle", "head"))
-        if mat == "Chr_Hair" and c.z < 1.725 and c.y < 0.03 and not (abs(c.x) > 0.062 and c.z > 1.69):
-            return True   # clean-shaven: beard and moustache off (brows and sideburns stay)
+        if mat == "Chr_Hair":     # only the brows stay on the body: the scalp hair goes to the quiffs, the beard goes
+            return not is_brow(c)
         if mat != "Chr_Skin" or c.z > 1.585:
             return False
         d = dom[polys[fi][0]]
@@ -423,20 +500,10 @@ def teddy_boy():
             J.v[v] = Vector((p.x * (1 + 0.07 * t), 0.012 + (p.y - 0.012) * (1 + 0.07 * t), z))
             J.w[v] = skirt_weights(J.v[v], J.w[v])
 
-    # --- velvet: collar, lapels, and the last 6 cm of each sleeve
-    reach = {}
-    for f, i in zip(J.f, J.isl):
-        if id(i) in sleeves:
-            c = sum((J.v[v] for v in f), Vector()) / len(f)
-            d = (c - hands["l" if c.x > 0 else "r"]).length
-            reach[id(i)] = min(reach.get(id(i), 9), d)
-    for k, (f, i) in enumerate(zip(J.f, J.isl)):
+    # --- velvet: collar and lapels (the cuffs are cut cleanly after the build: see velvet_cuffs)
+    for k, i in enumerate(J.isl):
         if id(i) in collar or id(i) in lapels:
             J.m[k] = "Chr_Velvet"
-        elif id(i) in sleeves:
-            c = sum((J.v[v] for v in f), Vector()) / len(f)
-            if (c - hands["l" if c.x > 0 else "r"]).length < reach[id(i)] + 0.06:
-                J.m[k] = "Chr_Velvet"
 
     # --- fit over CH01's body and the shirt
     under = Part(); under.v = list(shirt.v); under.f = list(shirt.f)
@@ -465,41 +532,11 @@ def teddy_boy():
         if hit:
             btn.disc(hit - Vector((0, 0.001, 0)), (0, -1, 0), 0.008, lambda p: skirt_weights(p, {"spine_01": 1.0}), "Chr_Velvet")
 
-    # --- the quiff: a pompadour over the top of the head, rising to a forward roll over the brow (100% head),
-    # Catmull-Clark smoothed.
-    hair = [c for c, d in zip(co, dom) if d == "head"]
-    top = max(p.z for p in hair)
-    crown = [p for p in hair if p.z > top - 0.05]
-    y_back = max(p.y for p in crown) - 0.02
-    y_front = min(p.y for p in crown) + 0.005
-    zb = top - 0.065
-    def half_w(y):
-        s = [abs(p.x) for p in hair if abs(p.y - y) < 0.012 and p.z > zb]
-        return (max(s) if s else 0.06) + 0.008
-    q = Part()
-    secs = []
-    # (t along the head back->front, forward push, base / top as fractions of the height): the last rows curl the roll under
-    for t, push, fb, ft in [(0.0, 0, 0, 1), (0.2, 0, 0, 1), (0.4, 0, 0, 1), (0.6, 0, 0, 1), (0.78, 0, 0, 1), (0.92, 0, 0, 1),
-                            (1.0, 0.012, 0.2, 0.96), (1.0, 0.026, 0.45, 0.86), (1.0, 0.033, 0.66, 0.74)]:
-        y = y_back + (y_front - y_back) * t - push
-        w = half_w(min(max(y, y_front), y_back)) * (1 - 0.12 * smooth01(0.6, 1.0, t)) * (1 - 0.4 * fb)
-        h = (top - zb) + 0.012 + 0.05 * smooth01(0.25, 0.9, t)
-        z0, z1 = zb + fb * h, zb + ft * h
-        secs.append([Vector((w * math.cos(a), y, z0 + (z1 - z0) * math.sin(a) ** 0.75))
-                     for a in (math.pi * j / 12 for j in range(13))]
-                    + [Vector((w * (-1 + 2 * j / 6), y, z0)) for j in range(1, 6)])   # flat underside: closes the roll
-    q.loft(secs, lambda p: head, "Chr_Hair")
-    for sec, want in ((secs[-1], Vector((0, -1, 0.3))), (secs[0], Vector((0, 1, 0)))):
-        c = sum(sec, Vector()) / len(sec)
-        ci = q.add_v(c, head); ri = [q.add_v(p, head) for p in sec]
-        for j in range(len(ri)):
-            q.face([ci, ri[j], ri[(j + 1) % len(ri)]], "Chr_Hair", want)
-    q = subdivide(q, 1)
-
-    for part in (shirt, J, btn, q):
+    for part in (shirt, J, btn):
         part.build(me)
-    print("CH01 shirt tris ~%d, jacket ~%d, quiff ~%d" % tuple(sum(len(f) - 2 for f in p.f) for p in (shirt, J, q)))
-    finish(arm, me, OUT01)
+    velvet_cuffs(me, arm)
+    print("CH01 shirt tris ~%d, jacket ~%d" % tuple(sum(len(f) - 2 for f in p.f) for p in (shirt, J)))
+    finish(arm, me, OUT01, quiffs)
 
 
 # --------------------------------------------------------------------------------------------- CH02: the flat cap
@@ -567,7 +604,16 @@ def flat_cap():
     finish(arm, me, OUT02)
 
 
-def finish(arm, me, out):
+def finish(arm, me, out, extra=None):
+    """Exports the armature, the body mesh and any extra meshes ({name: Part}, skinned to the same armature)."""
+    objs = [me]
+    for name, part in (extra or {}).items():
+        ob = bpy.data.objects.new(name, bpy.data.meshes.new(name))
+        bpy.context.scene.collection.objects.link(ob)
+        ob.parent = arm; ob.matrix_world = me.matrix_world.copy()
+        ob.modifiers.new("Armature", 'ARMATURE').object = arm
+        part.build(ob)
+        objs.append(ob)
     m = me.data
     used = sorted({p.material_index for p in m.polygons})   # drop the slots nothing wears now (fedora, chain...)
     remap = {o: n for n, o in enumerate(used)}
@@ -582,11 +628,13 @@ def finish(arm, me, out):
     me.data.update()
     tris = sum(len(p.vertices) - 2 for p in me.data.polygons)
     bpy.ops.object.select_all(action='DESELECT')
-    arm.select_set(True); me.select_set(True)
+    arm.select_set(True)
+    for ob in objs:
+        ob.select_set(True)
     bpy.context.view_layer.objects.active = arm
     bpy.ops.export_scene.fbx(filepath=out, use_selection=True, object_types={'ARMATURE', 'MESH'},
                              add_leaf_bones=False, bake_anim=False, mesh_smooth_type='FACE')
-    print("EXPORTED", out, "tris", tris, "materials", [m.name for m in me.data.materials])
+    print("EXPORTED", out, "tris", tris, "materials", [m.name for m in me.data.materials], "meshes", [o.name for o in objs])
     if RENDER:
         render(me, os.path.join(RENDER, os.path.splitext(os.path.basename(out))[0]))
 
@@ -613,8 +661,21 @@ def render(me, base):
     sun.data.energy = 3.5; sun.rotation_euler = (math.radians(40), 0, math.radians(-30))
     cam = bpy.data.objects.new("cam", bpy.data.cameras.new("cam")); scn.collection.objects.link(cam); scn.camera = cam
     cam.data.type = 'ORTHO'
+    quiffs = sorted((o for o in bpy.data.objects if o.name.startswith("Hair_Quiff")), key=lambda o: o.name)
+    for o in quiffs[1:]:   # the other styles: head shots only
+        quiffs[0].hide_render = True; o.hide_render = False
+        for name, (yaw, pitch) in {"head": (-30, 15), "headside": (90, 5), "headback": (160, 10)}.items():
+            cam.data.ortho_scale = 0.55
+            y, p = math.radians(yaw), math.radians(pitch)
+            d = Vector((math.sin(y) * math.cos(p), -math.cos(y) * math.cos(p), math.sin(p)))
+            cam.location = Vector((0, 0, 1.7)) + d * 6
+            cam.rotation_euler = (-d).to_track_quat('-Z', 'Y').to_euler()
+            scn.render.filepath = base + "_" + name + "_" + o.name[-1] + ".png"
+            bpy.ops.render.render(write_still=True)
+        o.hide_render = True; quiffs[0].hide_render = False
     for name, (yaw, pitch, scale, tgt) in {"front": (0, 8, 2.1, 0.95), "side": (90, 8, 2.1, 0.95), "game": (-25, 50, 2.3, 0.9),
-                                           "back": (180, 15, 2.1, 0.95), "head": (-30, 15, 0.55, 1.7), "chest": (-20, 12, 1.0, 1.3)}.items():
+                                           "back": (180, 15, 2.1, 0.95), "head": (-30, 15, 0.55, 1.7), "headside": (90, 5, 0.55, 1.7),
+                                           "headback": (160, 10, 0.55, 1.7), "chest": (-20, 12, 1.0, 1.3)}.items():
         cam.data.ortho_scale = scale
         y, p = math.radians(yaw), math.radians(pitch)
         d = Vector((math.sin(y) * math.cos(p), -math.cos(y) * math.cos(p), math.sin(p)))

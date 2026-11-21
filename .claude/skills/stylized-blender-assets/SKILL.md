@@ -1,6 +1,6 @@
 ---
 name: stylized-blender-assets
-description: Build stylized, modular, game-ready 3D assets for ANY game as Blender Python scripts that export Unity-ready FBX files (materials and colliders matched by name), verified with a preview render, a z-fighting check and, when possible, a run in real Blender. Use this skill whenever the user asks for 3D models, props, furniture, rooms, vehicles, interiors, buildings, modular kit pieces, environment assets or variations of them for a game or demo, mentions Blender scripts, bpy or FBX, or wants something "in the same style" as earlier assets - even if they don't say "Blender". Also covers project profiles (e.g. the Fathom / Atlantis underwater game) for consistent ongoing sets.
+description: Build stylized, modular, game-ready 3D assets for ANY game as Blender Python scripts that export Unity-ready FBX files (materials and colliders matched by name), verified with a preview render, a z-fighting check and, when possible, a run in real Blender. Use this skill whenever the user asks for 3D models, props, furniture, rooms, vehicles, interiors, buildings, modular kit pieces, environment assets or variations of them for a game or demo, mentions Blender scripts, bpy or FBX, or wants something "in the same style" as earlier assets - even if they don't say "Blender". Also covers new outfits, garments and hairstyles on rigged characters (restyling pack geometry on the same skeleton) and project profiles (e.g. the Fathom / Atlantis underwater game) for consistent ongoing sets.
 ---
 
 # Stylized Blender Assets
@@ -55,6 +55,8 @@ For follow-up requests in the same set, don't re-ask.
   seeded packed shelves), `assets/projects/railtracer/railtracer_train_kit_piece.py` (fully MODULAR
   vehicle kit: walls/floors/roofs/end caps on a 1 m grid + `TrainCarBuilder.cs` layout-string tool),
   `assets/piece_template.py` (minimal), other project examples under `assets/projects/<name>/`.
+- `references/character_reskin.md` - new clothes or hair on a RIGGED character (same skeleton, animations,
+  ragdoll): restyle the pack's real garments and the character's own hair instead of modelling from scratch.
 
 ### 3. Write the piece script
 Copy `assets/piece_template.py`. The library `scripts/kit_lib.py` gives:
@@ -134,6 +136,8 @@ the module grid).
 - Everything random is seeded; same script = same assets.
 
 ## Files
+- `references/character_reskin.md` + `assets/projects/railtracer/railtracer_mob_reskin.py` - reskinning rigged
+  characters (borrowed garments restyled, hair bent into new styles, push-out fit, clean trim cuts)
 - `scripts/kit_lib.py` - generic library (pasted into every generated script)
 - `scripts/kit_textures.py` - seamless texture recipes + styles (pasted after the lib)
 - `scripts/assemble.py` - CONFIG + lib (+ project libs) + piece -> one script

@@ -518,6 +518,9 @@ namespace RailTracer
                 if (a.parameters.Any(p => p.name == "IdleOffset")) a.SetFloat("IdleOffset", Random.value); // out of step, every time they idle
                 a.Play(0, 0, Random.value); // out of sync so they don't bob together
                 AddEyes(a, e.id % 2 == 0 ? enemyEyeBlue : enemyEyeGreen, false);
+                // The Teddy Boy model carries two quiffs (Hair_QuiffA / B): one each, by id (not in step with the eyes)
+                foreach (var r in a.GetComponentsInChildren<Renderer>(true))
+                    if (r.name.StartsWith("Hair_Quiff")) r.gameObject.SetActive(r.name.EndsWith(e.id / 2 % 2 == 0 ? "A" : "B"));
                 if (a.parameters.Any(p => p.name == "Armed")) armed.Add(a);
                 if (!e.tough) { var gun = HoldGun(a); if (gun != null) guns[e] = gun; } // heavies don't shoot
             }
