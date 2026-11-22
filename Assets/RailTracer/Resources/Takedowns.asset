@@ -16,7 +16,7 @@ MonoBehaviour:
   - name: Heart Stab (crouched)
     kind: 0
     target: 0
-    stance: 0
+    stance: 1
     facing: 0
     attacker: {fileID: 8993902097722301239, guid: 6440dfbf1af408640a3740e671b5e528, type: 3}
     victim: {fileID: 8993902097722301239, guid: c89388cae16cb174da4beff3a98478bc, type: 3}

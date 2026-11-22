@@ -183,20 +183,21 @@ MonoBehaviour:
     largeTerror: 45
     bodyFearSmall: 10
     bodyFearLarge: 45
+    jumpScareTerror: 15
     unseenTerror: 35
     hitChance: 0.8
     heavyHitChance: 0.9
-    shakenHitMult: 0.5
     wildHitChance: 0.3
     meleeHitChance: 0.9
+    shakenHitMult: 0.5
     halfCoverHitMult: 0.75
     leapHitPenalty: 0.25
     shotDamage: 15
     maxHp: 30
     maxLegend: 100
     quietLegend: 10
-    brutalLegend: 30
-    railLegend: 25
+    brutalGain: 20
+    railGain: 30
     leapRange: 3
     throwDistance: 5
     leapTerror: 40
@@ -206,18 +207,28 @@ MonoBehaviour:
     brokenFleeChance: 0.5
     searchTurns: 3
     searchRadius: 2
+    sweepStep: 2
     guardTurnInterval: 2
   skillTable: {fileID: 0}
   seed: 10
   enemyStepDelay: 0.4
+  fleePace: 2
   useTrainKit: 1
   cutawayNearWall: 1
   lampHeight: 2.1
   lampInset: 0.3
+  wallLampEvery: 4
+  tableLampPower: 0.1
+  tableLampReach: 1
+  tableLampCone: 179
+  tableLampInnerCone: 0
+  pictureLightPower: 0.25
+  sunDim: 0.01
   lampColor: {r: 1, g: 0.78, b: 0.5, a: 1}
-  lampIntensity: 3
-  lampRange: 4.5
-  lampAngle: 80
+  wallLampIntensity: 2
+  wallLampRange: 4.5
+  wallLampAngle: 120
+  wallLampInnerAngle: 0
   legendLampColors:
   - {r: 1, g: 0.78, b: 0.5, a: 1}
   - {r: 1, g: 0.66, b: 0.38, a: 1}
@@ -249,6 +260,14 @@ MonoBehaviour:
   bloodOverlayColor: {r: 0.45, g: 0.03, b: 0.03, a: 1}
   bloodPatternScale: 6
   bloodSpreadSpeed: 0.5
+  footprintsFrom: 50
+  footprintStride: 0.42
+  footprintGap: 0.09
+  footprintLength: 0.32
+  footprintWidth: 0.115
+  footprintDepth: 0.5
+  footprintColor: {r: 0.45, g: 0.12, b: 0.12, a: 0.9}
+  runnerHeight: 0.015
   auraFrom: 0.1
   auraFull: 1
   debugLegend: 0
@@ -262,10 +281,187 @@ MonoBehaviour:
   characterScale: 1
   unitSpeed: 5
   flipLength: 1
-  stylishFlipLength: 1.4
+  stylishFlipTravel:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 0.067
+      value: 0.086
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 0.133
+      value: 0.163
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 0.2
+      value: 0.239
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 0.267
+      value: 0.312
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 0.333
+      value: 0.389
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 0.4
+      value: 0.466
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 0.467
+      value: 0.526
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 0.533
+      value: 0.575
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 0.6
+      value: 0.627
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 0.667
+      value: 0.679
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 0.733
+      value: 0.737
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 0.8
+      value: 0.792
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 0.867
+      value: 0.841
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 0.933
+      value: 0.89
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 1
+      value: 0.926
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 1.067
+      value: 0.956
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 1.133
+      value: 0.984
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 1.2
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
   endTurnHold: 0.5
   hopClimbTime: 0.45
   hopWalkSpeed: 3
+  hopVaultSpeed: 1.5
   takedownHold: 0.5
   takedownMove:
     serializedVersion: 2
@@ -346,19 +542,25 @@ MonoBehaviour:
   quietKillBloodAt: 0.62
   quietVictimFacesAway: 1
   snatchTime: 0.25
-  killCamDistance: 1.9
+  killCamClose: 1.25
   killCamHeight: 0.55
   sceneCamTime: 1.2
   killCamFlyIn: 0.45
   killCamPause: 0.2
   killCamFlyOut: 0.35
   killCamSlowMo: 0.25
-  throwCamSlowMo: 0.5
+  hitSlowTime: 0.5
+  swingHitAt: 0.35
+  swingTravel: 0
+  walkOutPace: 1.25
   takedownBloodAt: 0.6
   bloodCastStanding: 1.8
   bloodCastCrouched: 1
   bloodCastReach: 1.5
   railSillHeight: 0.55
+  barShoveLift: 0.3
+  railHangPos: {x: 0.335, y: 1.334, z: -0.691}
+  railHangRot: {x: 77.2229, y: 180, z: 189.13}
   railLean: 80
   freeShotPause: 0.55
   muzzleColor: {r: 1, g: 0.75, b: 0.35, a: 1}
@@ -371,7 +573,57 @@ MonoBehaviour:
   propAmount: 1.55
   ashtrayBrassSmoothness: 0.5
   ashtrayBrassNormal: 0.5
+  hoverSlashTime: 0.42
+  hoverSwipeDelay: 0.06
+  hoverSwipeTime: 0.15
+  hoverGrow: 1.2
+  hoverSwipePast: 100
+  padZoomSpeed: 1.2
+  padFollowEdge: 0.2
+  volleyGap: {x: 0.08, y: 0.22}
+  soakBrutal: 0.7
+  soakStealth: 0.35
+  soakHeight: 0.3
+  soakDepth: 1.2
   zoneTint: 0.12
+  knifeOffset: {x: 0, y: 0, z: 0}
+  knifeTwist: {x: 0, y: 0, z: 0}
+  browColor: {r: 0.2, g: 0.12, b: 0.06, a: 1}
+  tracerEyeColor: {r: 0.29411766, g: 0.38039216, b: 0.5568628, a: 1}
+  enemyEyeBlue: {r: 0.29411766, g: 0.38039216, b: 0.5568628, a: 1}
+  enemyEyeGreen: {r: 0.25, g: 0.55, b: 0.3, a: 1}
+  eyeGlow: {r: 1, g: 0.08, b: 0.04, a: 1}
+  irisSize: 0.011
+  irisDepth: 0.003
+  eyeGlowStrength: 4
+  eyeTrailTime: 0.35
+  eyeTrailWidth: 0.012
+  irisNudge: {x: 0, y: 0, z: 0}
+  gunLength: 0.33
+  gunOffset: {x: 0, y: 0, z: 0}
+  gunTwist: {x: 0, y: 0, z: 0}
+  gunSteel: {r: 0.11, g: 0.11, b: 0.12, a: 1}
+  gunCylinder: {r: 0.2, g: 0.2, b: 0.21, a: 1}
+  glassBurst: 45
+  fleeOutPast: 2.5
+  ragdollSettle: 1.6
+  ragdollSlide: 0.15
+  standUpTime: 0.4
+  tableLampHeight: 1.01
+  journeyZoom: 55
+  thanksDelay: 1.2
+  glassAlpha: 0.35
+  musicVolume: 0.6
+  pauseMusic: 0.35
+  musicFade: 2.5
+  musicWindDown: 1.6
+  musicInCar: 0.25
+  musicFar: 30
+  musicFarLevel: 0.25
+  musicMuffle: 3200
+  earsHeight: 1.1
+  recordRpm: 78
+  sfxVolume: 0.8
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
