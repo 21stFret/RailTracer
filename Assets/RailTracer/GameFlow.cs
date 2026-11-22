@@ -52,6 +52,7 @@ namespace RailTracer
         public int enemySpeed = 1;       // the enemy turn: 0 slow, 1 normal, 2 fast
         public float masterVolume = 1f;  // everything (AudioListener.volume), 0-1
         public float musicVolume = 1f;   // the music on top of that, 0-1
+        public float sfxVolume = 1f;     // the sound effects on top of master, 0-1 (20.1; older saves read 1)
         public int windowMode = -1; // FullScreenMode (FullScreenWindow or Windowed; an old ExclusiveFullScreen reads as FullScreenWindow), -1 = as the player started
         public int width, height;   // the windowed size; 0 = as the player started
     }
@@ -538,11 +539,11 @@ namespace RailTracer
                 }
             }
             // The Options car: a lamp per setting, down the car in menu order (SyncSettingLamps).
-            for (int i = 0; i < 8; i++)
+            for (int i = 0; i < 9; i++)
             {
                 var l = new GameObject("Setting Lamp " + (i + 1)).AddComponent<Light>();
                 l.transform.SetParent(menuTrain.transform, false);
-                l.transform.localPosition = new Vector3(OptionsX + 2f + i * 3.2f, 2.1f, -2f);
+                l.transform.localPosition = new Vector3(OptionsX + 2f + i * 2.8f, 2.1f, -2f);
                 l.type = LightType.Point;
                 l.color = new Color(1f, 0.9f, 0.75f);
                 l.range = 7f;
@@ -583,7 +584,7 @@ namespace RailTracer
         void SyncSettingLamps(bool showing)
         {
             var s = save.settings;
-            float[] level = { s.masterVolume, s.musicVolume, s.killCam ? 1f : 0f, s.killCam ? s.killCamChance : 0f, s.killCamSlowMo, 0.35f + 0.325f * Mathf.Clamp(s.enemySpeed, 0, 2), 1f, 1f }; // master, music, kill cam, chance, slow motion, enemy speed, window mode, resolution
+            float[] level = { s.masterVolume, s.musicVolume, s.sfxVolume, s.killCam ? 1f : 0f, s.killCam ? s.killCamChance : 0f, s.killCamSlowMo, 0.35f + 0.325f * Mathf.Clamp(s.enemySpeed, 0, 2), 1f, 1f }; // master, music, sfx, kill cam, chance, slow motion, enemy speed, window mode, resolution
             for (int i = 0; i < settingLamps.Count; i++) settingLamps[i].intensity = showing ? 2.8f * level[i] : 0f;
             for (int k = 0; k < menuCars.Count; k++)
             {
@@ -780,28 +781,29 @@ namespace RailTracer
                     if (!windowed) (w, h) = (Display.main.systemWidth, Display.main.systemHeight); // fullscreen: the desktop's own
                     var items = new[]
                     {
-                        $"Master volume\t{Mathf.RoundToInt(100 * s.masterVolume)}%", $"Music volume\t{Mathf.RoundToInt(100 * s.musicVolume)}%",
+                        $"Master volume\t{Mathf.RoundToInt(100 * s.masterVolume)}%", $"Music volume\t{Mathf.RoundToInt(100 * s.musicVolume)}%", $"Sound effects\t{Mathf.RoundToInt(100 * s.sfxVolume)}%",
                         $"Kill cam\t{(s.killCam ? "On" : "Off")}", $"Kill cam chance\t{Mathf.RoundToInt(100 * s.killCamChance)}%",
                         $"Kill cam slow motion\t{s.killCamSlowMo:0.##}x", $"Enemy turn speed\t{EnemySpeeds[Mathf.Clamp(s.enemySpeed, 0, 2)]}",
                         $"Window\t{modeName}", windowed ? $"Resolution\t{w} x {h}" : $"Resolution\t{w} x {h} (screen)", "Controls", "Back",
                     };
                     int hit = hud.RefreshMenu(false, "Options", items, null, Pad.Active ? "Volumes: right to turn up, left to turn down." : "Volumes: click to turn up, right-click to turn down.", at, held, -1, "Reset data");
                     if (click && hit == -3) { screen = MenuScreen.ResetData; break; }
-                    if (back || (click && (hit == 9))) { screen = MenuScreen.Start; break; }
-                    if ((click || down) && (hit == 0 || hit == 1)) // 10% steps, wrapping round
+                    if (back || (click && (hit == 10))) { screen = MenuScreen.Start; break; }
+                    if ((click || down) && hit >= 0 && hit <= 2) // 10% steps, wrapping round
                     {
                         float Step(float v) => Mathf.Repeat(Mathf.Round(v * 10f) + (down ? -1f : 1f), 11f) / 10f;
                         if (hit == 0) AudioListener.volume = s.masterVolume = Step(s.masterVolume);
-                        else s.musicVolume = Step(s.musicVolume);
+                        else if (hit == 1) s.musicVolume = Step(s.musicVolume);
+                        else { s.sfxVolume = Step(s.sfxVolume); UiSfx("MenuSwipe"); } // a sample at the new level
                         WriteSave();
                         break;
                     }
                     if (!click) break;
-                    if (hit == 2) s.killCam = !s.killCam;
-                    else if (hit == 3) s.killCamChance = Chances[(System.Array.IndexOf(Chances, s.killCamChance) + 1) % Chances.Length];
-                    else if (hit == 4) s.killCamSlowMo = SlowMos[(System.Array.IndexOf(SlowMos, s.killCamSlowMo) + 1) % SlowMos.Length];
-                    else if (hit == 5) s.enemySpeed = (s.enemySpeed + 1) % EnemySpeeds.Length;
-                    else if (hit == 6)
+                    if (hit == 3) s.killCam = !s.killCam;
+                    else if (hit == 4) s.killCamChance = Chances[(System.Array.IndexOf(Chances, s.killCamChance) + 1) % Chances.Length];
+                    else if (hit == 5) s.killCamSlowMo = SlowMos[(System.Array.IndexOf(SlowMos, s.killCamSlowMo) + 1) % SlowMos.Length];
+                    else if (hit == 6) s.enemySpeed = (s.enemySpeed + 1) % EnemySpeeds.Length;
+                    else if (hit == 7)
                     {
                         s.windowMode = (int)(windowed ? FullScreenMode.FullScreenWindow : FullScreenMode.Windowed);
                         if (!windowed && (s.width <= 0 || s.width >= Display.main.systemWidth)) // first window: the biggest that fits
@@ -811,7 +813,7 @@ namespace RailTracer
                             if (fit.width > 0) (s.width, s.height) = (fit.width, fit.height);
                         }
                     }
-                    else if (hit == 7)
+                    else if (hit == 8)
                     {
                         if (!windowed) break; // fullscreen always uses the screen's own resolution
                         var sizes = Screen.resolutions.Select(r => (r.width, r.height)).Distinct()
@@ -822,7 +824,7 @@ namespace RailTracer
                             (s.width, s.height) = sizes[(i + 1) % sizes.Count];
                         }
                     }
-                    else if (hit == 8) { screen = MenuScreen.Controls; break; }
+                    else if (hit == 9) { screen = MenuScreen.Controls; break; }
                     else break;
                     ApplySettings();
                     WriteSave();

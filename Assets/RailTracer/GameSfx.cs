@@ -10,6 +10,7 @@ namespace RailTracer
         [Header("Sound effects")]
         [Range(0f, 1f)] public float sfxVolume = 0.8f;
 
+        float SfxLevel => sfxVolume * save.settings.sfxVolume; // the Options setting on top (master: AudioListener.volume)
         AudioClip[] sfxClips;
         readonly List<AudioClip> sfxPick = new List<AudioClip>();
 
@@ -19,7 +20,7 @@ namespace RailTracer
             sfxPick.Clear();
             foreach (var clip in sfxClips) if (clip.name.StartsWith(name)) sfxPick.Add(clip);
             if (sfxPick.Count == 0 || !root) return;
-            AudioSource.PlayClipAtPoint(sfxPick[Random.Range(0, sfxPick.Count)], root.TransformPoint(at), sfxVolume);
+            AudioSource.PlayClipAtPoint(sfxPick[Random.Range(0, sfxPick.Count)], root.TransformPoint(at), SfxLevel);
         }
 
         AudioSource uiAudio;
@@ -32,7 +33,7 @@ namespace RailTracer
             foreach (var clip in sfxClips) if (clip.name.StartsWith(name)) sfxPick.Add(clip);
             if (sfxPick.Count == 0) return;
             if (!uiAudio) { uiAudio = gameObject.AddComponent<AudioSource>(); uiAudio.playOnAwake = false; uiAudio.spatialBlend = 0f; }
-            uiAudio.PlayOneShot(sfxPick[Random.Range(0, sfxPick.Count)], sfxVolume);
+            uiAudio.PlayOneShot(sfxPick[Random.Range(0, sfxPick.Count)], SfxLevel);
         }
 
         // A blow landing: the knife (a stomp for a brutal kill) and the blood together.

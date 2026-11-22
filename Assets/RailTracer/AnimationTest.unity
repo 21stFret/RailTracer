@@ -165,6 +165,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   holdAfter: 1
   resetPause: 0.4
+  bloodCastStanding: 1.8
+  bloodCastCrouched: 1
+  bloodCastReach: 1.5
+  killCamClose: 1.25
+  killCamHeight: 0.55
+  takedownHold: 0.5
+  soakBrutal: 0.7
+  soakStealth: 0.35
+  soakHeight: 0.3
+  soakDepth: 1.2
+  knifeOffset: {x: 0, y: 0, z: 0}
+  knifeTwist: {x: 0, y: 0, z: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

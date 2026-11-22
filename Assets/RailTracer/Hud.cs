@@ -454,7 +454,6 @@ namespace RailTracer
             (new[] { "Z" }, "Undo (until you act, are seen or move a body)"),
             (new[] { "V" }, "Hold: every enemy's senses; on the win card, look around"),
             (new[] { "L" }, "The full log (paused while open)"),
-            (new[] { "B" }, "Blood tile outlines (off at first)"),
             (new[] { "O" }, "Open or shut the window under the mouse"),
             (new[] { "R" }, "Restart the car"),
             (new[] { "Esc" }, "Pause; the main menu is in there"),

@@ -56,7 +56,7 @@ namespace RailTracer
             Fit(bottom);
             var col = Rect("Lines", bottom, Vector2.zero, Vector2.zero, Vector2.zero);
             Column(col, new RectOffset(0, 0, 0, 0), 10f).childAlignment = TextAnchor.LowerLeft;
-            for (int i = 0; i < 10; i++) menuItems.Add(Line(col, MenuSize, MenuNote, 3f, i));
+            for (int i = 0; i < 12; i++) menuItems.Add(Line(col, MenuSize, MenuNote, 3f, i)); // Options has 11 (20.1)
             // The text beside the lines; on Journey inside a card (the picked car's name, description, best ticket).
             menuInfoBox = Rect("Info", bottom, Vector2.zero, Vector2.zero, Vector2.zero);
             CardShape(menuInfoBox);

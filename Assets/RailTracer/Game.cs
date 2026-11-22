@@ -1444,8 +1444,9 @@ namespace RailTracer
                 mouse = null;
             }
             if (phase == Phase.Play && ThanksStep(kb, mouse)) return; // the end-of-demo card
-            // Debug: F9 forgets all tutorial progress and restarts the carriage, as on a new save.
-            if (kb != null && kb.f9Key.wasPressedThisFrame) { Tutorial.ResetAll(); RestartCar(); }
+            // Debug (editor and development builds only, not the Steam build): F9 forgets all tutorial progress and
+            // restarts the carriage, as on a new save; N on a won car's card goes straight out; B blood tile outlines.
+            if (Debug.isDebugBuild && kb != null && kb.f9Key.wasPressedThisFrame) { Tutorial.ResetAll(); RestartCar(); }
             // The intro / end card swallows input: any key or click fades a dismissable one; R always restarts. The
             // win card waits for Space held, then you walk out. A tutorial card or a centre panel (pause, board,
             // demo complete) pauses the game: only their own buttons work.
@@ -1464,7 +1465,7 @@ namespace RailTracer
                 bool any = kb.anyKey.wasPressedThisFrame || Pad.AnyDown || (mouse != null && (mouse.click || mouse.rclick));
                 if (kb.rKey.wasPressedThisFrame || Pad.Down(GamepadButton.North)) RestartCar();
                 else if (lookKey && endShown && c.Won && !busy) { looking = true; winHeld = 0f; hud.SetCardHold(0f); hud.LookAround(true); }
-                else if (kb.nKey.wasPressedThisFrame && c.Won && !busy) WalkOn(); // debug: straight out
+                else if (Debug.isDebugBuild && kb.nKey.wasPressedThisFrame && c.Won && !busy) WalkOn(); // debug: straight out
                 else if (endShown && c.Won && !busy)
                 {
                     if (!kb.spaceKey.isPressed && !(mouse != null && mouse.held)) winHeld = 0f; // Space, or the mouse held down
@@ -1501,7 +1502,7 @@ namespace RailTracer
                 showAllSenses = kb.vKey.isPressed || Pad.Held(GamepadButton.LeftTrigger);
                 if (kb.zKey.wasPressedThisFrame) Undo();
                 if (kb.cKey.wasPressedThisFrame && !busy) c.Do("crouch");
-                if (kb.bKey.wasPressedThisFrame) bloodOutlines = !bloodOutlines;
+                if (Debug.isDebugBuild && kb.bKey.wasPressedThisFrame) bloodOutlines = !bloodOutlines; // debug
                 if (kb.oKey.wasPressedThisFrame && mouse != null) WindowUnderMouse(mouse.pos)?.Toggle();
                 if (Pad.Active) PadPlay();
                 // End turn: hold Space or the pad's X (a tap does nothing, so it can't end a turn by accident).
