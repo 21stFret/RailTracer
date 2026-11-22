@@ -337,8 +337,9 @@ namespace RailTracer
             c = new Carriage(new[] { "P.....", "......" }, t, 1);
             victim = c.Spawn(1, 0, 1, 0, 0);
             c.legend = Unlock(t, SkillId.Rail);
-            Check(c.KillOutcome(Act.RailGrab, victim) == (c.player, victim.pos), "rail preview: hung out of their window");
+            Check(c.KillOutcome(Act.RailGrab, victim) == (victim.pos, victim.pos), "rail preview: hung out of their window, you on its tile");
             Check(c.Perform(Act.RailGrab, victim) && c.railWait == Cool(t, SkillId.Rail), "rail grab, then cooldown");
+            Check(c.player == new Cell(1, 0), "rail grab: you end at the window you put them out of");
             Check(c.bodies[0].hung && c.bodies[0].pos == new Cell(1, 0) && !c.CanGrab, "hung out of the window: can't be grabbed");
             Check(new[] { new Cell(0, 0), new Cell(1, 0), new Cell(2, 0), new Cell(0, 1), new Cell(1, 1), new Cell(2, 1) }.All(c.IsBloody) && !c.IsBloody(new Cell(3, 0)),
                   "blood on every tile within 1 of the window");
@@ -601,6 +602,30 @@ namespace RailTracer
             c.Grab();
             c.Move(new Cell(2, 0));
             Check(e.terror == t.unseenTerror, "a body dragged out of sight: spooked");
+            // Dragged into their sight (it was out of it): no slide-away fright.
+            c = new Carriage(new[] { "......", "L.....", "......", "......" }, t, 1);
+            c.player = new Cell(2, 0);
+            body2 = PlaceBody(c, 3, 0);
+            e = c.Spawn(1, 3, 1, 0, 0);
+            e.found.Add(body2);
+            Check(!c.Sees(e, new Cell(3, 0), true) && c.Sees(e, new Cell(4, 0), true), "set-up: it comes into sight");
+            Check(c.Grab() && c.Move(new Cell(1, 0)) && body2.pos == new Cell(2, 0), "dragged along behind you");
+            c = new Carriage(new[] { "......", "L.....", "......", "......" }, t, 1);
+            c.player = new Cell(4, 0);
+            body2 = PlaceBody(c, 3, 0);
+            e = c.Spawn(1, 3, 1, 0, 0);
+            e.found.Add(body2);
+            c.Grab();
+            c.Move(new Cell(5, 0)); // (3,0) out of sight, (4,0) in it: slides into view
+            Check(body2.pos == new Cell(4, 0) && e.terror == 0, "a body slid into sight: no slide-away fright");
+
+            // A brutal kill only ever lands on the victim's own tile.
+            c = new Carriage(new[] { "P.....", "......" }, t, 1);
+            c.legend = Unlock(t, SkillId.Brutal);
+            victim = c.Spawn(1, 1, 1, 0, 0);
+            c.Spawn(5, 1, 1, 0, 0);
+            Check(c.KillOutcome(Act.BrutalKill, victim) == (victim.pos, victim.pos) && c.Perform(Act.BrutalKill, victim)
+                  && c.player == new Cell(1, 1) && c.bodies[0].pos == new Cell(1, 1), "brutal: onto the victim's tile, nowhere else");
 
             // Leap bloodied at 75: twice the range.
             c = new Carriage(new[] { "P.......", "........" }, t, 1);
@@ -1251,8 +1276,9 @@ namespace RailTracer
             var b = c.bodies[0];
             Check(b.kind == BodyKind.Stealth && c.BodyFear(b) == t.bodyFearSmall, "stealth body: small");
             c.Spawn(6, 1, 1, 0, 0);
-            c.Grab();
+            Check(!c.CanGrab && !c.Grab(), "a body on your own tile can't be dragged");
             c.Move(new Cell(1, 0));
+            Check(c.Grab() && c.Move(new Cell(2, 0)) && b.pos == new Cell(1, 0), "step off it, grab: it slides in behind you");
             Check(b.kind == BodyKind.Stealth, "dragging keeps the kind");
             c.legend = Unlock(t, SkillId.Throw);
             c.StartPlayerTurn();

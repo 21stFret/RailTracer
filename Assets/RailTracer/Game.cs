@@ -28,9 +28,9 @@ namespace RailTracer
         // what makes a new value take.)
         public float tableLampPower = 0.1f, tableLampReach = 1f, tableLampCone = 179f, tableLampInnerCone = 0f;
         // Picture lights (19.43): a dim warm spot under each painting's brass hood, aimed at the picture, its cone and
-        // reach taken from the painting (so as big as its frame). Not reddened by the legend.
+        // reach taken from the painting (so as big as its frame). Reddened by the legend like the lamps (19.65).
         public float pictureLightPower = 0.25f;
-        readonly HashSet<Light> tableLamps = new HashSet<Light>(); // lit at their own level (LegendLighting)
+        readonly HashSet<Light> tableLamps = new HashSet<Light>(), pictureLights = new HashSet<Light>(); // lit at their own level (LegendLighting)
         public float sunDim = 0.01f;      // the directional light over the kit carriage: on, no shadows, very dim
         public Color lampColor = new Color(1f, 0.78f, 0.5f);
         // Wall lamps (renamed from lampIntensity / lampRange / lampAngle so these override the scene): the max (legend 0).
@@ -104,6 +104,8 @@ namespace RailTracer
         readonly Dictionary<Enemy, (Renderer body, Renderer nose)> views = new Dictionary<Enemy, (Renderer, Renderer)>();
         SkillId? selected; // hotkeys 1-8; no kill selected = clicking an enemy does nothing
         bool busy, showAllSenses, leaping, hopping, throwing, endShown;
+        bool looking;              // V on the win card: the card hidden, the camera free
+        bool enemyTurn, skipTurn;  // Tab / pad B in the enemy turn: the rest of it resolves at once
         SkillHud hud;
         string[] Map => car.map; // the car being played (GameFlow: which car, its seed, your health coming in)
         readonly Tutorial tut = new Tutorial();
@@ -190,8 +192,14 @@ namespace RailTracer
         public float hopClimbTime = 0.45f, hopWalkSpeed = 3f;
         [Tooltip("Playback speed of the Vault clip on a window hop; the climb lasts the clip's length at this speed.")]
         public float hopVaultSpeed = 1.5f;
+        [Tooltip("The window vault's slide follows the clip's own root travel (its feet planted), not an even pace.")]
+        public bool vaultPaced = true;
         // Brutal kill: player and victim play their "Takedown" states facing each other, locked to the tiles.
         public float takedownHold = 0.5f; // the corpse lingers this long after the clip
+        [Tooltip("Share of a finisher's end (0-1) over which your hips are eased onto your tile while the clip still plays; 0 = the old slide after it.")]
+        [Range(0f, 1f)] public float takedownEndBlend = 0.35f;
+        [Tooltip("Stealth finishers hold your hips in place (you never leave your tile), not the middle of the pair: no travel of yours to slide back.")]
+        public bool pinStealthAttacker = true;
         // How far onto the victim's tile the player is (0..1) through the clip (0..1). Shape it in the Inspector:
         // the flat start and end are the window where the player stands still.
         public AnimationCurve takedownMove = AnimationCurve.EaseInOut(0.15f, 0f, 0.45f, 1f);
@@ -341,6 +349,8 @@ namespace RailTracer
             if (root) Destroy(root.gameObject);
             lamps.Clear();
             tableLamps.Clear();
+            pictureLights.Clear();
+            outOfCar.Clear();
             shownLampLevel = -1f; // snap to the new legend
             root = new GameObject("Carriage").transform;
             views.Clear();
@@ -371,6 +381,7 @@ namespace RailTracer
             seenTerror.Clear();
             fearRoseAt.Clear();
             posedBodies.Clear();
+            toFloor.Clear();
             takedownVictim = null;
             selected = null;
             // The car fresh, or a save's turn replayed onto it (the same dice, so nothing rerolls).
@@ -384,6 +395,8 @@ namespace RailTracer
                 else hud.ShowCard(CarLabel(), car.name, "Time to collect.", null, 3f, true);
             }
             endShown = false;
+            if (looking) { looking = false; hud.LookAround(false); }
+            enemyTurn = skipTurn = false; // a restart mid enemy turn stopped it
             walkQueued = false;
             taken.Clear();
             tut.Clear();
@@ -438,6 +451,7 @@ namespace RailTracer
                 look.name = "Car Look";
                 kitBuilt = onKit = true;
                 AddBoothTables(look.transform, trainKit, Map);
+                DressBars(look.transform, trainKit, Map);
                 if (car.kind == CarKind.Baggage) // no curtains or blinds in baggage cars (19.45, 19.46; the baked hold still has them)
                     foreach (var t in look.GetComponentsInChildren<Transform>(true))
                         if (t.name.StartsWith("Curtains_Large") || t.name.StartsWith("Blind_Small")) t.gameObject.SetActive(false);
@@ -448,6 +462,7 @@ namespace RailTracer
                 var look = new GameObject("Car Look").transform;
                 look.SetParent(root, false);
                 kitBuilt = onKit = useTrainKit && BuildKitCarriage(trainKit, c, Map, car.kind, look, true, lookTrain, car.name);
+                if (kitBuilt) DressBars(look, trainKit, Map);
                 if (kitBuilt) WakeLook(look, trainKit, lookTrain, c.H, true, car.kind == CarKind.Baggage);
             }
             boothAisle = Map.Any(r => r.IndexOf('V') >= 0);
@@ -615,6 +630,62 @@ namespace RailTracer
             }
             DressTables(kit, tables, new System.Random(MapSeed(map) + 1), look); // the same as a built car's
         }
+
+        // Every bar (19.65): its own lamp lit (the Bar_L model's corner lamp), a few ashtrays along the counter, and no
+        // paintings on the wall behind it (the bottles' wall). Built and baked looks alike, before WakeLook lights them.
+        void DressBars(Transform look, TrainKit kit, string[] map)
+        {
+            var bars = look.GetComponentsInChildren<Transform>(true).Where(t => t.name.StartsWith("Bar_L")).ToList();
+            var ashtray = kit ? kit.Get("Prop_Ashtray_Cigar") : null;
+            foreach (var bar in bars)
+            {
+                var bulb = new GameObject("Table Lamp").AddComponent<Light>(); // lit like a dining table's lamp (WakeLook)
+                bulb.transform.SetParent(bar, false);
+                bulb.transform.localPosition = barBulb;
+                bulb.transform.rotation = Quaternion.LookRotation(Vector3.down);
+                bulb.type = LightType.Spot; // straight down, like a table lamp's
+                bulb.spotAngle = tableLampCone;
+                bulb.innerSpotAngle = tableLampInnerCone;
+                bulb.color = lampColor;
+                bulb.intensity = tableLampPower;
+                bulb.range = barLampReach;
+                bulb.shadows = LightShadows.None;
+                if (!ashtray) continue;
+                for (int i = 0; i < barAshtrays.Length; i++)
+                {
+                    var a = Instantiate(ashtray, bar);
+                    a.name = "Prop_Ashtray_Cigar" + (i == 1 ? Empty : ""); // the middle one stubbed out
+                    a.transform.localPosition = new Vector3(barAshtrays[i], 1.11f, -0.1f);
+                    a.transform.localRotation = Quaternion.Euler(0f, 37f * i + 20f, 0f);
+                    if (bar.lossyScale.x < 0f) a.transform.localScale = new Vector3(-1f, 1f, 1f); // undo a mirrored bar's flip on the prop
+                }
+            }
+            // Paintings over a bar's back row (from its short leg to its open end) come down, with their lights.
+            var behind = new HashSet<Cell>();
+            var seen = new HashSet<Cell>();
+            for (int y = 0; y < map.Length; y++)
+                for (int x = 0; x < map[0].Length; x++)
+                {
+                    if (map[y][x] != 'B' || seen.Contains(new Cell(x, y))) continue;
+                    var g = TileGroup(map, new Cell(x, y), 'B');
+                    seen.UnionWith(g);
+                    int row = g.Any(p => p.y == 0) ? 0 : g.Any(p => p.y == map.Length - 1) ? map.Length - 1 : -1;
+                    if (row < 0) continue;
+                    for (int bx = g.Min(p => p.x) - 1; bx <= g.Max(p => p.x) + 1; bx++) behind.Add(new Cell(bx, row));
+                }
+            if (behind.Count == 0) return;
+            foreach (var t in look.GetComponentsInChildren<Transform>(true))
+            {
+                if (!t.name.StartsWith("Painting_")) continue;
+                var p = look.InverseTransformPoint(t.position);
+                var tile = new Cell(Mathf.RoundToInt(p.x), p.z > -(map.Length - 1) / 2f ? 0 : map.Length - 1);
+                if (behind.Contains(tile)) t.gameObject.SetActive(false);
+            }
+        }
+        [Tooltip("The bar lamp's bulb, in the Bar_L model's space (railtracer_dining.py).")]
+        public Vector3 barBulb = new Vector3(-0.28f, 1.36f, -0.08f);
+        public float barLampReach = 2.5f;
+        static readonly float[] barAshtrays = { 0.85f, 1.9f, 3.0f }; // along the counter's front, metres from the corner
 
         static int MapSeed(string[] map) => map.Aggregate(17, (h, row) => row.Aggregate(h, (k, ch) => unchecked(k * 31 + ch)));
 
@@ -1379,15 +1450,25 @@ namespace RailTracer
             // win card waits for Space held, then you walk out. A tutorial card or a centre panel (pause, board,
             // demo complete) pauses the game: only their own buttons work.
             bool carded = kb != null && hud.CardUp;
-            if (carded)
+            bool lookKey = kb != null && (kb.vKey.wasPressedThisFrame || Pad.Down(GamepadButton.West));
+            if (carded && looking)
+            {
+                // Looking round from the win card: the camera is yours; V (pad X) puts the card back as it was.
+                if (lookKey) { looking = false; hud.LookAround(false); }
+                else if (!camming) MoveCamera(kb, mouse);
+                kb = null;
+                mouse = null;
+            }
+            else if (carded)
             {
                 bool any = kb.anyKey.wasPressedThisFrame || Pad.AnyDown || (mouse != null && (mouse.click || mouse.rclick));
                 if (kb.rKey.wasPressedThisFrame || Pad.Down(GamepadButton.North)) RestartCar();
-                else if (kb.nKey.wasPressedThisFrame && c.Won && !busy) { hud.HideCard(); StartCoroutine(ExitCar()); } // debug: straight out
+                else if (lookKey && endShown && c.Won && !busy) { looking = true; winHeld = 0f; hud.SetCardHold(0f); hud.LookAround(true); }
+                else if (kb.nKey.wasPressedThisFrame && c.Won && !busy) WalkOn(); // debug: straight out
                 else if (endShown && c.Won && !busy)
                 {
                     if (!kb.spaceKey.isPressed && !(mouse != null && mouse.held)) winHeld = 0f; // Space, or the mouse held down
-                    else if ((winHeld += Time.unscaledDeltaTime) >= endTurnHold) { winHeld = -1f; hud.HideCard(); StartCoroutine(ExitCar()); }
+                    else if ((winHeld += Time.unscaledDeltaTime) >= endTurnHold) { winHeld = -1f; WalkOn(); }
                     hud.SetCardHold(winHeld >= 0f ? winHeld / endTurnHold : 1f);
                 }
                 else if (endShown && c.Lost && mouse != null && mouse.click) RestartCar(); // the loss card: a click retries
@@ -1404,6 +1485,7 @@ namespace RailTracer
             if (kb != null)
             {
                 if (kb.rKey.wasPressedThisFrame) RestartCar();
+                if (enemyTurn && (kb.tabKey.wasPressedThisFrame || Pad.Down(GamepadButton.East))) skipTurn = true; // the rest of the enemy turn at once
                 var digits = new[] { kb.digit1Key, kb.digit2Key, kb.digit3Key, kb.digit4Key, kb.digit5Key, kb.digit6Key, kb.digit7Key, kb.digit8Key };
                 for (int i = 0; i < digits.Length; i++)
                     if (digits[i].wasPressedThisFrame) Select((SkillId)i);
@@ -1434,7 +1516,8 @@ namespace RailTracer
 
             // With input held back this only follows the camera target (tutorial pans). Never during a kill cam: it owns
             // the camera (and this would drag it back to your play distance along the shot's direction).
-            if (phase == Phase.Play && !camming) MoveCamera(kb, mouse);
+            if (phase == Phase.Play && !camming && !looking) MoveCamera(kb, mouse); // looking round: moved above
+
             WalkStep();
             if (selected.HasValue && !c.Has(selected.Value)) selected = null; // lost the legend for it
             leaping = !walking && (selected == SkillId.Leap || (kb != null && kb.shiftKey.isPressed));
@@ -1503,6 +1586,7 @@ namespace RailTracer
                         }
                     }
                 }
+                else if (kill.HasValue) { } // a kill selected: only an enemy can be picked, never a tile (Esc / B cancels)
                 else if (leaping) used = c.Do($"leap {hover.Value.x} {hover.Value.y}");
                 else if (hopping)
                 {
@@ -1524,6 +1608,7 @@ namespace RailTracer
             Tags();
             Tickets();
             hud.SetEndTurn(spaceHeld >= 0f ? spaceHeld / endTurnHold : 0f, !busy && !c.Over && !walking);
+            hud.SetSkipHint(enemyTurn && !skipTurn);
             var mode = Mode();
             hud.SetQuiet(walking); // the walk-through car: only the menu and controls hints
             hud.Refresh(c, selected ?? (leaping ? SkillId.Leap : hopping ? SkillId.Hop : (SkillId?)null), hudSlot, mode?.name, mode?.hint,
@@ -1538,8 +1623,9 @@ namespace RailTracer
                 {
                     RecordClear();
                     AchievementsForClear();
-                    hud.ShowCard($"{CarLabel()} cleared", "The assassin washes up", "and steps out as the conductor.",
-                        Pad.Active ? "A hold to walk on  /  Y to ride again" : "Hold Space / click to walk on  /  R to ride again", 0f, false, TicketStates());
+                    string title = TrainEnd ? $"{Train.TrainNames[Train.TrainOf(carIndex)]} complete" : $"{CarLabel()} cleared";
+                    hud.ShowCard(title, "The assassin washes up", "and steps out as the ticket inspector.",
+                        Pad.Active ? "A hold to walk on  /  Y to ride again  /  X look around" : "Hold Space / click to walk on  /  R to ride again  /  V look around", 0f, false, TicketStates());
                     hud.SetCardHold(0f);
                 }
                 else hud.ShowCard(CarLabel(), "The demon was only", "human after all.", Pad.Active ? "A to retry" : "R or click to retry", 0f, false);
@@ -1646,7 +1732,8 @@ namespace RailTracer
         void Poll()
         {
             if (c == null) return;
-            if (c.legend >= c.t.maxLegend) Achievements.Unlock(Achievements.Bloodied); // the legend bar full
+            if (!walking && c.legend >= c.t.maxLegend) Achievements.Unlock(Achievements.Bloodied); // the legend bar full
+            if (!walking && c.brokeCount >= 3) Achievements.Unlock(Achievements.BreakThree); // the third to break, whatever became of them
             if (tut.Skipped) return;
             foreach (var e in c.enemies)
             {
@@ -1732,7 +1819,7 @@ namespace RailTracer
             chips.Clear();
             foreach (var e in c.enemies)
             {
-                if (e.state != EnemyState.Active && e.state != EnemyState.Broken) continue;
+                if ((e.state != EnemyState.Active && e.state != EnemyState.Broken) || PastDoors(e)) continue;
                 var sp = cam.WorldToScreenPoint(shown[e] + Vector3.up * (FigureHeight + 0.25f));
                 if (sp.z < 0) continue; // behind the camera
                 bool broken = e.state == EnemyState.Broken;
@@ -1940,7 +2027,8 @@ namespace RailTracer
         {
             busy = true;
             bool brutal = act == Act.BrutalKill;
-            // Half cover straight out from the victim's tile (the one furthest from you): finishers that use it come first.
+            // Half cover straight out from the victim's tile (the one furthest from you; the gramophone before any other):
+            // finishers that use it come first.
             var away = (shown.TryGetValue(victim, out var vs) ? vs : World(victim.pos)) - playerShown;
             Vector3? coverDir = null;
             Cell coverCell = default;
@@ -1948,7 +2036,8 @@ namespace RailTracer
             {
                 var side = new Vector3(d.x, 0f, -d.y);
                 var seatCell = new Cell(victim.pos.x + d.x, victim.pos.y + d.y);
-                if (c.IsSeat(seatCell) && (coverDir == null || Vector3.Dot(side, away) > Vector3.Dot(coverDir.Value, away)))
+                bool gram = seatCell == c.gramophone, hadGram = coverDir != null && coverCell == c.gramophone;
+                if (c.IsSeat(seatCell) && (coverDir == null || (gram && !hadGram) || (!hadGram && Vector3.Dot(side, away) > Vector3.Dot(coverDir.Value, away))))
                 {
                     coverDir = side;
                     coverCell = seatCell;
@@ -1959,7 +2048,8 @@ namespace RailTracer
             var victimFacing = new Vector3(victim.facing.x, 0f, -victim.facing.y);
             float ahead = Vector3.Dot(victimFacing, -new Vector3(away.x, 0f, away.z).normalized);
             TakedownFacing? approach = ahead > 0.2f ? TakedownFacing.Front : ahead < -0.2f ? TakedownFacing.Back : (TakedownFacing?)null;
-            var entry = takedowns ? takedowns.Pick(brutal ? KillKind.Brutal : KillKind.Stealth, victim.tough, c.crouched, coverDir.HasValue, approach) : null;
+            var entry = takedowns ? takedowns.Pick(brutal ? KillKind.Brutal : KillKind.Stealth, victim.tough, c.crouched, coverDir.HasValue, approach,
+                alwaysCover: brutal && coverDir.HasValue && coverCell == c.gramophone) : null;
             string state = entry != null ? "Finisher" : brutal ? "Takedown" : "StealthKill";
             int hash = Animator.StringToHash(state);
             if (playerAnim && anims.TryGetValue(victim, out var va) && playerAnim.HasState(0, hash) && va.HasState(0, hash))
@@ -1972,7 +2062,7 @@ namespace RailTracer
                 playerFacing = dir.normalized;
                 // A cover finisher (shoved over a seat): the pair turns to face the seat and moves towards it.
                 bool useCover = entry != null && entry.needsCover && coverDir.HasValue;
-                if (useCover && c.gramophone == coverCell) c.Do("needle"); // shoved onto the gramophone: the music stops
+                if (useCover && c.gramophone == coverCell && c.Do("needle") && !walking) Achievements.Unlock(Achievements.OffTheRecord); // shoved onto the gramophone: the music stops
                 if (useCover)
                 {
                     playerFacing = coverDir.Value;
@@ -2048,7 +2138,11 @@ namespace RailTracer
                 var victimHips = va.GetBoneTransform(HumanBodyBones.Hips);
                 var playerHipsAtStart = playerAnim.GetBoneTransform(HumanBodyBones.Hips);
                 bool hold = entry != null && entry.HoldsPlace && victimHips && playerHipsAtStart;
-                Vector3 PairMiddle() => (root.InverseTransformPoint(playerHipsAtStart.position) + root.InverseTransformPoint(victimHips.position)) / 2f;
+                // A stealth kill never takes you off your tile: your hips are what's held (no travel of yours, so nothing
+                // to slide back after; the victim keeps the spacing). Otherwise the middle of the pair.
+                bool pinMe = hold && !brutal && pinStealthAttacker;
+                Vector3 PairMiddle() => pinMe ? root.InverseTransformPoint(playerHipsAtStart.position)
+                    : (root.InverseTransformPoint(playerHipsAtStart.position) + root.InverseTransformPoint(victimHips.position)) / 2f;
                 var heldAt = hold ? PairMiddle() : Vector3.zero;
                 float length = playerAnim.GetCurrentAnimatorStateInfo(0).length;
                 float length2 = 0f;
@@ -2097,6 +2191,21 @@ namespace RailTracer
                                 Strike(chestNow, brutal);
                                 HitSlowMo();
                             }
+                    }
+                    // The last part of the clip eases your hips onto your tile while you still move (Takedown End Blend),
+                    // so the step back to it doesn't come as a slide after the clip.
+                    if (entry != null && playerHips && takedownEndBlend > 0f && (!chained || second) && t >= 1f - takedownEndBlend)
+                    {
+                        float left = Mathf.Max(Time.deltaTime, (1f - t) * (second ? length2 : length));
+                        float k = Mathf.Clamp01(Time.deltaTime / left);
+                        if (anchor.HasValue) anchor = Vector3.Lerp(anchor.Value, end, k);
+                        else
+                        {
+                            var off = end - root.InverseTransformPoint(playerHips.position);
+                            off.y = 0f;
+                            playerShown += off * k;
+                            if (hold) heldAt += pinMe ? off * k : off * k / 2f; // not undone by the hold below
+                        }
                     }
                     if (hold && !anchor.HasValue)
                     {
@@ -2346,7 +2455,7 @@ namespace RailTracer
             {
                 if (!l) continue;
                 l.color = shownLampColor;
-                l.intensity = (tableLamps.Contains(l) ? tableLampPower : wallLampIntensity) * shownLampLevel;
+                l.intensity = (tableLamps.Contains(l) ? tableLampPower : pictureLights.Contains(l) ? pictureLightPower : wallLampIntensity) * shownLampLevel;
             }
             var tint = Color.Lerp(Color.white, shownLampColor, 0.5f);
             RenderSettings.ambientLight = baseAmbient * tint;
@@ -2412,6 +2521,8 @@ namespace RailTracer
                     if (pendingAct == Act.RailGrab) { hung.Add(e); Smash(e.pos, true); } // through the glass
                     KillBlood(e, pendingAct, dir.sqrMagnitude > 1e-4f ? dir.normalized : Vector3.forward);
                 }
+                if (lastState[e] == EnemyState.Active && e.state == EnemyState.Broken) // breaking: a scream (19.65)
+                    Sfx("Scream", (shown.TryGetValue(e, out var at) ? at : World(e.pos)) + Vector3.up * FigureHeight * 0.9f);
                 lastState[e] = e.state;
             }
             pendingAct = null;
@@ -2428,10 +2539,9 @@ namespace RailTracer
         void KillBlood(Enemy e, Act? how, Vector3 dir, Vector3? chestAt = null, bool gore = false)
         {
             Sfx("BloodStab", chestAt ?? World(e.pos) + Vector3.up * FigureHeight * 0.6f);
-            // A loud death: a scream for a brutal kill and a rail grab, a cry for anyone shot (Resources/Audio/Sfx
-            // "Scream*" / "DeathCry*"; silent until those clips are there). Quiet kills stay quiet.
+            // A loud death: the victim of a brutal kill or a rail grab screams (Resources/Audio/Sfx "Scream*", one at
+            // random). Quiet kills and anyone shot stay silent; so does a witness, unless it breaks them (DetectBlood).
             if (how == Act.BrutalKill || how == Act.RailGrab) Sfx("Scream", chestAt ?? World(e.pos) + Vector3.up * FigureHeight * 0.9f);
-            else if (how == null) Sfx("DeathCry", World(e.pos) + Vector3.up * FigureHeight * 0.9f);
             if (!blood) return;
             var at = chestAt.HasValue ? new Vector3(chestAt.Value.x, 0f, chestAt.Value.z) : World(e.pos);
             var chest = chestAt ?? at + Vector3.up * FigureHeight * 0.6f;
@@ -2614,6 +2724,12 @@ namespace RailTracer
             blood.Screen(screenCanvas.transform);
         }
 
+        // A pause in the enemy turn, cut short by a skip.
+        IEnumerator Pause(float seconds)
+        {
+            for (float time = 0f; time < seconds && !skipTurn; time += Time.deltaTime) yield return null;
+        }
+
         IEnumerator EnemyPhase()
         {
             busy = true;
@@ -2621,12 +2737,14 @@ namespace RailTracer
             while (tut.Active) yield return null;
             c.Do("end");
             KeepTurnPrints(); // the turn's walk is final now
+            enemyTurn = true;
+            skipTurn = false;
             foreach (var e in c.enemies)
             {
                 if (c.Over) break;
                 if (!e.InPlay && c.Decide(e) != Intent.Flee) continue; // broken ones only move to flee
-                if (followCamera) camTarget = shown[e];
-                yield return new WaitForSeconds(enemyStepDelay / EnemyPace);
+                if (followCamera && !skipTurn) camTarget = shown[e];
+                yield return Pause(enemyStepDelay / EnemyPace);
                 bool fleeing = c.Decide(e) == Intent.Flee;
                 int logBefore = c.log.Count, hpBefore = c.hp;
                 bool melee = e.tough && (c.Decide(e) == Intent.Melee || c.Decide(e) == Intent.Charge);
@@ -2641,14 +2759,14 @@ namespace RailTracer
                 }
                 // The camera stays on each enemy until it has finished moving (a fleer all the way out of the door).
                 bool walked = route.Count > 0;
-                while (route.Count > 0 || (shown[e] - StandAt(e)).sqrMagnitude > 1e-3f)
+                while (!skipTurn && (route.Count > 0 || (shown[e] - StandAt(e)).sqrMagnitude > 1e-3f))
                 {
                     if (followCamera) camTarget = shown[e];
                     yield return null;
                 }
-                // Its swing, if it made one: the clip, then the hit as it lands.
+                // Its swing, if it made one: the clip, then the hit as it lands (skipped: just the hit).
                 Animator swinger = null;
-                if (melee && c.log.Skip(logBefore).Any(line => line.Contains("lunges")))
+                if (!skipTurn && melee && c.log.Skip(logBefore).Any(line => line.Contains("lunges")))
                 {
                     if (anims.TryGetValue(e, out var ea) && ea.HasState(0, Animator.StringToHash("Swing")))
                     {
@@ -2660,7 +2778,7 @@ namespace RailTracer
                         swingHold = (ea, hips ? ea.transform.InverseTransformPoint(hips.position) : Vector3.zero);
                         ea.CrossFadeInFixedTime("Swing", 0.1f);
                     }
-                    for (float time = 0f; time < swingHitAt; time += Time.deltaTime) yield return null;
+                    yield return Pause(swingHitAt);
                 }
                 holdHit = false;
                 if (c.hitsTaken > lastHits) // the swing's hit lands: the slash, your blood, the red screen
@@ -2671,22 +2789,44 @@ namespace RailTracer
                 }
                 hud.shownHp = -1;
                 // The camera stays until the swing has played out (the hit shows meanwhile).
-                for (float time = 0f; swinger && time < 3f; time += Time.deltaTime)
+                for (float time = 0f; swinger && !skipTurn && time < 3f; time += Time.deltaTime)
                 {
                     var st = swinger.GetCurrentAnimatorStateInfo(0);
                     if (!swinger.IsInTransition(0) && (!st.IsName("Swing") || st.normalizedTime >= 1f)) break;
                     yield return null;
                 }
                 swingHold = (null, Vector3.zero);
-                if (fleeing && e.state == EnemyState.Fled) { yield return new WaitForSeconds(0.3f / EnemyPace); gone.Add(e); }
-                else if (walked) yield return new WaitForSeconds(0.15f / EnemyPace);
+                if (skipTurn) SnapEnemies();
+                if (fleeing && e.state == EnemyState.Fled) { yield return Pause(0.3f / EnemyPace); gone.Add(e); }
+                else if (walked) yield return Pause(0.15f / EnemyPace);
                 Poll(); // a card pauses the turn before the next enemy acts
                 while (tut.Active) yield return null;
             }
+            if (skipTurn) SnapEnemies();
+            enemyTurn = skipTurn = false;
             c.Do("start");
             AutoSave(); // after the turn's results, so reloading never rerolls a shot
             if (followCamera) { yield return new WaitForSeconds(enemyStepDelay / EnemyPace); camTarget = playerShown; }
             busy = false;
+        }
+
+        // A skipped enemy turn: everyone straight to where the rules have them (facing as they do), fleers out of sight,
+        // and no fear ghosts for what was skipped.
+        void SnapEnemies()
+        {
+            foreach (var x in c.enemies)
+            {
+                if (routes.TryGetValue(x, out var r)) r.Clear();
+                if (x.walked != null) x.walked = null;
+                if (shown.ContainsKey(x) && x.state != EnemyState.Dead) shown[x] = StandAt(x);
+                if (x.state == EnemyState.Fled) gone.Add(x);
+                seenTerror[x] = x.terror;
+            }
+            swingHold = (null, Vector3.zero);
+            holdHit = false;
+            if (c.hitsTaken > lastHits) { HitBlood(); lastHits = c.hitsTaken; }
+            hud.shownHp = -1;
+            if (followCamera) camTarget = playerShown;
         }
 
         // Broken enemies still fleeing when the level is won run out of the carriage before the end card.
@@ -2828,12 +2968,18 @@ namespace RailTracer
                 var (body, nose) = kv.Value;
                 bool present = e.state == EnemyState.Active || e.state == EnemyState.Broken || e == takedownVictim
                     || (e.state == EnemyState.Fled && !gone.Contains(e)); // a fleer stays in sight until out of the door
-                body.gameObject.SetActive(present);
-                nose.gameObject.SetActive(e.InPlay);
+                bool outside = PastDoors(e); // ...and is drawn only up to its threshold (still walked on out of sight)
+                body.gameObject.SetActive(present && !outside);
+                nose.gameObject.SetActive(e.InPlay && !outside);
                 if (anims.TryGetValue(e, out var anim))
                 {
                     if (e.state == EnemyState.Dead && e != takedownVictim) { Corpse(e, anim); continue; }
                     SyncEnemyAnim(e, anim, present);
+                    if (outside != outOfCar.Contains(e))
+                    {
+                        if (outside) outOfCar.Add(e); else outOfCar.Remove(e);
+                        foreach (var r in anim.GetComponentsInChildren<Renderer>(true)) r.enabled = !outside;
+                    }
                 }
                 if (!present) continue;
                 bool broken = e.state == EnemyState.Broken;
@@ -3180,6 +3326,25 @@ namespace RailTracer
             return false;
         }
 
+        // A body left in a finisher's standing end (bent over a table by Shove to Table) once it's moved: the last frame
+        // of a finisher whose victim ends on the floor, its hips over the body's tile.
+        readonly HashSet<Enemy> toFloor = new HashSet<Enemy>(); // thrown posed bodies: laid down where they land
+        void FloorPose(Enemy e, Animator a)
+        {
+            int hash = Animator.StringToHash("Finisher");
+            var lying = takedowns ? takedowns.takedowns.Find(k => k.victim && !k.needsCover && !k.victimFallsAfter && !(k.attacker2 && k.victim2)) : null;
+            if (lying == null || !a.HasState(0, hash)) { StartCoroutine(Topple(a.transform, a.transform.forward)); return; }
+            Override(a, "Finisher Victim", lying.victim);
+            a.enabled = true;
+            a.Play(hash, 0, 1f);
+            a.Update(0f);
+            a.enabled = false;
+            var hips = a.GetBoneTransform(HumanBodyBones.Hips);
+            var d = hips ? a.transform.localPosition - root.InverseTransformPoint(hips.position) : Vector3.zero;
+            d.y = 0f;
+            bodyOffset[e] = d;
+        }
+
         // Corpses follow their bodies: dragged a tile at a time (smearing the trail), or thrown (a splash where they land).
         void SyncBodies()
         {
@@ -3191,8 +3356,14 @@ namespace RailTracer
                 if (was != b.pos)
                 {
                     bodyCell[b] = b.pos;
-                    if (posedBodies.Remove(b.who) && HasRagdoll(a)) StartCoroutine(Ragdoll(b.who, a, b.pos)); // off the table, it falls
-                    if (Mathf.Max(Mathf.Abs(b.pos.x - was.x), Mathf.Abs(b.pos.y - was.y)) > 1) flying.Add(b); // thrown
+                    bool thrown = Mathf.Max(Mathf.Abs(b.pos.x - was.x), Mathf.Abs(b.pos.y - was.y)) > 1;
+                    if (posedBodies.Remove(b.who)) // off the table: it falls (lying where a throw lands it)
+                    {
+                        if (HasRagdoll(a)) StartCoroutine(Ragdoll(b.who, a, b.pos));
+                        else if (thrown) toFloor.Add(b.who);
+                        else FloorPose(b.who, a);
+                    }
+                    if (thrown) flying.Add(b);
                     else if (blood) { blood.Decal(root, World(was), Vector3.down, blood.dripScale); decaled.Add(was); } // the drag trail
                 }
                 var t = a.transform;
@@ -3204,6 +3375,7 @@ namespace RailTracer
                 {
                     // Landed: the gore splash (a short effect) and the pools and spatter that stay.
                     flying.Remove(b);
+                    if (toFloor.Remove(b.who)) { FloorPose(b.who, a); t.localPosition = World(b.pos) + bodyOffset[b.who]; }
                     Sfx("HeadStomp", World(b.pos));
                     if (!blood) continue;
                     var land = World(b.pos);
@@ -3615,6 +3787,7 @@ namespace RailTracer
             // With a vault state ("Vault" or "Vault2", picked at random each climb) the clip does the jump (its height is
             // in the pose) and lasts as long as the climb; without one, a little code hop over the sill.
             float climbTime = hopClimbTime, lift = 0.7f;
+            float travel = 0f; // the vault clip's own root travel (m), to pace the slide by: its feet stay planted
             var vaults = playerAnim ? VaultStates.Where(h => playerAnim.HasState(0, h)).ToArray() : new int[0];
             if (vaults.Length > 0)
             {
@@ -3631,15 +3804,31 @@ namespace RailTracer
                 if (info.shortNameHash != vault) info = playerAnim.GetCurrentAnimatorStateInfo(0);
                 if (info.shortNameHash == vault) climbTime = info.length / hopVaultSpeed;
                 lift = 0f;
+                // Its root travel (dropped by the game) read back as the animator works it out each frame, so the slide
+                // keeps the clip's own pace (Vault Paced): from its average root speed, the whole jump's distance.
+                var clips = playerAnim.GetNextAnimatorClipInfo(0);
+                if (clips.Length == 0) clips = playerAnim.GetCurrentAnimatorClipInfo(0);
+                if (vaultPaced && clips.Length > 0 && clips[0].clip)
+                {
+                    travel = clips[0].clip.averageSpeed.magnitude * clips[0].clip.length * playerAnim.humanScale * playerAnim.transform.lossyScale.x;
+                    if (travel > 0.05f) playerAnim.applyRootMotion = true; // only to read deltaPosition: Sync puts you back each frame
+                }
             }
+            var along = root.TransformDirection(flat.sqrMagnitude > 1e-6f ? flat.normalized : Vector3.forward);
+            float done = 0f;
             for (float time = 0f; time < climbTime; time += Time.deltaTime)
             {
                 float k = time / climbTime;
+                if (playerAnim && playerAnim.applyRootMotion)
+                {
+                    done += Mathf.Max(0f, Vector3.Dot(playerAnim.deltaPosition, along));
+                    k = Mathf.Max(Mathf.Clamp01(done / travel), k * k * k); // never behind a cubic of time: it always gets there
+                }
                 playerShown = Vector3.Lerp(a, b, k) + Vector3.up * Mathf.Sin(k * Mathf.PI) * lift;
                 yield return null;
             }
             playerShown = b;
-            if (playerAnim) playerAnim.speed = 1f;
+            if (playerAnim) { playerAnim.speed = 1f; playerAnim.applyRootMotion = false; }
             hopMoving = false;
             if (window) window.open = false;
         }
@@ -3650,6 +3839,7 @@ namespace RailTracer
         {
             if (playerAnim) foreach (var r in playerAnim.GetComponentsInChildren<Renderer>()) r.enabled = on;
             else playerBody.enabled = on;
+            if (auraHolder) foreach (var r in auraHolder.GetComponentsInChildren<Renderer>()) r.enabled = on; // no aura outside the train
         }
 
         // A rail grab through a shut window: the sash swaps to its broken one (shards left in the frame; anything
@@ -3743,6 +3933,10 @@ namespace RailTracer
         // Where an enemy's figure stands: its tile, or for one that has fled, out through the end door it reached
         // (Flee Out Past metres beyond it), so it runs out of the carriage before it's gone.
         public float fleeOutPast = 2.5f;
+        // Past the car's end doors: nothing out there is drawn (a fleer vanishes as it crosses the threshold).
+        readonly HashSet<Enemy> outOfCar = new HashSet<Enemy>(); // drawn hidden past the doors
+        bool PastDoors(Enemy e) => shown.TryGetValue(e, out var p) && (p.x < -0.5f || p.x > c.W - 0.5f);
+
         Vector3 StandAt(Enemy e) => e.state == EnemyState.Fled
             ? World(e.pos) + Vector3.right * (e.pos.x == 0 ? -fleeOutPast : fleeOutPast) : World(e.pos);
 
@@ -3812,9 +4006,10 @@ namespace RailTracer
             t.localRotation = Quaternion.LookRotation(moving && step.sqrMagnitude > 1e-8f ? step : new Vector3(e.facing.x, 0, -e.facing.y));
             if (aware == Awareness.Startled) t.localRotation *= Quaternion.Euler(-14f, 0f, 0f); // recoils
             lookYaw[a] = !moving && aware == Awareness.Unaware ? IdleLook(e) : 0f; // a glance turns the upper body, the feet stay planted
-            t.localScale = Vector3.one * characterScale * (e.tough ? 1.15f : 1f);
+            t.localScale = Vector3.one * characterScale * (e.tough ? HeavyScale : 1f);
             Tint(a, SuitColor(e));
         }
+        const float HeavyScale = 1.15f * 0.9f; // a heavy beside a guard (19.65: 10% smaller)
 
         // The idle glance, after the animator: spread up the spine to the head (feet and hips stay on the pose).
         void LateUpdate()
@@ -3861,7 +4056,7 @@ namespace RailTracer
                 var t = a.transform;
                 t.localPosition = shown[e] = World(lying);
                 t.localRotation = Quaternion.LookRotation(new Vector3(e.facing.x, 0, -e.facing.y));
-                t.localScale = Vector3.one * characterScale * (e.tough ? 1.15f : 1f);
+                t.localScale = Vector3.one * characterScale * (e.tough ? HeavyScale : 1f);
                 Tint(a, SuitColor(e));
             }
             if (hung.Contains(e)) HangOut(e, a);

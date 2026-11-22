@@ -19,7 +19,8 @@ asset's first tile (the round table: the centre of its 2x2 block). Directions be
   Bar_L               L of 5 tiles corner tile at the pivot: the counter stands in the room, 4 tiles along +X,
                       its front and brass foot rail facing -Z; the short leg runs 1 tile along +Z back to the wall.
                       The bartender stands behind it (the row at +Z), with a cupboard and a shelf of bottles on the wall (kept under 1.8 m for the wall lamps).
-                      1.1 m tall; taps, a cash register, glasses and bottles on top.
+                      1.1 m tall; taps, glasses and bottles on top, a brass lamp with a green shade on the room corner
+                      (its bulb 1.36 m up at Unity local (-0.28, 1.36, -0.08): the game lights it). No cash register (19.65).
 Chairs reach about 0.2 m past the table's tiles into the open floor around it (the map keeps a tile clear
 round every table); nothing reaches past the wall side of a window table.
 """
@@ -1338,7 +1339,8 @@ def bar_l():
         while u < end - 0.12:
             bottle(P, rng, u, sb0 + 0.14, y, rng.uniform(0.2, 0.3), 0.03)
             u += rng.uniform(0.1, 0.17)
-    # on the counter: beer taps facing the bartender, a cash register at the far end, glasses, a bottle or two
+    # on the counter: beer taps facing the bartender, glasses, a bottle or two; a lamp on the room corner (19.65: the
+    # cash register is gone, the game sets ashtrays along the front)
     ty = top + 0.05
     for u in (1.2, 1.45):
         R(P, u - 0.03, u + 0.03, back - 0.12, back - 0.04, ty, ty + 0.03, BRASS)
@@ -1346,8 +1348,7 @@ def bar_l():
         tube_w(P, back - 0.08, back + 0.06, u, ty + 0.28, 0.012, BRASS, segs=8)
         L(P, [(0.014, ty + 0.2), (0.014, ty + 0.28)], u, back + 0.06, BRASS, segs=8)
         L(P, [(0.02, ty + 0.3), (0.02, ty + 0.42)], u, back - 0.08, WOODDARK, segs=10)          # handle
-    R(P, 2.95, 3.35, -0.02, 0.28, ty, ty + 0.18, BRASS)                                       # register, keys to the back
-    R(P, 3.0, 3.3, -0.02, 0.18, ty + 0.18, ty + 0.3, BRASS)
+    lamp(P, -0.28, -0.08, ty)                                                                 # the bar's own light
     for (u, w) in ((2.1, -0.12), (2.3, -0.16), (2.45, -0.1), (0.3, -0.14), (-0.2, 0.7), (-0.05, 1.0)):
         tumbler(P, u, w, ty)
     for u in (0.55, 0.68):

@@ -14,11 +14,11 @@ namespace RailTracer
     {
         const string Folder = "Assets/RailTracer/Resources/" + Game.LookFolder;
 
-        [MenuItem("Rail Tracer/Car Looks/Bake The Red Line (train 1)")]
+        [MenuItem("Rail Tracer/Car Looks/Bake The Midlands Night Train (train 1)")]
         static void BakeTrain1() => Bake(0, Train.TrainCars);
-        [MenuItem("Rail Tracer/Car Looks/Bake The Supper Express (train 2)")]
+        [MenuItem("Rail Tracer/Car Looks/Bake The Northern Sovereign (train 2)")]
         static void BakeTrain2() => Bake(Train.TrainCars, 2 * Train.TrainCars);
-        [MenuItem("Rail Tracer/Car Looks/Bake The Night Freight (train 3)")]
+        [MenuItem("Rail Tracer/Car Looks/Bake The Royal Parallel (train 3)")]
         static void BakeTrain3() => Bake(2 * Train.TrainCars, 3 * Train.TrainCars);
 
         [MenuItem("Rail Tracer/Car Looks/Bake This Car")]

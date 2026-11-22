@@ -156,6 +156,7 @@ namespace RailTracer
         public Cell player;
         public int hp, legend;
         public int hitsTaken; // for effects: goes up on every hit, shielded or not
+        public int brokeCount; // enemies who reached Broken in this car (killed or fled since or not)
         public List<Cell> walked; // tiles of the last move, in order, for the view to follow
         public int movesLeft; // spent per tile walked, double while crouched or dragging
         public bool acted, turnOver, leaped, hopped, crouched;
@@ -513,6 +514,7 @@ namespace RailTracer
             if (after == before) return;
             if (after == Stage.Broken)
             {
+                brokeCount++;
                 // One roll: run for the next carriage (if there's a way) or kneel and beg.
                 e.fleeing = rng.NextDouble() < t.brokenFleeChance && DoorPath(e) != null;
                 Log(e.fleeing ? $"{Name(e)} broke: drops the gun and runs." : $"{Name(e)} broke: drops the gun and begs.");
@@ -1033,12 +1035,14 @@ namespace RailTracer
 
         // ---- Bodies ----
 
-        public bool CanGrab => CanMove && held == null && bodies.Exists(b => !b.hung && Cheb(b.pos, player) <= 1);
+        // Only a body next to you: one on your own tile can't be dragged (it would follow onto the tile it's on);
+        // step off it first and it slides in behind you as usual.
+        public bool CanGrab => CanMove && held == null && bodies.Exists(b => !b.hung && Cheb(b.pos, player) == 1);
 
         public bool Grab()
         {
             if (!CanGrab) return false;
-            held = bodies.Find(b => !b.hung && b.pos == player) ?? bodies.Find(b => !b.hung && Cheb(b.pos, player) == 1);
+            held = bodies.Find(b => !b.hung && Cheb(b.pos, player) == 1);
             dragTrail = new Stain { trail = true };
             dragTrail.tiles.Add(held.pos);
             stains.Add(dragTrail);
@@ -1055,8 +1059,8 @@ namespace RailTracer
             dragTrail = null;
         }
 
-        // The body follows like a snake: into the tile you just left, smearing the trail. Anyone who sees it move
-        // without seeing you gets the big fright and follows it.
+        // The body follows like a snake: into the tile you just left, smearing the trail. Anyone who sees it slide out of
+        // their sight, without seeing you, gets the big fright and follows it (into view, or within it: nothing).
         void DragTo(Cell tile)
         {
             var from = held.pos;
@@ -1064,8 +1068,7 @@ namespace RailTracer
             if (dragTrail.tiles[dragTrail.tiles.Count - 1] != tile) dragTrail.tiles.Add(tile);
             foreach (var e in enemies)
             {
-                // Seeing it slide, into view or out of it (dragged out of sight still counts).
-                if (e.reacted.Contains(dragTrail) || !(Sees(e, tile, true) || Sees(e, from, true)) || CanSee(e, player)) continue;
+                if (from == tile || e.reacted.Contains(dragTrail) || !Sees(e, from, true) || Sees(e, tile, true) || CanSee(e, player)) continue;
                 Log($"{Name(e)} sees {Name(held.who)}'s body slide away!");
                 AddTerror(e, t.unseenTerror);
                 e.found.Add(held);
@@ -1184,12 +1187,13 @@ namespace RailTracer
         Cell RailWindow(Enemy e) => IsWindow(e.pos) ? e.pos : player;
 
         // Where you and the body end up if this kill goes ahead (null if it can't): every stealth kill pulls the
-        // victim onto your tile, the rail grab hangs them out of the window, the brutal kill carries you onto theirs.
+        // victim onto your tile, the rail grab hangs them out of the window and leaves you on its tile (the floor tile at
+        // that window), the brutal kill carries you onto theirs.
         public (Cell player, Cell body)? KillOutcome(Act a, Enemy e)
         {
             if (CantAct(a, e) != null) return null;
             if (a == Act.BrutalKill) return (e.pos, e.pos);
-            if (a == Act.RailGrab) return (player, RailWindow(e));
+            if (a == Act.RailGrab) return (RailWindow(e), RailWindow(e));
             return (player, player);
         }
 
@@ -1244,6 +1248,7 @@ namespace RailTracer
                     // Hung out of the window, one leg hooked inside: blood on every tile within 1 of it.
                     bool boost = Bloodied(SkillId.Rail);
                     railWait = Def(SkillId.Rail).cooldown;
+                    player = at; // you end at the window you put them out of
                     body.hung = true;
                     var s = new Stain();
                     for (int dx = -1; dx <= 1; dx++)

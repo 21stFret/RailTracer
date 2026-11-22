@@ -24,7 +24,7 @@ namespace RailTracer
     public static class Train
     {
         public const int TrainCars = 5, Trains = 3, Cars = TrainCars * Trains; // a Journey car's index runs 0 to Cars - 1
-        public static readonly string[] TrainNames = { "The Red Line", "The Supper Express", "The Night Freight" };
+        public static readonly string[] TrainNames = { "The Midlands Night Train", "The Northern Sovereign", "The Royal Parallel" };
         public static int TrainOf(int car) => car / TrainCars;
 
         // The hand-made first carriage. The gramophone ('G') takes the aisle place of a seat bank (a single seat beside it).
@@ -59,7 +59,7 @@ namespace RailTracer
             "..XX..M...MXX..CCC.M...XX.",
             "P...........X.............",
             "..M..XX...M.....XX..M..X..",
-            "___x___..._____xx_._..__x_",
+            "___x___..._____xx.._..__x_", // 19.65: a double window at 17-18, half of it behind the crates
         };
 
         // The walk-through car: the first carriage's seats with nobody in them.
@@ -123,8 +123,11 @@ namespace RailTracer
 
         // The target turns per Journey car: the level solver's results (train 1: 18.40, its generated cars 2 and 5 again
         // in 19.35 with booth seating, and again in 19.42 with booth tables; trains 2 and 3: 19.21, the Night coach again
-        // as a booth coach in 19.48, still 9 at beam 20; seed 1). Rerun it after changing a car.
-        static readonly int[] Targets = { 11, 8, 11, 9, 16, 10, 9, 9, 12, 10, 9, 8, 10, 11, 14 };
+        // as a booth coach in 19.48, still 9 at beam 20; seed 1). All fifteen rerun in 19.65 (the rail grab leaves you at
+        // the window, no drag from your own tile, the slide fright only out of sight, the Restaurant car's bars, the
+        // baggage hold's double window, First class's heavy swapped; First class and the Night coach at beam 20).
+        // Rerun it after changing a car.
+        static readonly int[] Targets = { 9, 8, 7, 11, 16, 10, 10, 9, 12, 11, 10, 9, 10, 13, 14 };
 
         static CarDef MakeDemo(int i)
         {
@@ -134,7 +137,7 @@ namespace RailTracer
                 1 => Generated("Second class", "The same booths, a little more room between them.", 2002, 8, 1, banks: 0.6, luggageMin: 1, luggageMax: 3, tables: 0.75), // 7 guards, 1 heavy
                 2 => Dining(),
                 3 => Baggage(),
-                4 => Generated("First class", "The last car. Whoever's left is waiting here.", 5005, 11, 3, tables: 0.75), // 8 guards, 3 heavies
+                4 => Swap(Generated("First class", "The last car. Whoever's left is waiting here.", 5005, 11, 3, tables: 0.75), 3, 7), // 8 guards, 3 heavies
                 5 => Hand("Pullman car", "Plush booths and a long walk to the far door. The minder waits by the partition.", CarKind.Passenger, PullmanMap, Pullman),
                 6 => Hand("Restaurant car", "Supper is served: tables down both sides and waiters working the aisle.", CarKind.Dining, RestaurantMap, Restaurant),
                 7 => Hand("Smoking car", "Every booth taken, the partition right by the door. Plenty of cover, plenty of eyes.", CarKind.Passenger, SmokingMap, Smoking),
@@ -147,6 +150,14 @@ namespace RailTracer
                 _ => Hand("Guard's van", "The end of the line. Everyone left on the train is in here.", CarKind.Baggage, VanMap, Van),
             };
             car.targetTurns = Targets[i];
+            return car;
+        }
+
+        // Two passengers trade places (their posts and facings stay; who stands there swaps). First class (19.65): the
+        // heavy by the near-side window (spawn 3) and the guard in the aisle at the middle partition (spawn 7).
+        static CarDef Swap(CarDef car, int a, int b)
+        {
+            (car.spawns[a][5], car.spawns[b][5]) = (car.spawns[b][5], car.spawns[a][5]);
             return car;
         }
 
@@ -177,20 +188,21 @@ namespace RailTracer
             new[] { 16, 4, 0, -1, 0 }, new[] { 18, 2, -1, 0, 1 }, new[] { 21, 3, 0, -1, 0 }, new[] { 22, 0, 0, 1, 0 }, new[] { 22, 2, 1, 0, 0 },
         }, new[] { new[] { 0, 9, 2, 13, 2 }, new[] { 9, 22, 2, 25, 2 } });
 
-        // Restaurant car: tables of every shape down both sides (no bar), the gramophone between two window tables,
-        // a dining cart in the aisle.
+        // Restaurant car: tables of every shape down both sides, two bars (19.65): one on the far side by the first door,
+        // one on the near side by the last, each open towards its nearer door with a bartender behind it; the
+        // gramophone between two window tables, a dining cart in the aisle.
         static readonly string[] RestaurantMap =
         {
-            "..TT..TT.__OO...TT_G_.TT..",
-            ".......T...OO.........T...",
+            "..___B.T.__OO...TT_G_.TT..",
+            "..BBBB.T...OO.........T...",
             "P.............D...........",
-            "...T...OO...T......OO...T.",
-            "..TT._.OO.____.TT..OO._.T.",
+            "...T...OO...T.....OO.BBBB.",
+            "..TT._.OO.____.TT.OO.B___.",
         };
         static readonly (int[][], int[][]) Restaurant = (new[] // 8 guards, 2 heavies
         {
-            new[] { 10, 2, 1, 0, 0 }, new[] { 5, 1, 0, 1, 0 }, new[] { 9, 1, -1, 0, 0 }, new[] { 13, 3, 0, -1, 0 }, new[] { 17, 1, 0, 1, 0 },
-            new[] { 18, 3, -1, 0, 1 }, new[] { 21, 2, -1, 0, 0 }, new[] { 23, 4, 0, -1, 0 }, new[] { 25, 1, -1, 0, 1 }, new[] { 10, 4, 0, -1, 0 },
+            new[] { 10, 2, 1, 0, 0 }, new[] { 3, 0, 1, 0, 0 }, new[] { 9, 1, -1, 0, 0 }, new[] { 13, 3, 0, -1, 0 }, new[] { 17, 1, 0, 1, 0 },
+            new[] { 20, 3, -1, 0, 1 }, new[] { 21, 2, -1, 0, 0 }, new[] { 23, 4, 0, -1, 0 }, new[] { 25, 1, -1, 0, 1 }, new[] { 10, 4, 0, -1, 0 },
         }, new[] { new[] { 0, 10, 2, 13, 2 }, new[] { 6, 21, 2, 16, 2 } });
 
         // Smoking car: the partition two banks in, then six close-packed banks; luggage in the gaps between them.

@@ -75,7 +75,7 @@ namespace RailTracer
         // from (`from`: Front or Back of the victim, null from the side: both). With half cover beside the victim, one that
         // uses it if there is one; otherwise at random, not the one just used when there's a choice. Nothing tagged for
         // your side: any side, then any stance too. Null if none fit.
-        public Takedown Pick(KillKind kind, bool heavy, bool crouched, bool cover, TakedownFacing? from = null)
+        public Takedown Pick(KillKind kind, bool heavy, bool crouched, bool cover, TakedownFacing? from = null, bool alwaysCover = false)
         {
             var want = heavy ? TakedownFor.Heavy : TakedownFor.Guard;
             var stance = crouched ? TakedownStance.Crouched : TakedownStance.Standing;
@@ -85,10 +85,11 @@ namespace RailTracer
             var set = takedowns.FindAll(t => Fits(t, false, false));
             if (set.Count == 0) set = takedowns.FindAll(t => Fits(t, true, false)); // nothing for this side: any side
             if (set.Count == 0) set = takedowns.FindAll(t => Fits(t, true, true)); // nothing for this stance: any of its kind
-            // Beside half cover: a cover finisher (Shove to Table) half the time, the others the rest.
+            // Beside half cover: a cover finisher (Shove to Table) half the time, the others the rest; always by the
+            // gramophone (alwaysCover), so the shove stops the music.
             if (set.Exists(t => t.needsCover) && set.Exists(t => !t.needsCover))
             {
-                bool useCover = UnityEngine.Random.value < coverChance;
+                bool useCover = alwaysCover || UnityEngine.Random.value < coverChance;
                 set.RemoveAll(t => t.needsCover != useCover);
             }
             if (set.Count == 0) return null;

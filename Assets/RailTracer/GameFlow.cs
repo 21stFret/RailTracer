@@ -19,6 +19,7 @@ namespace RailTracer
         public BestTicket[] best = new BestTicket[Train.Cars];
         public Settings settings = new Settings();
         public List<string> tutorial = new List<string>();   // the tutorial cards had or skipped (Tutorial)
+        public int endlessCleared;                           // endless cars cleared, ever (ENDLESS_10); old saves read 0
     }
 
     // The run in progress, as of the start of the current player turn: which car, its seed and the health you came
@@ -71,7 +72,7 @@ namespace RailTracer
         int rulesSeed = 1, startHp = 30;
         List<string> replay;   // a save's commands, replayed by the next Build
         SaveData save = new SaveData();
-        string choice;         // the centre panel: null, "pause", "board" (the next car) or "done" (demo complete)
+        string choice;         // the centre panel: null, "pause" or "board" (the next car)
         float winHeld = -1f;   // holding Space on the win card
         public float standUpTime = 0.4f; // clearing a car crouched: the beat to stand before walking out
         bool boardAsked;       // the board popup has shown for this visit to the glowing tile
@@ -162,7 +163,6 @@ namespace RailTracer
         // The walk-through car's card: after a train's last car, the next train named.
         void WalkCard()
         {
-            if (demoOver) return;
             bool newTrain = !endless && carIndex % Train.TrainCars == 0 && carIndex < Train.Cars;
             hud.ShowCard("Between cars", "A quiet carriage.", newTrain ? $"Next: {Train.TrainNames[Train.TrainOf(carIndex)]}." : "Walk on to the far door.", null, 2.5f, true);
         }
@@ -172,7 +172,7 @@ namespace RailTracer
         {
             endless = endlessRun;
             walking = false;
-            demoOver = thanksUp = false;
+            thanksUp = false;
             carIndex = index;
             if (endless && newLayout) carSeed = Random.Range(1, int.MaxValue);
             car = CurrentDef();
@@ -237,7 +237,8 @@ namespace RailTracer
         // The win card is up: record the ticket, mark the car cleared.
         void RecordClear()
         {
-            if (endless || walking) return;
+            if (walking) return;
+            if (endless) { save.endlessCleared++; WriteSave(); return; }
             var t = new BestTicket
             {
                 set = true, killed = c.enemies.Count(e => e.state == EnemyState.Dead),
@@ -252,11 +253,9 @@ namespace RailTracer
         void AchievementsForClear()
         {
             if (walking) return;
-            int broken = c.enemies.Count(e => e.state == EnemyState.Broken || e.state == EnemyState.Fled);
-            if (c.hitsTaken == 0) Achievements.Unlock(Achievements.Untouched); // shielded hits count: not a scratch
-            if (broken >= 3) Achievements.Unlock(Achievements.BreakThree);
+            if (c.hitsTaken == 0) Achievements.Unlock(Achievements.Untouched); // no hit at all: health or a shield's legend
             if (!c.enemies.Exists(e => e.hasSeen)) Achievements.Unlock(Achievements.Unseen);
-            if (endless) { if (carIndex >= 10) Achievements.Unlock(Achievements.Endless10); return; }
+            if (endless) { if (save.endlessCleared >= 10) Achievements.Unlock(Achievements.Endless10); return; } // lifetime (RecordClear)
             if (carIndex % Train.TrainCars == Train.TrainCars - 1)
                 Achievements.Unlock(new[] { Achievements.Train1, Achievements.Train2, Achievements.Train3 }[Train.TrainOf(carIndex)]);
         }
@@ -295,15 +294,6 @@ namespace RailTracer
             hopMoving = false;
             hopRunning = exiting = false;
             busy = false;
-            // After the last car of train 3: on into the quiet carriage all the same (no next car to board), then the
-            // thank-you card. After the last car of train 1 or 2 the walk-through car boards the next train.
-            bool last = !endless && carIndex == Train.Cars - 1;
-            if (last)
-            {
-                save.run = null; // the demo is done: nothing to continue
-                WriteSave();
-                demoOver = true;
-            }
             int hp = c.hp;
             walking = true;
             carIndex++;
@@ -311,12 +301,34 @@ namespace RailTracer
             rulesSeed = Random.Range(1, int.MaxValue);
             startHp = hp;
             Build();
-            if (demoOver) { StartCoroutine(ThanksCard()); yield break; }
             AutoSave();
         }
 
-        // The end of the demo, in the quiet carriage: a card like the tutorial's; any key or click, then the choices.
-        bool demoOver, thanksUp;
+        // A train's last car (Journey): no walk out. The win card reads "<train> complete"; walking on goes back to the
+        // menu, on Journey with the next train's car 1 picked (after train 3: the thank-you card first, then Journey on
+        // its last car). The finished run leaves the save: nothing to continue.
+        bool TrainEnd => !endless && !walking && carIndex % Train.TrainCars == Train.TrainCars - 1;
+
+        void WalkOn()
+        {
+            hud.HideCard();
+            if (!TrainEnd) { StartCoroutine(ExitCar()); return; }
+            save.run = null;
+            WriteSave();
+            if (carIndex == Train.Cars - 1) StartCoroutine(ThanksCard());
+            else JourneyAt(carIndex + 1);
+        }
+
+        void JourneyAt(int g)
+        {
+            OpenMenu();
+            screen = MenuScreen.Journey;
+            ShowTrain(Train.TrainOf(g));
+            journeyPick = g % Train.TrainCars;
+        }
+
+        // The end of the game, over the cleared car: a card like the tutorial's; any key or click, then Journey.
+        bool thanksUp;
         public float thanksDelay = 1.2f;
         IEnumerator ThanksCard()
         {
@@ -337,7 +349,7 @@ namespace RailTracer
             {
                 thanksUp = false;
                 hud.HideTutorial();
-                OpenChoice("done");
+                JourneyAt(Train.Cars - 1);
             }
             return true;
         }
@@ -394,8 +406,7 @@ namespace RailTracer
 
         void WalkStep()
         {
-            if (demoOver && glow) glow.SetActive(false); // nothing left to board
-            if (!walking || glow == null || demoOver) return;
+            if (!walking || glow == null) return;
             float pulse = 0.35f + 0.25f * Mathf.Sin(Time.unscaledTime * 3f);
             glow.GetComponent<Renderer>().sharedMaterial.color = Fill(Bone, pulse);
             bool on = c.player == GlowTile && playerRoute.Count == 0 && (playerShown - World(GlowTile)).sqrMagnitude < 0.01f;
@@ -409,13 +420,13 @@ namespace RailTracer
             StartCar(endless, carIndex, hp);
         }
 
-        // ---- The centre panel: pause, board the next car, demo complete ----
+        // ---- The centre panel: pause, board the next car ----
 
         void OpenChoice(string which)
         {
             choice = which;
-            hud.ShowPause(true, which == "board" ? NextName() : which == "done" ? "Demo complete" : "Paused",
-                which == "board" ? "Not yet" : which == "done" ? null : "Resume"); // each panel's way out is a line (Resume, Not yet)
+            hud.ShowPause(true, which == "board" ? NextName() : "Paused",
+                which == "board" ? "Not yet" : "Resume"); // each panel's way out is a line (Resume, Not yet)
         }
 
         void CloseChoice()
@@ -429,7 +440,6 @@ namespace RailTracer
             : $"Car {carIndex % Train.TrainCars + 1}: {Train.Demo(carIndex).name}";
 
         string[] ChoiceItems() => choice == "board" ? new[] { "Board", "Not yet" }
-            : choice == "done" ? new[] { $"Restart from {Train.TrainNames[0]}", "Try Endless mode", "Main menu" }
             : new[] { "Resume", $"Tutorial tips\t{(tut.Skipped ? "Off" : "On")}", $"Kill cam\t{(KillCamOn ? "On" : "Off")}", "Restart car", "Main menu" };
 
         // True while the panel is open (it takes the input).
@@ -440,7 +450,7 @@ namespace RailTracer
             int hit = hud.RefreshPause(ChoiceItems(), at);
             if (mouse != null) hud.RefreshButtons(at, mouse.held, mouse.click); // the HUD's hover colours
             bool esc = (kb != null && kb.escapeKey.wasPressedThisFrame) || Pad.Down(GamepadButton.East) || Pad.Down(GamepadButton.Start);
-            if (esc && choice != "done") { CloseChoice(); return true; }
+            if (esc) { CloseChoice(); return true; }
             if (kb != null && choice == "board" && (kb.spaceKey.wasPressedThisFrame || kb.enterKey.wasPressedThisFrame)) hit = 0;
             else if (mouse == null || !mouse.click) return true;
             switch (choice)
@@ -448,11 +458,6 @@ namespace RailTracer
                 case "board":
                     if (hit == 0) { CloseChoice(); BoardNext(); }
                     else if (hit == 1) CloseChoice();
-                    break;
-                case "done":
-                    if (hit == 0) { CloseChoice(); StartCar(false, 0, MaxHpCarry); }
-                    else if (hit == 1) { CloseChoice(); StartCar(true, 1, MaxHpCarry); }
-                    else if (hit == 2) { CloseChoice(); OpenMenu(); }
                     break;
                 default:
                     if (hit == 0) CloseChoice();
@@ -709,7 +714,7 @@ namespace RailTracer
                     int hit = hud.RefreshMenu(true, null, items, null, null, at);
                     if (!click) break;
                     if (firstPlay && hit > 0) hit += 2; // same actions, Journey and Endless skipped
-                    if (hit == 0) Dive(BackdropIsEmpty ? () => StartCar(false, 0, MaxHpCarry) : (System.Action)null);
+                    if (hit == 0) Dive(BackdropIsEmpty ? () => StartCar(false, Mathf.Min(NextDemo, Train.Cars - 1), MaxHpCarry) : (System.Action)null); // nothing saved: the next car to clear
                     else if (hit == 1)
                     {
                         screen = MenuScreen.Journey;

@@ -377,7 +377,7 @@ namespace RailTracer
         CanvasGroup card;
         TMP_Text cardSmall, cardLine1, cardLine2;
         GameObject cardFoot, cardHold;
-        readonly (GameObject row, GameObject cap, TMP_Text key, TMP_Text words)[] cardHints = new (GameObject, GameObject, TMP_Text, TMP_Text)[2];
+        readonly (GameObject row, GameObject cap, TMP_Text key, TMP_Text words)[] cardHints = new (GameObject, GameObject, TMP_Text, TMP_Text)[3];
         Wedge cardHoldFill;
         float cardShown, cardAuto, cardFading = -1f;
         bool cardDismissable;
@@ -408,15 +408,30 @@ namespace RailTracer
         public void SetVisible(bool on) => hudCanvas.enabled = on; // the kill cam hides it
 
         RectTransform play, controlsHint;
-        GameObject logHint;
+        GameObject logHint, skipHint, lookHint;
+        bool lookingAround;
         // The walk-through car: only ESC MENU and H CONTROLS, dropped to where SPACE HOLD: END TURN sits.
         public void SetQuiet(bool on)
         {
-            if (play.gameObject.activeSelf != on) return;
+            if (lookingAround || play.gameObject.activeSelf != on) return;
             play.gameObject.SetActive(!on);
             logHint.SetActive(!on);
             controlsHint.anchoredPosition = new Vector2(controlsHint.anchoredPosition.x, on ? 8f : 38f);
         }
+
+        // V on the win card: the card and the HUD hidden (the card stays up underneath, as it was), only V BACK.
+        public void LookAround(bool on)
+        {
+            if (on == lookingAround) return;
+            lookingAround = on;
+            card.alpha = on ? 0f : 1f;
+            play.gameObject.SetActive(!on);
+            controlsHint.gameObject.SetActive(!on);
+            lookHint.SetActive(on);
+        }
+
+        // TAB SKIP TURN with the key hints: only during the enemy turn.
+        public void SetSkipHint(bool on) { if (skipHint.activeSelf != on) skipHint.SetActive(on); }
 
         public bool CardUp => card.gameObject.activeSelf && cardFading < 0f;
         public bool CardVisible => card.gameObject.activeSelf;
@@ -435,8 +450,9 @@ namespace RailTracer
             (new[] { "G" }, "Grab or drop a body"),
             (new[] { "C" }, "Crouch: hidden behind seats, half speed"),
             (new[] { "Space" }, "Hold: end turn"),
+            (new[] { "Tab" }, "Skip the rest of the enemy turn"),
             (new[] { "Z" }, "Undo (until you act, are seen or move a body)"),
-            (new[] { "V" }, "Hold: every enemy's senses"),
+            (new[] { "V" }, "Hold: every enemy's senses; on the win card, look around"),
             (new[] { "L" }, "The full log (paused while open)"),
             (new[] { "B" }, "Blood tile outlines (off at first)"),
             (new[] { "O" }, "Open or shut the window under the mouse"),
@@ -453,7 +469,8 @@ namespace RailTracer
             (new[] { "A" }, "Move there; with a kill selected, act on the enemy there"),
             (new[] { "LB / RB" }, "Previous / next skill (B cancels); Drag, then A, grabs or drops a body"),
             (new[] { "Y" }, "Crouch: hidden behind seats, half speed"),
-            (new[] { "X" }, "Hold: end turn"),
+            (new[] { "X" }, "Hold: end turn; on the win card, look around"),
+            (new[] { "B" }, "Skip the rest of the enemy turn"),
             (new[] { "View" }, "Undo (until you act, are seen or move a body)"),
             (new[] { "LT" }, "Hold: every enemy's senses"),
             (new[] { "L3" }, "The full log (paused while open)"),
@@ -698,6 +715,19 @@ namespace RailTracer
                 Glow(w);
                 Button(id, b, cap.border, cap.text, w);
             }
+            var skip = Row("Skip", hint, 6f); // the enemy turn only (SetSkipHint)
+            var skipCap = SketchCap(skip, "Tab", 15);
+            Glyph(skipCap.text, "B");
+            Glow(SketchLabel(skip, "Skip turn", 15, LockedText));
+            skipHint = skip.gameObject;
+            skipHint.SetActive(false);
+            var look = Row("Look Hint", root, 6f); // looking round from the win card (LookAround)
+            Place(look, Vector2.right, new Vector2(-16, 8));
+            Fit(look);
+            Glyph(SketchCap(look, "V", 15).text, "X");
+            Glow(SketchLabel(look, "Back", 15, LockedText));
+            lookHint = look.gameObject;
+            lookHint.SetActive(false);
             log = Text(root, body, 14, TextAlignmentOptions.BottomRight, Vector2.right, new Vector2(280, 200)); // clear of the legend number at 72 px
             Place(log.rectTransform, Vector2.right, new Vector2(-16, 78)); // the same gap above the key hints
             log.textWrappingMode = TextWrappingModes.Normal;
@@ -743,7 +773,7 @@ namespace RailTracer
             Stretch(play, 0f);
             play.SetAsFirstSibling();
             foreach (var part in root.Cast<Transform>().ToList())
-                if (part != play && part != hint && part.gameObject != controls) part.SetParent(play, false);
+                if (part != play && part != hint && part != look && part.gameObject != controls) part.SetParent(play, false);
             controlsHint = hint;
             logHint = hint.Find("Log").gameObject;
 
@@ -766,10 +796,10 @@ namespace RailTracer
             cardLine1.fontStyle = cardLine2.fontStyle = FontStyles.UpperCase;
             cardLine1.color = cardLine2.color = Bone;
             cardLine1.lineSpacing = cardLine2.lineSpacing = -30f;
-            // The foot: up to two hints; one that starts with a single key ("R to ride again") shows it as a key box.
+            // The foot: up to three hints; one that starts with a single key ("R to ride again") shows it as a key box.
             var foot = Row("Foot", box, 18f);
             cardFoot = foot.gameObject;
-            for (int i = 0; i < 2; i++)
+            for (int i = 0; i < cardHints.Length; i++)
             {
                 var footHint = Row("Hint", foot, 6f);
                 var cap = SketchCap(footHint, "", 15);

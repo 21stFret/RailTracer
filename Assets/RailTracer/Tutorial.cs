@@ -51,7 +51,7 @@ namespace RailTracer
         // The opening walkthrough, in order: title, text, tip.
         public static readonly (string title, string text, string tip)[] Walkthrough =
         {
-            ("Tickets please", "You're the conductor. Tonight this carriage is full of unruly passengers, and you're here to punch their tickets.", null),
+            ("Tickets please", "You're the ticket inspector. Tonight this carriage is full of unruly passengers, and you're here to punch their tickets.", null),
             ("Health", "This is your health. Be careful, you don't have much.", null),
             ("Actions", "Each turn you get four moves and one action. Crouch behind seats to stay small, and watch the eye: when it's open, someone can see you.", null),
             ("Skills", "Press 1 to 8 to pick a skill. Grey is locked, white is ready, and red is bloodied, stronger than before. If there's no valid target, the box shows hollow.", "Hover a box to read it."),

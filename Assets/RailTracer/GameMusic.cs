@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace RailTracer
 {
-    // The music: every track in Resources/Audio (DarkJazz1, JazzNoir1-5...; not the Sfx folder) on ONE AudioSource for
+    // The music: every track in Resources/Audio (19.65: five royalty-free noir jazz tracks; not the Sfx folder) on ONE AudioSource for
     // the whole game, played in random order, each a different one from the last (19.37), so it never restarts on a
     // scene change. It fades in over the menus as a flat (2D) track at full level. Diving into a car with a gramophone, the
     // same source slides over to 3D at the record (spatial blend 0 to 1 over the dive), so the music carries on from
@@ -100,7 +100,7 @@ namespace RailTracer
             muffle.cutoffFrequency = 22000f * Mathf.Pow(musicMuffle / 22000f, music.spatialBlend);       // the gramophone's tone with it
             music.pitch = Mathf.MoveTowards(music.pitch, playing && c.musicStopped ? 0f : 1f, dt / musicWindDown);
             float target = !playing ? musicVolume : here ? musicVolume * musicInCar : 0f;
-            if (choice != null) target *= pauseMusic; // the pause / board / demo complete card: quieter
+            if (choice != null) target *= pauseMusic; // the pause / board card: quieter
             musicLevel = Mathf.MoveTowards(musicLevel, target, dt * musicVolume / musicFade);
             music.volume = musicLevel * music.pitch * save.settings.musicVolume; // the Options music volume (master: AudioListener.volume)
             if (gramophoneRecord) gramophoneRecord.RotateAround(centre, gramophone.up, recordRpm * 6f * music.pitch * dt);

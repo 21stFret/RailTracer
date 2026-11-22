@@ -62,6 +62,7 @@ namespace RailTracer
                 {
                     if (n == "Seat Lamp") lamps.Add(light);
                     else if (n == "Table Lamp") { lamps.Add(light); tableLamps.Add(light); }
+                    else if (n == "Picture Light") { lamps.Add(light); pictureLights.Add(light); } // reddens with the rest (19.65)
                 }
             }
             if (!live) return;

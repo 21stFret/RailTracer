@@ -10,7 +10,7 @@ namespace RailTracer
     {
         public const string Train1 = "TRAIN_1", Train2 = "TRAIN_2", Train3 = "TRAIN_3", // train 3: the end of the game
             Untouched = "UNTOUCHED", BreakThree = "BREAK_THREE", Unseen = "UNSEEN",
-            Endless10 = "ENDLESS_10", Bloodied = "BLOODIED";
+            Endless10 = "ENDLESS_10", Bloodied = "BLOODIED", OffTheRecord = "OFF_THE_RECORD"; // OFF_THE_RECORD: hidden
 
         static bool ready;
         static readonly HashSet<string> sent = new HashSet<string>(); // asked this session: cheap to call every frame
