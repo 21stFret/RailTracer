@@ -19,8 +19,10 @@ if (-not $SkipBuild) {
     $log = "$root\Builds\Steam\build.log"
     New-Item -ItemType Directory -Force (Split-Path $log) | Out-Null
     Write-Host "Building with Unity $version (log: $log)..."
-    $p = Start-Process $unity -Wait -PassThru -ArgumentList '-batchmode', '-projectPath', "`"$root`"",
+    $p = Start-Process $unity -PassThru -ArgumentList '-batchmode', '-projectPath', "`"$root`"",
         '-executeMethod', 'RailTracer.SteamBuild.Build', '-logFile', "`"$log`""
+    $null = $p.Handle # keeps the exit code readable
+    $p.WaitForExit() # not -Wait: that also waits on Unity's leftover child processes and never returned
     if ($p.ExitCode -ne 0) { throw "Unity build failed (exit $($p.ExitCode)); see $log" }
 }
 
