@@ -85,6 +85,13 @@ namespace RailTracer
             bool Fits(Takedown t, bool anySide, bool anyStance) => t.kind == kind && t.attacker && t.victim && (t.target == want || t.target == TakedownFor.Any)
                 && (anyStance || t.stance == stance || t.stance == TakedownStance.Any) && (!t.needsCover || cover)
                 && (anySide || from == null || t.facing == from);
+            // By the gramophone (alwaysCover): a cover finisher whatever side or stance you come from (20.5; Shove to Table
+            // is tagged Front, so from behind or the side it was never picked and the music played on).
+            if (alwaysCover && cover)
+            {
+                var shove = takedowns.FindAll(t => t.kind == kind && t.attacker && t.victim && t.needsCover && (t.target == want || t.target == TakedownFor.Any));
+                if (shove.Count > 0) return last[kind] = shove[UnityEngine.Random.Range(0, shove.Count)];
+            }
             var set = takedowns.FindAll(t => Fits(t, false, false));
             if (set.Count == 0) set = takedowns.FindAll(t => Fits(t, true, false)); // nothing for this side: any side
             if (set.Count == 0) set = takedowns.FindAll(t => Fits(t, true, true)); // nothing for this stance: any of its kind

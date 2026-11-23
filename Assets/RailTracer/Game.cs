@@ -1906,7 +1906,8 @@ namespace RailTracer
                     : c.PanicTurn(e) ? (e.panic == Panic.WildFire ? "wildfire" : "freeze") // a freeze shows the ghost
                     : !red ? null // a white chip keeps its "?": icons are for red chips
                     : c.Swings(e, at) ? "charge" // a heavy that will reach you and swing (3 steps to arrive, 1 to swing)
-                    : c.WillShoot(e, at) ? "crosshair" : null;
+                    : c.WillShoot(e, at) ? "crosshair"
+                    : c.Decide(e) == Intent.Hesitate ? "freeze" : null; // Shaken and hesitating: the ghost, it holds its fire (20.5; the slot was empty)
                 int plate = e.tough && !broken ? (c.StageOf(e) >= Stage.Shaken ? 2 : 1) : 0; // cracked once they can be killed
                 bool notYet = KillMode.HasValue && plate == 1 && hover == e.pos; // only on the heavy you're pointing at (20.3)
                 // Targeting a kill on them: the legend it gives, on the legend bar (its "+30 legend" is in the skill's
