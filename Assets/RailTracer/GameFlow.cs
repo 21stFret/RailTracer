@@ -288,6 +288,7 @@ namespace RailTracer
                     var step = playerShown - before;
                     if (step.sqrMagnitude > 1e-6f) playerFacing = step.normalized;
                     if (c.legend >= footprintsFrom) Footprints(step); // the hop flag above would keep Sync from laying them
+                    StepAside(path);
                     camTarget = playerShown;
                     yield return null;
                 }
@@ -355,6 +356,27 @@ namespace RailTracer
             return true;
         }
 
+        static bool Begging(Enemy e) => e.state == EnemyState.Broken && !e.fleeing;
+
+        // On the walk out, anyone still begging on your way shuffles to the side as you reach them (within Step Aside At,
+        // metres), onto a free tile beside theirs off your path (across the car first); you walk on straight (20.5).
+        public float stepAsideAt = 1.4f;
+        void StepAside(List<Cell> path)
+        {
+            foreach (var e in c.enemies)
+            {
+                if (!Begging(e) || asideAt.ContainsKey(e) || !path.Contains(e.pos)) continue;
+                if ((World(e.pos) - playerShown).sqrMagnitude > stepAsideAt * stepAsideAt) continue;
+                var taken = new HashSet<Cell>(c.enemies.Where(o => o != e && o.state == EnemyState.Broken).Select(o => o.pos));
+                foreach (var kv in asideAt) taken.Add(new Cell(Mathf.RoundToInt(kv.Value.x), Mathf.RoundToInt(-kv.Value.z)));
+                var side = new[] { new Cell(0, 1), new Cell(0, -1), new Cell(1, 0), new Cell(-1, 0), new Cell(1, 1), new Cell(1, -1), new Cell(-1, 1), new Cell(-1, -1) }
+                    .Select(d => new Cell(e.pos.x + d.x, e.pos.y + d.y))
+                    .Where(n => c.InBounds(n) && !c.Blocked(n) && !path.Contains(n) && !taken.Contains(n) && c.bodies.All(b => b.pos != n))
+                    .Cast<Cell?>().FirstOrDefault();
+                if (side.HasValue) asideAt[e] = World(side.Value);
+            }
+        }
+
         // The shortest walk from `a` to `b` round seats, luggage and anyone still standing (bodies are stepped over).
         List<Cell> PathOut(Cell a, Cell b)
         {
@@ -369,7 +391,8 @@ namespace RailTracer
                 foreach (var d in new[] { new Cell(1, 0), new Cell(-1, 0), new Cell(0, 1), new Cell(0, -1) })
                 {
                     var n = new Cell(at.x + d.x, at.y + d.y);
-                    if (!c.InBounds(n) || c.Blocked(n) || parent.ContainsKey(n) || (c.EnemyAt(n) != null && n != b)) continue;
+                    // The begging don't block the way: they shuffle aside as you reach them (StepAside, 20.5).
+                    if (!c.InBounds(n) || c.Blocked(n) || parent.ContainsKey(n) || (c.EnemyAt(n) is Enemy o && !Begging(o) && n != b)) continue;
                     parent[n] = at;
                     q.Enqueue(n);
                 }

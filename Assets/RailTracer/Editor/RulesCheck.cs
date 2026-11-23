@@ -749,7 +749,7 @@ namespace RailTracer
             Check(m.All(r => r.Length == W) && m.SelectMany(r => r).All(ch => "._PSLlWGTODBMXxCtVw".IndexOf(ch) >= 0), where + ": a known piece on every tile");
             bool booths = m.Any(r => r.IndexOf('V') >= 0); // a booth coach: its aisle on the near side
             int aisle = booths ? H - 1 : 2;
-            Check(Enumerable.Range(1, W - 1).All(x => At(x, aisle) == '.' || At(x, aisle) == 'D' || (i == 3 && At(x, aisle) == 'X')), where + ": the aisle clear"); // the baggage hold's one crate in the aisle
+            Check(Enumerable.Range(1, W - 1).All(x => At(x, aisle) == '.' || (booths && At(x, aisle) == '_') || At(x, aisle) == 'D' || (i == 3 && At(x, aisle) == 'X')), where + ": the aisle clear"); // the baggage hold's one crate in the aisle
             if (booths) BoothShape(m, where);
             Check(m.SelectMany(r => r).Count(ch => ch == 'G') == 1, where + ": one gramophone");
             string allowed = car.kind == CarKind.Passenger ? "SLlWGtVw" : car.kind == CarKind.Dining ? "TODBG" : "MXxCG";
@@ -1016,7 +1016,18 @@ namespace RailTracer
                 Check(Enumerable.Range(x + 1, width).All(n => (m[H - 2][n] == 'w') == (n - x <= width - 2)), where + $": booth front after {x}");
             }
             Check(m.Select((r, y) => y == H - 2 ? r : r.Replace("w", "")).All(r => r.Length == W), where + ": booth fronts only on the row by the aisle");
+            // The aisle side's windows (20.5): one run per stretch between dividers, centred, plain wall elsewhere.
+            for (int x0 = 0; x0 < W;)
+            {
+                if (m[0][x0] == 'V') { Check(m[H - 1][x0] == '_', where + $": plain wall level with the divider at {x0}"); x0++; continue; }
+                int x1 = x0;
+                while (x1 + 1 < W && m[0][x1 + 1] != 'V') x1++;
+                int w = x1 - x0 + 1, a = x0 + (w - 1) / 2, b = x0 + w / 2;
+                Check(Enumerable.Range(x0, w).All(x => (m[H - 1][x] == '.') == (x >= a && x <= b)), where + $": one window centred on {x0}-{x1}");
+                x0 = x1 + 1;
+            }
             m = m.Select(r => r.Replace('w', '.')).ToArray();
+            m[H - 1] = m[H - 1].Replace('_', '.');
             var dividers = Enumerable.Range(0, W).Where(x => m[0][x] == 'V').ToList();
             Check(dividers.Count >= 2 && dividers.All(x => Enumerable.Range(0, H).All(y => m[y][x] == (y < H - 1 ? 'V' : '.'))), where + ": dividers walled but for the aisle");
             Check(dividers[0] >= 2 && dividers[dividers.Count - 1] <= W - 3 && new[] { 0, 1, W - 2, W - 1 }.All(x => Enumerable.Range(0, H).All(y => ".PG".IndexOf(m[y][x]) >= 0)), where + ": two open columns at each end");
@@ -1045,13 +1056,13 @@ namespace RailTracer
                     foreach (var (dx, dy) in new[] { (1, 0), (-1, 0), (0, 1), (0, -1) })
                     {
                         int nx = x + dx, ny = y + dy;
-                        if (nx >= 0 && ny >= 0 && nx < TrainGen.W && ny < 5 && map[ny][nx] == '.' && seen.Add((nx, ny))) todo.Enqueue((nx, ny));
+                        if (nx >= 0 && ny >= 0 && nx < TrainGen.W && ny < 5 && "._".IndexOf(map[ny][nx]) >= 0 && seen.Add((nx, ny))) todo.Enqueue((nx, ny));
                     }
                 }
-                Check(map.SelectMany((r, y) => r.Select((ch, x) => (ch, x, y))).All(p => p.ch != '.' || seen.Contains((p.x, p.y))), "booths: every floor tile reachable");
-                Check(spawns.Length == 10 && spawns.Count(s => s[5] == 1) == 2 && spawns.All(s => map[s[1]][s[0]] == '.')
+                Check(map.SelectMany((r, y) => r.Select((ch, x) => (ch, x, y))).All(p => "._".IndexOf(p.ch) < 0 || seen.Contains((p.x, p.y))), "booths: every floor tile reachable");
+                Check(spawns.Length == 10 && spawns.Count(s => s[5] == 1) == 2 && spawns.All(s => "._".IndexOf(map[s[1]][s[0]]) >= 0)
                     && spawns.Select(s => (s[0], s[1])).Distinct().Count() == spawns.Length, "booths: 10 passengers on free floor, two tough");
-                Check(patrols.Values.All(r => r.All(cell => cell.y == 4 && map[4][cell.x] == '.')), "booths: patrols walk the aisle");
+                Check(patrols.Values.All(r => r.All(cell => cell.y == 4 && "._".IndexOf(map[4][cell.x]) >= 0)), "booths: patrols walk the aisle");
             }
             for (int seed = 1; seed <= 300; seed++)
             {

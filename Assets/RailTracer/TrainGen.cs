@@ -192,6 +192,19 @@ namespace RailTracer
             }
             foreach (int i in Enumerable.Range(0, spawns.Count).OrderBy(_ => rng.Next()).Take(toughs)) spawns[i][5] = 1;
 
+            // The aisle side's windows (20.5): one per stretch between dividers (and at each end), centred on it (2 tiles
+            // for an even stretch, 1 for an odd one), plain wall ('_') elsewhere and level with the dividers, so the
+            // windows show where hops go booth to booth. Drawn after the guards, so they stand where they did.
+            for (int x0 = 0; x0 < W;)
+            {
+                if (g[x0, 0] == 'V') { g[x0, Aisle] = '_'; x0++; continue; }
+                int x1 = x0;
+                while (x1 + 1 < W && g[x1 + 1, 0] != 'V') x1++;
+                int w = x1 - x0 + 1, a = x0 + (w - 1) / 2, b = x0 + w / 2;
+                for (int x = x0; x <= x1; x++) if (x < a || x > b) g[x, Aisle] = '_';
+                x0 = x1 + 1;
+            }
+
             var map = new string[H];
             for (int y = 0; y < H; y++)
                 map[y] = new string(Enumerable.Range(0, W).Select(x => x == 0 && y == H / 2 ? 'P' : g[x, y]).ToArray());

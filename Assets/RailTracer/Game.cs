@@ -380,6 +380,7 @@ namespace RailTracer
             idleLook.Clear();
             lookYaw.Clear();
             begging.Clear();
+            asideAt.Clear();
             bodyCell.Clear();
             bodyOffset.Clear();
             seenTerror.Clear();
@@ -3020,6 +3021,7 @@ namespace RailTracer
                     {
                         if (leaping ? c.CanLeapTo(cell) : hopping ? c.CanHopTo(cell) : c.CanThrowTo(cell))
                             col = Fill(Bone, 0.6f); // one mode at a time and the banner names it: every target looks the same
+                        else if (hopping && c.IsWindow(cell)) col = Fill(Bone, 0.15f); // every window, faint: where hops go from and to (20.5)
                     }
                     else if (kill.HasValue && c.InReach(kill.Value, cell))
                         col = Fill(DangerRed, 0.35f); // the selected kill's reach
@@ -4032,8 +4034,9 @@ namespace RailTracer
         readonly HashSet<Enemy> outOfCar = new HashSet<Enemy>(); // drawn hidden past the doors
         bool PastDoors(Enemy e) => shown.TryGetValue(e, out var p) && (p.x < -0.5f || p.x > c.W - 0.5f);
 
-        Vector3 StandAt(Enemy e) => e.state == EnemyState.Fled
+        Vector3 StandAt(Enemy e) => asideAt.TryGetValue(e, out var aside) ? aside : e.state == EnemyState.Fled
             ? World(e.pos) + Vector3.right * (e.pos.x == 0 ? -fleeOutPast : fleeOutPast) : World(e.pos);
+        readonly Dictionary<Enemy, Vector3> asideAt = new Dictionary<Enemy, Vector3>(); // beggars moved out of your way on the walk out (StepAside)
 
         static void Follow(Queue<Vector3> route, List<Cell> walked)
         {

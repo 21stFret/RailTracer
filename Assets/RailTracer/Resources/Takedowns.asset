@@ -34,6 +34,7 @@ MonoBehaviour:
     bloodAt: 0.59867716
     extraBlood:
     - 0.54087377
+    screamAt: -1
     headOff: 0
     gore: 1
     reverseGrip: 1
@@ -61,6 +62,7 @@ MonoBehaviour:
     bloodAt: 0.5
     extraBlood:
     - 0.35
+    screamAt: 0.38
     headOff: 0
     gore: 1
     reverseGrip: 0
@@ -88,6 +90,7 @@ MonoBehaviour:
     bloodAt: 0.51610565
     extraBlood:
     - 0.3598558
+    screamAt: 0.34400916
     headOff: 0
     gore: 1
     reverseGrip: 1
@@ -114,6 +117,7 @@ MonoBehaviour:
     speed: 1
     bloodAt: 0.72898734
     extraBlood: []
+    screamAt: 0.4
     headOff: 1
     gore: 1
     reverseGrip: 0
@@ -140,6 +144,7 @@ MonoBehaviour:
     speed: 1
     bloodAt: 0.19275786
     extraBlood: []
+    screamAt: -1
     headOff: 0
     gore: 0
     reverseGrip: 1
@@ -166,6 +171,7 @@ MonoBehaviour:
     speed: 1
     bloodAt: 0.57049555
     extraBlood: []
+    screamAt: -1
     headOff: 0
     gore: 0
     reverseGrip: 0
@@ -192,6 +198,7 @@ MonoBehaviour:
     speed: 1
     bloodAt: 0.77598214
     extraBlood: []
+    screamAt: 0.7
     headOff: 0
     gore: 1
     reverseGrip: 1
@@ -219,6 +226,7 @@ MonoBehaviour:
     bloodAt: 0.19144218
     extraBlood:
     - 0.6
+    screamAt: -1
     headOff: 0
     gore: 0
     reverseGrip: 1
@@ -247,6 +255,7 @@ MonoBehaviour:
     extraBlood:
     - 0.1347211
     - 0.42387748
+    screamAt: 0.15
     headOff: 0
     gore: 1
     reverseGrip: 1
@@ -274,6 +283,7 @@ MonoBehaviour:
     bloodAt: 0.7
     extraBlood:
     - 0.08603354
+    screamAt: -1
     headOff: 0
     gore: 0
     reverseGrip: 1
