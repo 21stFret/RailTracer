@@ -127,7 +127,7 @@ namespace RailTracer
         // the window, no drag from your own tile, the slide fright only out of sight, the Restaurant car's bars, the
         // baggage hold's double window, First class's heavy swapped; First class and the Night coach at beam 20).
         // Rerun it after changing a car.
-        static readonly int[] Targets = { 9, 8, 8, 8, 13, 10, 10, 11, 9, 9, 10, 8, 10, 10, 13 }; // 20.3: the solver (seed 1; First class and the Night coach at beam 20)
+        static readonly int[] Targets = { 9, 9, 8, 8, 13, 10, 10, 9, 9, 9, 10, 8, 10, 11, 14 }; // 20.4: the solver (seed 1; First class and the Night coach at beam 20)
 
         static CarDef MakeDemo(int i)
         {

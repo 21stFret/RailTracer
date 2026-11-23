@@ -47,6 +47,7 @@ namespace RailTracer
     public class Tuning
     {
         public int moveRange = 4, enemyMoveRange = 3, patrolMoveRange = 2;
+        public int heavyMoveRange = 4; // 20.4: heavies walk a tile further, but only swing if they got beside you within enemyMoveRange
         public int crouchMoveCost = 2; // per tile while crouched or dragging a body
         // Cones: basic gunmen see forward and the two forward diagonals; tough ones also both sides, further.
         // Never changes with awareness.
@@ -278,6 +279,7 @@ namespace RailTracer
         static bool Adjacent(Cell a, Cell b) => Manhattan(a, b) == 1;
         static Cell Mid(Cell a, Cell b) => new Cell((a.x + b.x) / 2, (a.y + b.y) / 2);
 
+        int MoveRange(Enemy e) => e.tough ? t.heavyMoveRange : t.enemyMoveRange;
         int Sight(Enemy e) => e.tough ? t.heavySight : t.guardSight;
 
         public Enemy EnemyAt(Cell c) => enemies.Find(e => e.pos == c && (e.state == EnemyState.Active || e.state == EnemyState.Broken));
@@ -355,7 +357,7 @@ namespace RailTracer
         }
 
         // Inside the enemy's cone (ignoring walls): forward and the forward diagonals at full range, plus close
-        // peripheral vision (one forward, two to the side); heavies also see the first 2 tiles straight out to each side.
+        // peripheral vision (one forward, two to the side); heavies also see the first tile straight out to each side (20.4; was 2).
         public bool InCone(Enemy e, Cell c)
         {
             int dx = c.x - e.pos.x, dy = c.y - e.pos.y;
@@ -363,7 +365,7 @@ namespace RailTracer
             int range = Sight(e);
             if (dx * dx + dy * dy > range * range) return false;
             int fwd = dx * e.facing.x + dy * e.facing.y, side = Math.Abs(dx * e.facing.y - dy * e.facing.x);
-            return (fwd > 0 && (side <= fwd || (fwd == 1 && side == 2))) || (e.tough && fwd == 0 && side <= 2);
+            return (fwd > 0 && (side <= fwd || (fwd == 1 && side == 2))) || (e.tough && fwd == 0 && side <= 1);
         }
 
         // `low` = on the floor or crouched: hidden by half cover on the viewer's side (Covered), except from a
@@ -1469,6 +1471,7 @@ namespace RailTracer
         {
             if (!Charges(e, at)) return false;
             if (Adjacent(e.pos, at)) return true;
+            // A swing needs it beside you within 3 tiles, even with a heavy's 4th (20.4).
             var reach = Bfs(e.pos, t.enemyMoveRange, n => n != at && !Blocked(n) && (n == player || EnemyAt(n) == null));
             return reach.Keys.Any(n => Adjacent(n, at));
         }
@@ -1565,7 +1568,7 @@ namespace RailTracer
         public List<Cell> PlannedRoute(Enemy e)
         {
             if (Decide(e) != Intent.Search || e.hunt != Hunt.Sweep || !(SweepTarget(e) is Cell to)) return new List<Cell>();
-            return (PathTo(e.pos, to) ?? new List<Cell>()).Take(t.enemyMoveRange).ToList();
+            return (PathTo(e.pos, to) ?? new List<Cell>()).Take(MoveRange(e)).ToList();
         }
 
         // The tile a sweep walks to: a short step (up to sweepStep) to another tile within searchRadius of the spot,
@@ -1616,9 +1619,9 @@ namespace RailTracer
                     return p != null && p.Count <= t.patrolMoveRange ? e.looks[e.lookIndex] : WalkFacing(e, e.post, t.patrolMoveRange);
                 }
                 case Intent.Investigate: case Intent.Follow:
-                    return WalkFacing(e, e.lastKnown ?? player, t.enemyMoveRange);
+                    return WalkFacing(e, e.lastKnown ?? player, MoveRange(e));
                 case Intent.Charge:
-                    return WalkFacing(e, e.berserk ? player : e.lastKnown ?? player, t.enemyMoveRange);
+                    return WalkFacing(e, e.berserk ? player : e.lastKnown ?? player, MoveRange(e));
                 case Intent.Startled: case Intent.Freeze: case Intent.WildFire:
                     return e.facing;
                 case Intent.Shoot: case Intent.Melee: case Intent.Hesitate:
@@ -1686,7 +1689,7 @@ namespace RailTracer
                 var path = DoorPath(e);
                 if (path == null) { e.fleeing = false; Log($"{Name(e)} is cornered and begs."); return; }
                 int i = 0;
-                Walk(e, t.enemyMoveRange, () => i < path.Count ? path[i++] : (Cell?)null);
+                Walk(e, MoveRange(e), () => i < path.Count ? path[i++] : (Cell?)null);
                 if (e.pos.x == 0 || e.pos.x == W - 1) { e.state = EnemyState.Fled; Log($"{Name(e)} flees to the next carriage."); }
                 return;
             }
@@ -1732,13 +1735,14 @@ namespace RailTracer
                 case Intent.Charge:
                     // Berserk: straight for your real tile. Otherwise for where it saw you. Arriving beside you
                     // (still seeing you), it swings at once; that ends its turn.
-                    Walk(e, t.enemyMoveRange, () => StepToward(e, e.berserk ? player : e.lastKnown ?? player));
-                    if (!Over && e.InPlay && !e.wasUnaware && Adjacent(e.pos, player) && (e.berserk || CanSee(e, player))) Swing(e);
+                    Walk(e, MoveRange(e), () => StepToward(e, e.berserk ? player : e.lastKnown ?? player));
+                    // A heavy that needed its 4th tile to get beside you only closes in (20.4): no swing this turn.
+                    if (!Over && e.InPlay && !e.wasUnaware && e.walked.Count <= t.enemyMoveRange && Adjacent(e.pos, player) && (e.berserk || CanSee(e, player))) Swing(e);
                     break;
                 case Intent.Investigate:
                 {
                     var goal = e.lastKnown ?? player;
-                    Walk(e, t.enemyMoveRange, () => e.awareness == Awareness.Searching ? StepToward(e, e.lastKnown ?? goal) : null);
+                    Walk(e, MoveRange(e), () => e.awareness == Awareness.Searching ? StepToward(e, e.lastKnown ?? goal) : null);
                     if (e.awareness != Awareness.Searching || e.hunt == Hunt.Sweep) break; // saw you or found something
                     var at = e.lastKnown ?? goal;
                     if (Cheb(e.pos, at) <= 1 || StepToward(e, at) == null)
@@ -1753,7 +1757,7 @@ namespace RailTracer
                 {
                     var s = e.trail;
                     var goal = e.lastKnown.Value;
-                    Walk(e, t.enemyMoveRange, () => e.trail == s && e.awareness == Awareness.Searching ? StepToward(e, goal) : null);
+                    Walk(e, MoveRange(e), () => e.trail == s && e.awareness == Awareness.Searching ? StepToward(e, goal) : null);
                     if (e.trail != s || e.awareness != Awareness.Searching) break;
                     var before = e.lastKnown;
                     RetargetTrail(e);
@@ -1774,7 +1778,7 @@ namespace RailTracer
                         {
                             var path = PathTo(e.pos, to.Value);
                             int i = 0;
-                            Walk(e, t.enemyMoveRange, () => path != null && i < path.Count ? path[i++] : (Cell?)null);
+                            Walk(e, MoveRange(e), () => path != null && i < path.Count ? path[i++] : (Cell?)null);
                         }
                     }
                     if (e.awareness != Awareness.Searching || (e.hunt != Hunt.Sweep && e.hunt != Hunt.Look)) break;

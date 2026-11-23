@@ -954,7 +954,7 @@ namespace RailTracer
                 h.lastKnown = c.player;
                 Check(!c.Swings(h, c.player) && c.IntentText(h) == "Charge", "heavy 4 away: closes in only");
                 c.Do("enemy 1");
-                Check(h.pos == new Cell(2, 0) && c.hp == ht.maxHp, "heavy closes in, no swing");
+                Check(h.pos == new Cell(1, 0) && c.hp == ht.maxHp, "heavy walks 4 to get beside you, no swing (20.4)");
             }
 
             // The walk-through car: nobody, never won, walk as far as you like.
@@ -1265,10 +1265,27 @@ namespace RailTracer
             h.awareness = Awareness.Combat;
             Check(!c.WillReact(h) && c.MovePreview(new Cell(2, 1)).TrueForAll(p => p.shooter == null), "a heavy has no reaction shot, none in the preview");
             Check(c.Move(new Cell(2, 1)) && c.hp == t.maxHp && h.reactionReady && c.shotsFired.Count == 0, "walking in a heavy's sight: no shot");
-            // ...and see only 2 tiles straight out to the sides.
+            // ...and see only 1 tile straight out to the sides (20.4).
             c = new Carriage(new[] { "......", "......", "......", "......", "......", "......", "......" }, t, 1);
             h = c.Spawn(0, 3, 1, 0, 0, tough: true);
-            Check(c.InCone(h, new Cell(0, 1)) && !c.InCone(h, new Cell(0, 0)) && c.InCone(h, new Cell(5, 3)), "heavy: 2 to the side, full range ahead");
+            Check(c.InCone(h, new Cell(0, 2)) && !c.InCone(h, new Cell(0, 1)) && c.InCone(h, new Cell(5, 3)), "heavy: 1 to the side, full range ahead");
+            // A heavy walks 4 tiles, but swings only if it got beside you within 3 (20.4).
+            c = new Carriage(new[] { "P......", "......." }, t, 1);
+            h = c.Spawn(5, 0, -1, 0, 0, tough: true);
+            h.awareness = Awareness.Combat;
+            c.EndPlayerTurn();
+            c.EnemyAct(h);
+            Check(h.pos == new Cell(1, 0) && c.hp == t.maxHp, "heavy: 4 tiles to get beside you, no swing");
+            c.StartPlayerTurn();
+            c.EndPlayerTurn();
+            c.EnemyAct(h);
+            Check(c.hp == t.maxHp - t.shotDamage, "heavy: beside you at its next turn, it swings");
+            c = new Carriage(new[] { "P......", "......." }, t, 1);
+            h = c.Spawn(4, 0, -1, 0, 0, tough: true);
+            h.awareness = Awareness.Combat;
+            c.EndPlayerTurn();
+            c.EnemyAct(h);
+            Check(h.pos == new Cell(1, 0) && c.hp == t.maxHp - t.shotDamage, "heavy: 3 tiles to get beside you, then swings");
 
             // A blood trail: the searcher heads for the newest part it can see, and its spot moves with it.
             c = new Carriage(new[] { "......L.", "......L.", "......L." }, t, 1);
