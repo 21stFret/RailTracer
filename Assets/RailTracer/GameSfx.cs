@@ -16,6 +16,7 @@ namespace RailTracer
 
         void Sfx(string name, Vector3 at)
         {
+            if (restoring) return; // a loaded save's replay is silent (20.2)
             sfxClips ??= Resources.LoadAll<AudioClip>("Audio/Sfx");
             sfxPick.Clear();
             foreach (var clip in sfxClips) if (clip.name.StartsWith(name)) sfxPick.Add(clip);

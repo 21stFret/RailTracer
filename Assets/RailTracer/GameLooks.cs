@@ -42,6 +42,10 @@ namespace RailTracer
             foreach (var t in look.GetComponentsInChildren<Transform>(true))
             {
                 string n = t.name;
+                // The brass luggage racks over the booth seats (train 3's booth coaches): no shadows, so the seats and
+                // lamps below aren't striped by them; they still receive light and shadow (20.2).
+                if (n.StartsWith("Rack_Brass"))
+                    foreach (var r in t.GetComponentsInChildren<Renderer>(true)) r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
                 if (n.StartsWith("Wall_")) Wood(t.gameObject);
                 if (n.StartsWith("Prop_Ashtray_Cigar"))
                 {

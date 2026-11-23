@@ -94,6 +94,14 @@ namespace RailTracer
                 AssetDatabase.SaveAssets();
                 Debug.Log("Rail Tracer: enemy begging states added.");
             }
+            // 20.2: once down on their knees, broken enemies loop Alex's terrified clip (Resources/Anim/Terrified.fbx) as
+            // their "Beg" state, in place of the praying loop (live and on a loaded save).
+            var terrified = File.Exists(Dir + "Terrified.fbx") ? MixamoClip(Dir + "Terrified.fbx", true, false) : null;
+            if (terrified && SetMotion(Dir + "Enemy.controller", "Beg", terrified))
+            {
+                AssetDatabase.SaveAssets();
+                Debug.Log("Rail Tracer: broken enemies loop \"Terrified\".");
+            }
             // Enemies fire with a "Shoot" state once a Mixamo "Pistol Shoot.fbx" is in RailTracer/Mixamo.
             var shoot = MixamoClip(Mixamo + "Pistol Shoot.fbx", false);
             if (shoot && AddShoot(Dir + "Enemy.controller", shoot))
@@ -163,9 +171,15 @@ namespace RailTracer
                 .Where(c => c).ToArray();
             var armed = mixamo.Where(f => Path.GetFileName(f).StartsWith("Pistol Idle")).Select(f => MixamoClip(f, true, inPlace: false))
                 .Where(c => c).ToArray();
-            if (set.relaxed.SequenceEqual(relaxed) && set.armed.SequenceEqual(armed)) return;
+            const string HeavyIdle = "Assets/ExplosiveLLC/Heavy Fighter Mecanim Animation Pack/Animations/Heavy@Idle.FBX";
+            var heavy = File.Exists(HeavyIdle) ? Clip(HeavyIdle) : null; // the pack imports Humanoid already
+            var ac = AssetDatabase.LoadAssetAtPath<AnimatorController>(Dir + "Enemy.controller");
+            var slot = ac ? ac.layers[0].stateMachine.states.Select(s => s.state).FirstOrDefault(s => s.name == "Idle")?.motion as AnimationClip : null;
+            if (set.relaxed.SequenceEqual(relaxed) && set.armed.SequenceEqual(armed) && set.heavy == heavy && set.armedSlot == slot) return;
             set.relaxed = relaxed;
             set.armed = armed;
+            set.heavy = heavy;
+            set.armedSlot = slot;
             EditorUtility.SetDirty(set);
             AssetDatabase.SaveAssets();
             Debug.Log($"Rail Tracer: IdleSet has {relaxed.Length} relaxed and {armed.Length} armed idles.");
@@ -440,6 +454,17 @@ namespace RailTracer
             var sm = ac.layers[0].stateMachine;
             if (sm.states.Any(s => s.state.name == "BegStart")) return false;
             Finish(State(sm, "BegStart", down), State(sm, "Beg", loop));
+            EditorUtility.SetDirty(ac);
+            return true;
+        }
+
+        // Swaps an existing state's clip. False if it's missing or already that clip.
+        static bool SetMotion(string path, string state, Motion motion)
+        {
+            var ac = AssetDatabase.LoadAssetAtPath<AnimatorController>(path);
+            var st = ac ? ac.layers[0].stateMachine.states.Select(s => s.state).FirstOrDefault(s => s.name == state) : null;
+            if (!st || st.motion == motion) return false;
+            st.motion = motion;
             EditorUtility.SetDirty(ac);
             return true;
         }

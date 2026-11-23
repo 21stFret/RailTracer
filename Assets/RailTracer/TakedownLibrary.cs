@@ -36,6 +36,9 @@ namespace RailTracer
         [Tooltip("More strikes: extra splashes at these points, 0-1 over the WHOLE takedown (both clips of a combo). " +
                  "Blood At still lays the stains. Set them in the animation test scene (N adds one at the current frame).")]
         public List<float> extraBlood = new List<float>();
+        [Tooltip("When a brutal kill's victim screams: 0-1 over the WHOLE takedown, like Extra Blood (set it in the animation test " +
+                 "scene: M at the current frame). Below 0 (the default): with the blood, as before.")]
+        public float screamAt = -1f;
         [Tooltip("The head comes off at Blood At: a gore burst where it was (a stomp, say).")]
         public bool headOff;
         [Tooltip("The brutal kills' gore at its blood (the big splash and the gut burst), whatever its kind.")]

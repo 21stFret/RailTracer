@@ -91,7 +91,11 @@ namespace RailTracer
             var projector = decal.GetComponentInChildren<UnityEngine.Rendering.Universal.DecalProjector>();
             float prefabDepth = projector ? projector.size.z : 1f;
             decal.transform.localScale = new Vector3(scale, scale, projectDepth / prefabDepth);
-            if (floor && projector) { projector.startAngleFade = 50f; projector.endAngleFade = 80f; } // tops of bodies, not up the walls
+            if (!projector) return;
+            if (floor) { projector.startAngleFade = 50f; projector.endAngleFade = 80f; } // tops of bodies, not up the walls
+            // Everything else but glass (20.2): only faces turned back towards the projector take it, so a stain on a thin
+            // dividing wall, or a soak beside one, doesn't come through on the far side (faces at 90 degrees or more fade out).
+            else if (!(parent && parent.GetComponent<SlidingWindow>())) { projector.startAngleFade = 70f; projector.endAngleFade = 90f; }
         }
 
         // Kill blood on one tile: five straight casts from `height` above its centre, down and out along the grid (left,

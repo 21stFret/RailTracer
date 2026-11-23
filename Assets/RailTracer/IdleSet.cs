@@ -9,5 +9,8 @@ namespace RailTracer
     {
         public AnimationClip[] relaxed = new AnimationClip[0];
         public AnimationClip[] armed = new AnimationClip[0];
+        // 20.2: heavies carry no gun, so when not unaware they take `heavy` (the Heavy Fighter pack's Heavy@Idle, a fists-up
+        // stance) in place of the enemy controller's armed idle (`armedSlot`, its "Idle" state's clip). Empty: no swap.
+        public AnimationClip heavy, armedSlot;
     }
 }

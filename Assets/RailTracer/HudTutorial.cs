@@ -331,6 +331,10 @@ namespace RailTracer
             head.text = "Paused";
             head.rectTransform.localRotation = Quaternion.Euler(0f, 0f, -1.5f);
             pauseHead = head;
+            // Under PAUSED (20.2): the train and car, small, in the menu's grey, with its own sketch tilt.
+            pauseSub = Text(pause, sketch, 18, TextAlignmentOptions.MidlineLeft, Vector2.zero, Vector2.zero);
+            pauseSub.color = LockedText;
+            pauseSub.rectTransform.localRotation = Quaternion.Euler(0f, 0f, 1f);
             var lines = Rect("Lines", pause, Vector2.zero, Vector2.zero, Vector2.zero);
             Column(lines, new RectOffset(0, 0, 0, 0), 0f).childForceExpandWidth = true;
             for (int i = 0; i < 5; i++) pauseItems.Add(Line(lines, 26, 20, 5f, i, card: true));
@@ -415,15 +419,18 @@ namespace RailTracer
         public bool PauseOpen => pause.gameObject.activeSelf;
         // The centre panel: the pause menu, or another short choice under its own heading (up to 5 lines).
         // escWord: what Esc does here, shown as a key hint (null: none).
-        public void ShowPause(bool on, string heading = "Paused", string escWord = "Resume")
+        public void ShowPause(bool on, string heading = "Paused", string escWord = "Resume", string subtitle = null)
         {
             pauseHead.text = heading;
+            pauseSub.text = subtitle ?? "";
+            pauseSub.gameObject.SetActive(!string.IsNullOrEmpty(subtitle));
             pauseHint.SetActive(escWord != null);
             pauseHintWords.text = escWord ?? "";
             pause.gameObject.SetActive(on);
             pauseDim.SetActive(on);
         }
         GameObject pauseDim;
+        TMP_Text pauseSub;
         const float PauseDim = 0.82f; // the dim's opacity behind the pause card
 
         // items: the menu's lines ("Label	note": a note after a tab), the one under the mouse hovered. Returns its index, or -1.

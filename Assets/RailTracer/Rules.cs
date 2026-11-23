@@ -137,7 +137,7 @@ namespace RailTracer
     // How the body was made: finding it frightens by how gory it is (Carriage.BodyFear).
     public enum BodyKind { Stealth, Brutal, Rail, Thrown, Shot }
 
-    public class Body { public Enemy who; public Cell pos; public bool hung; public BodyKind kind; } // hung: out of a window (rail grab), can't be grabbed
+    public class Body { public Enemy who; public Cell pos; public bool hung; public BodyKind kind; public Cell? cover; } // hung: out of a window (rail grab), can't be grabbed; cover: the seat, table, bar or gramophone it was shoved onto (20.2)
 
     // Blood on the floor: one per kill or throw, or one growing trail per drag (tiles oldest to newest).
     public class Stain { public List<Cell> tiles = new List<Cell>(); public bool trail; }
@@ -196,11 +196,11 @@ namespace RailTracer
                 {
                     char ch = map[y][x];
                     seat[x, y] = "STBMODGt".IndexOf(ch) >= 0;
-                    solid[x, y] = "LlWXxV".IndexOf(ch) >= 0;
+                    solid[x, y] = "LlWXxVw".IndexOf(ch) >= 0;
                     blankWall[x, y] = "_lxBG".IndexOf(ch) >= 0; // a bar or the gramophone stands against plain wall
                     if (ch == 'G') gramophone = new Cell(x, y);
                     cage[x, y] = ch == 'C';
-                    wall[x, y] = ch == 'W' || ch == 'V'; // 'V' a booth divider: a wall (its column a partition, the aisle its door)
+                    wall[x, y] = ch == 'W' || ch == 'V' || ch == 'w'; // 'V' a booth divider: a wall (its column a partition, the aisle its door); 'w' a booth front (20.2)
                     if (ch == 'P') player = new Cell(x, y);
                 }
             // Partitions: a column walled off but for one doorway (the train draws the wall on the joint after it).
@@ -370,8 +370,9 @@ namespace RailTracer
         public bool Sees(Enemy e, Cell c, bool low)
         {
             if (!e.InPlay || !InCone(e, c)) return false;
+            if (!LineOfSight(e.pos, c, false)) return false; // walls, partitions (the doorway rule), luggage, tall cover by you
             if (e.awareness == Awareness.Searching && Cheb(e.pos, c) <= t.searchNoticeRange) return true;
-            if (!LineOfSight(e.pos, c, false) || Dist2(e.pos, c) > SightThrough(e, c) * SightThrough(e, c)) return false;
+            if (Dist2(e.pos, c) > SightThrough(e, c) * SightThrough(e, c)) return false;
             return !(low && Covered(c, e.pos));
         }
 
@@ -602,10 +603,22 @@ namespace RailTracer
 
         // Gunfire: everyone not already fighting turns towards it and looks around where they stand (the carriage
         // doesn't pile in).
-        void AlertAll()
+        // Gunfire from `from` (20.2): the nearest enemy not fighting (by walking distance; a tie goes to the first in the
+        // car's list) goes to check where the shot came from, like a noise. Everyone else turns to it and looks around
+        // where they stand. Heard everywhere, as before.
+        void AlertAll(Cell from)
         {
+            Enemy nearest = null;
+            int best = int.MaxValue;
             foreach (var e in enemies)
-                if (e.InPlay) Look(e, player, Clue.Noise);
+            {
+                if (!e.InPlay || e.awareness == Awareness.Combat || e.awareness == Awareness.Startled) continue;
+                var p = PathTo(e.pos, from);
+                if (p != null && p.Count < best) { best = p.Count; nearest = e; }
+            }
+            foreach (var e in enemies)
+                if (e.InPlay && e != nearest) Look(e, player, Clue.Noise);
+            if (nearest != null) Search(nearest, from, Hunt.Go, Clue.Noise);
         }
 
         // Searching from where they stand: face `at`, look around for searchTurns, then stand down.
@@ -841,9 +854,10 @@ namespace RailTracer
             return res;
         }
 
-        // Overwatch: gun out (searching or fighting), not broken, shot unspent, and not about to freeze in panic.
+        // Overwatch: gun out (searching or fighting), not broken, shot unspent, and not about to freeze in panic. Heavies
+        // carry no gun (20.2): they never fire, they only charge and swing.
         public bool WillReact(Enemy e) =>
-            e.InPlay && e.reactionReady && (e.awareness == Awareness.Searching || e.awareness == Awareness.Combat)
+            e.InPlay && !e.tough && e.reactionReady && (e.awareness == Awareness.Searching || e.awareness == Awareness.Combat)
             && !(PanicTurn(e) && e.panic == Panic.Freeze);
 
         // You are now on `tile` (seen as you stand or crouch): whoever sees it is in combat; `watching` enemies (those
@@ -883,8 +897,10 @@ namespace RailTracer
                 if (held != null) DragTo(left);
                 if (hp <= 0) break;
             }
+            // Fighters who saw you on the way turn to the last tile they saw you on. Searchers hunting a tile you crossed
+            // don't: they'd be turning to you through walls (20.2).
             foreach (var e in enemies)
-                if (e.InPlay && e.lastKnown.HasValue && path.Contains(e.lastKnown.Value)) Face(e, e.lastKnown.Value);
+                if (e.InPlay && e.awareness == Awareness.Combat && e.lastKnown.HasValue && path.Contains(e.lastKnown.Value)) Face(e, e.lastKnown.Value);
             if (freeWalk) movesLeft = 999;
             return true;
         }
@@ -894,9 +910,11 @@ namespace RailTracer
             if (!CanMove) return;
             crouched = !crouched;
             if (crouched) return;
-            StepInto(player, new List<Enemy>(), false); // standing up over the seats: seen (they fight), but no reaction fire (19.57)
-            foreach (var e in enemies)
-                if (e.InPlay && e.lastKnown == player) Face(e, player);
+            // Standing up over the seats: whoever sees you (the full sight check) fights and turns to you, but nobody
+            // fires (19.57). Only they turn: a searcher hunting this tile (it heard a kill here) doesn't (20.2).
+            var seers = enemies.FindAll(e => Sees(e, player, false));
+            StepInto(player, new List<Enemy>(), false);
+            foreach (var e in seers) Face(e, player);
         }
 
         // Leap: traversal or closing in, over anything but walls and the cage. Costs your whole move; travels at head height, so every tile
@@ -1065,6 +1083,7 @@ namespace RailTracer
         {
             var from = held.pos;
             held.pos = tile;
+            if (from != tile) held.cover = null; // dragged off: the cover is free again
             if (dragTrail.tiles[dragTrail.tiles.Count - 1] != tile) dragTrail.tiles.Add(tile);
             foreach (var e in enemies)
             {
@@ -1088,6 +1107,7 @@ namespace RailTracer
             var b = held;
             Drop();
             b.pos = c;
+            b.cover = null;
             b.kind = BodyKind.Thrown;
             acted = true;
             throwWait = Def(SkillId.Throw).cooldown;
@@ -1331,6 +1351,17 @@ namespace RailTracer
             return true;
         }
 
+        // One body per piece of cover (20.2): a Shove to Table (chosen by the view, sent as "shove x y") puts the newest body
+        // on that cover; nobody else can be shoved there until it's dragged or thrown off.
+        public bool CoverTaken(Cell c) => bodies.Exists(b => b.cover == c);
+        bool Shove(Cell c)
+        {
+            var b = bodies.Count > 0 ? bodies[bodies.Count - 1] : null;
+            if (b == null || !IsSeat(c) || CoverTaken(c)) return false;
+            b.cover = c;
+            return true;
+        }
+
         public void EndPlayerTurn() => turnOver = true;
 
         // ---- Commands: everything that changes the carriage, as text, so a save can replay it ----
@@ -1341,7 +1372,7 @@ namespace RailTracer
 
         public Enemy EnemyById(int id) => enemies.Find(e => e.id == id);
 
-        // "move x y", "leap x y", "hop x y", "throw x y", "act <Act> <enemy id>", "grab", "drop", "crouch", "undo", "needle",
+        // "move x y", "leap x y", "hop x y", "throw x y", "act <Act> <enemy id>", "grab", "drop", "crouch", "undo", "needle", "shove x y",
         // "end" (your turn), "enemy <id>" (its turn), "start" (your next turn). False if it did nothing.
         public bool Do(string cmd)
         {
@@ -1360,6 +1391,7 @@ namespace RailTracer
                 case "crouch": ToggleCrouch(); break;
                 case "undo": ok = CanReset; ResetTurn(); break;
                 case "needle": ok = StopMusic(); break;
+                case "shove": ok = Shove(At()); break;
                 case "end": EndPlayerTurn(); break;
                 case "enemy": EnemyAct(EnemyById(int.Parse(w[1]))); break;
                 case "start": StartPlayerTurn(); break;
@@ -1590,7 +1622,7 @@ namespace RailTracer
             if (o.InPlay && o.awareness != Awareness.Combat && CanSee(o, player)) Fight(o); // whoever fires on you has you in sight
             if (rng.NextDouble() < HitChance(o, player, leaping)) { Log($"{Name(o)} {what}: hit!"); Damage(t.shotDamage); }
             else Log($"{Name(o)} {what}: miss.");
-            AlertAll();
+            AlertAll(o.pos);
         }
 
         void StandDown(Enemy e)
@@ -1770,7 +1802,7 @@ namespace RailTracer
                     if (CanSee(e, player)) targets.Add(player);
                     foreach (var o in enemies) if (o != e && o.InPlay) targets.Add(o.pos);
                     targets.RemoveAll(c => !InCone(e, c) || Dist2(e.pos, c) > Sight(e) * Sight(e) || !LineOfSight(e.pos, c, false));
-                    if (targets.Count == 0) { Log($"{Name(e)} fires wildly at nothing."); AlertAll(); break; }
+                    if (targets.Count == 0) { Log($"{Name(e)} fires wildly at nothing."); AlertAll(e.pos); break; }
                     shotsFired.Add(e);
                     var hit = targets[rng.Next(targets.Count)];
                     if (rng.NextDouble() >= t.wildHitChance * (HalfCovered(hit, e.pos) ? t.halfCoverHitMult : 1f)) Log($"{Name(e)} fires wildly and misses.");
@@ -1783,7 +1815,7 @@ namespace RailTracer
                         Bleed(v.pos, false);
                         Log($"{Name(e)} fires wildly and kills {Name(v)}!");
                     }
-                    AlertAll();
+                    AlertAll(e.pos);
                     break;
                 }
                 case Intent.Freeze:

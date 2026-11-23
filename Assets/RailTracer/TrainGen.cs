@@ -137,7 +137,7 @@ namespace RailTracer
         // The booth coach (19.48): booths down the far side (rows 0-3), the aisle down the near side (row 4). A booth is two
         // seat banks (rows 0-1) facing each other across 1 to 3 free columns, between dividers ('V' on rows 0-3: walls,
         // the aisle open, so the rules treat each as a partition with its doorway on the aisle); back-to-back booths share
-        // one. The two columns at each end stay open floor (any column left over joins the far end); the gramophone
+        // one ('w': a booth front, see below). The two columns at each end stay open floor (any column left over joins the far end); the gramophone
         // stands in the far end's window corner. Passengers as in Make, the patrols on the aisle.
         public static (string[] map, int[][] spawns, Dictionary<int, Cell[]> patrols) MakeBooths(Random rng, int enemies, int toughs)
         {
@@ -156,6 +156,16 @@ namespace RailTracer
                 Divider(at);
             }
             g[W - 1, 0] = 'G';
+            // Booth fronts (20.2, Alex's layout C): each booth, and the stretch past the last divider, is walled off along
+            // its aisle edge ('w' on the row next to the aisle) from its left divider, all but its last 2 tiles: half
+            // closed, the doorway at the far end.
+            for (int x = 0; x < W; x++)
+            {
+                if (g[x, 0] != 'V') continue;
+                int next = Enumerable.Range(x + 1, W - x - 1).FirstOrDefault(n => g[n, 0] == 'V');
+                int width = (next > 0 ? next : W) - x - 1;
+                for (int k = 1; k <= width - 2; k++) g[x + k, Aisle - 1] = 'w';
+            }
 
             var placed = new List<(int x, int y)>();
             var spawns = new List<int[]>();

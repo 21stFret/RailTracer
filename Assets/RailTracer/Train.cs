@@ -127,7 +127,7 @@ namespace RailTracer
         // the window, no drag from your own tile, the slide fright only out of sight, the Restaurant car's bars, the
         // baggage hold's double window, First class's heavy swapped; First class and the Night coach at beam 20).
         // Rerun it after changing a car.
-        static readonly int[] Targets = { 9, 8, 7, 11, 16, 10, 10, 9, 12, 11, 10, 9, 10, 13, 14 };
+        static readonly int[] Targets = { 9, 8, 8, 8, 13, 10, 10, 11, 10, 10, 10, 8, 10, 10, 13 }; // 20.2: the solver (seed 1; First class and the Night coach at beam 20)
 
         static CarDef MakeDemo(int i)
         {
@@ -173,14 +173,14 @@ namespace RailTracer
         // ---- Train 2, the Supper Express: more dining, no baggage. ----
 
         // Pullman car: the partition far down (column 19), a bank missing on each side for open floor, the gramophone
-        // in a bank's aisle place.
+        // in a bank's aisle place. Booth tables ('t', 20.2) in four of its window booths, like Second class.
         static readonly string[] PullmanMap =
         {
-            "..S..S.L...S__S..S.WS..SL.",
+            "..S.tS.L...S__St.S.WS..SL.",
             "..S..S.....S..S..S.WS..S..",
             "P.........................",
             "..S.....S..S..G..S.WS..S..",
-            "..S___.LS..S.LS..S.WS..S..",
+            "..S___.LS.tS.LS..S.WS.tS..",
         };
         static readonly (int[][], int[][]) Pullman = (new[] // 9 guards, 1 heavy
         {
@@ -205,14 +205,15 @@ namespace RailTracer
             new[] { 20, 3, -1, 0, 1 }, new[] { 21, 2, -1, 0, 0 }, new[] { 23, 4, 0, -1, 0 }, new[] { 25, 1, -1, 0, 1 }, new[] { 10, 4, 0, -1, 0 },
         }, new[] { new[] { 0, 10, 2, 13, 2 }, new[] { 6, 21, 2, 16, 2 } });
 
-        // Smoking car: the partition two banks in, then six close-packed banks; luggage in the gaps between them.
+        // Smoking car: the partition two banks in, then six close-packed banks; luggage in the gaps between them. Booth
+        // tables ('t', 20.2) in four of its window booths.
         static readonly string[] SmokingMap =
         {
-            "..S..S.WS..SL....S__S..S.L",
+            "..St.S.WS..SL....S__St.S.L",
             "..S..S.WS..S.....G..S..S..",
             "P.........................",
             "..S..S.WS..S..S..S.....S..",
-            "..S..SLWS..S__S..S.L...S..",
+            "..S..SLWS.tS__S.tS.L...S..",
         };
         static readonly (int[][], int[][]) Smoking = (new[] // 8 guards, 2 heavies
         {
@@ -338,6 +339,40 @@ namespace RailTracer
 
         // A fresh carriage for the car: its map and passengers, with your health carried in (a walk-through car
         // has nobody in it and costs nothing to walk).
+        // Starting guards with some variety (20.2), the same for a car every time (seeded from its map): about 4 in 10
+        // posted guards start facing the other way, out instead of in (so they also turn the other way first), and about
+        // half the patrols run across the car (window to aisle to window) where a clear column is near their beat.
+        public const double FlipChance = 0.4, CrossChance = 0.5;
+        static void Vary(Carriage c, CarDef car)
+        {
+            uint h = 2166136261;
+            foreach (var row in car.map) foreach (char ch in row) h = (h ^ ch) * 16777619; // FNV-1a: stable across runs
+            var rng = new Random((int)h);
+            var taken = new HashSet<Cell>(c.enemies.Select(e => e.pos));
+            foreach (var e in c.enemies)
+            {
+                if (e.route == null)
+                {
+                    if (rng.NextDouble() >= FlipChance) continue;
+                    e.facing = new Cell(-e.facing.x, -e.facing.y);
+                    e.looks.Reverse();
+                    continue;
+                }
+                if (rng.NextDouble() >= CrossChance) continue;
+                int x0 = e.route.Min(r => r.x), x1 = e.route.Max(r => r.x);
+                var cols = Enumerable.Range(x0 - 2, x1 - x0 + 5)
+                    .Where(x => x > 2 && Enumerable.Range(0, c.H).All(y => !c.Blocked(new Cell(x, y)) && (new Cell(x, y) == e.pos || !taken.Contains(new Cell(x, y)))))
+                    .ToList();
+                if (cols.Count == 0) continue;
+                int col = cols[rng.Next(cols.Count)];
+                taken.Remove(e.pos);
+                e.pos = e.post = new Cell(col, c.H / 2);
+                taken.Add(e.pos);
+                e.route = new List<Cell> { new Cell(col, 0), new Cell(col, c.H - 1) };
+                e.routeIndex = 0;
+            }
+        }
+
         public static Carriage Make(CarDef car, Tuning t, int seed, int hp)
         {
             var c = new Carriage(car.map, t, seed);
@@ -347,6 +382,7 @@ namespace RailTracer
                 var s = car.spawns[i];
                 c.Spawn(s[0], s[1], s[2], s[3], s[4], s[5] == 1, car.patrols.TryGetValue(i, out var route) ? route.ToList() : null);
             }
+            Vary(c, car);
             c.NameEnemies();
             c.hp = hp;
             if (c.freeWalk) c.StartPlayerTurn(); // the free moves

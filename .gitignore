@@ -37,6 +37,8 @@ crashlytics-build.properties
 # Asset Store packs: re-import from the Asset Store (see README.md)
 /Assets/Synty/
 /Assets/Synty.meta
+/Assets/ExplosiveLLC/
+/Assets/ExplosiveLLC.meta
 /Assets/RVFX/
 /Assets/RVFX.meta
 /Assets/Animations/Game/Brutal_Finishers_Hand_and_Knife/

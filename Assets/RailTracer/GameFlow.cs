@@ -427,8 +427,13 @@ namespace RailTracer
         {
             choice = which;
             hud.ShowPause(true, which == "board" ? NextName() : "Paused",
-                which == "board" ? "Not yet" : "Resume"); // each panel's way out is a line (Resume, Not yet)
+                which == "board" ? "Not yet" : "Resume", // each panel's way out is a line (Resume, Not yet)
+                which == "board" ? null : WhereName());
         }
+
+        // Under PAUSED: "The Royal Parallel – Night coach"; in Endless, the endless car's number.
+        string WhereName() => walking ? "Between cars" : endless ? $"Endless – car {carIndex}"
+            : $"{Train.TrainNames[Train.TrainOf(carIndex)]} – {car.name}";
 
         void CloseChoice()
         {

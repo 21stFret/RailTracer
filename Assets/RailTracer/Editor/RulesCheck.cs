@@ -130,6 +130,41 @@ namespace RailTracer
             c.ToggleCrouch();
             Check(c.CanSee(upWatch, c.player) && c.hp == upHp && upWatch.reactionReady && upWatch.lastKnown == c.player, "standing up in view: spotted, no reaction fire");
 
+            // Crouched behind a partition after a kill, searchers on the far side hunting your tile and looking away: standing
+            // up, crouching and walking back onto it turn nobody and change nobody's state (20.2, the Night Coach report).
+            c = new Carriage(new[] { "..W....", "..W....", ".......", "..W....", "..W...." }, t, 1);
+            c.player = new Cell(1, 1);
+            var away = new List<Enemy> { c.Spawn(3, 0, 1, 0, 0), c.Spawn(3, 1, 1, 0, 0), c.Spawn(4, 3, 0, 1, 0) };
+            foreach (var a in away) { a.awareness = Awareness.Searching; a.lastKnown = c.player; }
+            c.crouched = true;
+            c.ToggleCrouch();
+            Check(away.TrueForAll(a => a.awareness == Awareness.Searching && a.facing != new Cell(-1, 0) && a.facing.x >= 0), "behind a partition: standing up turns nobody");
+            c.ToggleCrouch();
+            c.ToggleCrouch();
+            Check(c.Move(new Cell(0, 1)) && c.Move(new Cell(1, 1)), "behind a partition: set-up walk");
+            Check(away.TrueForAll(a => a.awareness == Awareness.Searching && a.facing.x >= 0 && a.facing.y >= 0), "behind a partition: walking over the hunted tile turns nobody");
+            var closeLook = c.Spawn(3, 1, -1, 0, 0);
+            closeLook.awareness = Awareness.Searching;
+            Check(!c.Sees(closeLook, new Cell(2, 2), true), "close look: not round a partition's door frame");
+
+            // A leap into the view of a searcher who has never seen you: startled, no reaction shot on the arc or the
+            // landing, and the preview marks no shooter (20.2).
+            c = new Carriage(new[] { ".......", "P......", "......." }, t, 1);
+            var startled = c.Spawn(6, 1, -1, 0, 0);
+            startled.awareness = Awareness.Searching;
+            Check(c.LeapPreview(new Cell(3, 1)).TrueForAll(p => p.shooter == null), "startle leap: the preview marks no shooter");
+            Check(c.Leap(new Cell(3, 1)) && startled.awareness == Awareness.Startled && startled.reactionReady && c.hp == t.maxHp, "startle leap: startled, not shot");
+
+            // One body per piece of cover (20.2): a second shove onto the same seat is refused; dragged off, it's free.
+            c = new Carriage(new[] { "P.S..", "....." }, t, 1);
+            c.Spawn(4, 1, 1, 0, 0); // someone left standing (looking away), or the car's already won
+            PlaceBody(c, 1, 0);
+            Check(c.Do("shove 2 0") && c.CoverTaken(new Cell(2, 0)), "cover: the shove takes the seat");
+            PlaceBody(c, 3, 0);
+            Check(!c.Do("shove 2 0") && c.bodies[1].cover == null, "cover: one body per seat");
+            c.bodies.RemoveAt(1); // (the bodies list only)
+            Check(c.Grab(), "cover: grab"); Check(c.Move(new Cell(0, 1)), "cover: drag move"); Check(!c.CoverTaken(new Cell(2, 0)), "cover: dragged off, free again");
+
             // On a patroller's route, unseen (beside it, out of its cone): it doesn't route round you, it walks into you,
             // turns, fights, and the surprise scares it a little.
             c = new Carriage(new[] { "..P..", ".....", "....." }, t, 1);
@@ -211,11 +246,14 @@ namespace RailTracer
             // Gunfire: allies don't block the shot, and the whole carriage learns where you are.
             c = new Carriage(Map, t, 1);
             var shooter = c.Spawn(4, 0, -1, 0, 0);
-            c.Spawn(2, 0, 1, 0, 0); // ally in the line of fire
+            var ally = c.Spawn(2, 0, 1, 0, 0); // ally in the line of fire
             var bystander = c.Spawn(4, 2, 1, 0, 1);
             c.EnemyAct(shooter);
             Check(shooter.awareness == Awareness.Combat && c.hp == t.maxHp - t.shotDamage, "sees you: combat, shoots past allies");
-            Check(bystander.awareness == Awareness.Searching && bystander.lastKnown == new Cell(0, 0), "gunfire alerts everyone");
+            Check(bystander.awareness == Awareness.Searching && bystander.hunt == Hunt.Look && bystander.lastKnown == new Cell(0, 0), "gunfire alerts everyone");
+            // The nearest not fighting (2 steps each: a tie, the first in the list) goes to where the shot came from (20.2).
+            Check(ally.awareness == Awareness.Searching && ally.hunt == Hunt.Go && ally.lastKnown == shooter.pos && c.Decide(ally) == Intent.Investigate,
+                "gunfire: the nearest guard goes to check where it came from");
             Check(c.HalfCovered(new Cell(0, 1), new Cell(4, 1)) && c.HitChance(shooter, new Cell(0, 1)) == t.halfCoverHitMult * t.hitChance, "seat is half cover");
 
             // Patrols face the way they walk; guards turn every few turns.
@@ -667,13 +705,13 @@ namespace RailTracer
             int W = m[0].Length, H = m.Length;
             char At(int x, int y) => x < 0 || y < 0 || x >= W || y >= H ? '#' : m[y][x];
             string where = $"car {i + 1} ({car.name})";
-            Check(m.All(r => r.Length == W) && m.SelectMany(r => r).All(ch => "._PSLlWGTODBMXxCtV".IndexOf(ch) >= 0), where + ": a known piece on every tile");
+            Check(m.All(r => r.Length == W) && m.SelectMany(r => r).All(ch => "._PSLlWGTODBMXxCtVw".IndexOf(ch) >= 0), where + ": a known piece on every tile");
             bool booths = m.Any(r => r.IndexOf('V') >= 0); // a booth coach: its aisle on the near side
             int aisle = booths ? H - 1 : 2;
             Check(Enumerable.Range(1, W - 1).All(x => At(x, aisle) == '.' || At(x, aisle) == 'D' || (i == 3 && At(x, aisle) == 'X')), where + ": the aisle clear"); // the baggage hold's one crate in the aisle
             if (booths) BoothShape(m, where);
             Check(m.SelectMany(r => r).Count(ch => ch == 'G') == 1, where + ": one gramophone");
-            string allowed = car.kind == CarKind.Passenger ? "SLlWGtV" : car.kind == CarKind.Dining ? "TODBG" : "MXxCG";
+            string allowed = car.kind == CarKind.Passenger ? "SLlWGtVw" : car.kind == CarKind.Dining ? "TODBG" : "MXxCG";
             Check(m.SelectMany(r => r).All(ch => ch == '.' || ch == '_' || ch == 'P' || allowed.IndexOf(ch) >= 0), where + ": only its kind's pieces");
             for (int x = 0; x < W; x++)
             {
@@ -918,6 +956,17 @@ namespace RailTracer
         static void BoothShape(string[] m, string where)
         {
             int W = m[0].Length, H = m.Length;
+            // Booth fronts (20.2): 'w' on the row by the aisle, from each divider, all but the last 2 tiles before the next
+            // (or the car's end); then the shape checks below as before.
+            for (int x = 0; x < W; x++)
+            {
+                if (m[0][x] != 'V') continue;
+                int next = Enumerable.Range(x + 1, W - x - 1).FirstOrDefault(n => m[0][n] == 'V');
+                int width = (next > 0 ? next : W) - x - 1;
+                Check(Enumerable.Range(x + 1, width).All(n => (m[H - 2][n] == 'w') == (n - x <= width - 2)), where + $": booth front after {x}");
+            }
+            Check(m.Select((r, y) => y == H - 2 ? r : r.Replace("w", "")).All(r => r.Length == W), where + ": booth fronts only on the row by the aisle");
+            m = m.Select(r => r.Replace('w', '.')).ToArray();
             var dividers = Enumerable.Range(0, W).Where(x => m[0][x] == 'V').ToList();
             Check(dividers.Count >= 2 && dividers.All(x => Enumerable.Range(0, H).All(y => m[y][x] == (y < H - 1 ? 'V' : '.'))), where + ": dividers walled but for the aisle");
             Check(dividers[0] >= 2 && dividers[dividers.Count - 1] <= W - 3 && new[] { 0, 1, W - 2, W - 1 }.All(x => Enumerable.Range(0, H).All(y => ".PG".IndexOf(m[y][x]) >= 0)), where + ": two open columns at each end");
@@ -1162,6 +1211,10 @@ namespace RailTracer
             c = new Carriage(new[] { "P.....", "......" }, t, 1);
             var h = c.Spawn(4, 0, -1, 0, 0, tough: true);
             Check(c.Charges(h, c.player) && !c.WillShoot(h, c.player), "a heavy shows the charge, not the crosshair");
+            // ...nor fire reaction shots (20.2): walking and leaping across a fighting heavy's sight draws nothing.
+            h.awareness = Awareness.Combat;
+            Check(!c.WillReact(h) && c.MovePreview(new Cell(2, 1)).TrueForAll(p => p.shooter == null), "a heavy has no reaction shot, none in the preview");
+            Check(c.Move(new Cell(2, 1)) && c.hp == t.maxHp && h.reactionReady && c.shotsFired.Count == 0, "walking in a heavy's sight: no shot");
             // ...and see only 2 tiles straight out to the sides.
             c = new Carriage(new[] { "......", "......", "......", "......", "......", "......", "......" }, t, 1);
             h = c.Spawn(0, 3, 1, 0, 0, tough: true);

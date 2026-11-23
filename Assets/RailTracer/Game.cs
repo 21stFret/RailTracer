@@ -200,6 +200,9 @@ namespace RailTracer
         [Range(0f, 1f)] public float takedownEndBlend = 0.35f;
         [Tooltip("Stealth finishers hold your hips in place (you never leave your tile), not the middle of the pair: no travel of yours to slide back.")]
         public bool pinStealthAttacker = true;
+        [Tooltip("Share of a takedown's last clip (0-1) at its end over which the victim's hips are held where the clip has them, " +
+                 "so they don't drift off as you stand up (20.2). Cover finishers travel as ever.")]
+        [Range(0f, 1f)] public float victimPinTail = 0.15f;
         // How far onto the victim's tile the player is (0..1) through the clip (0..1). Shape it in the Inspector:
         // the flat start and end are the window where the player stands still.
         public AnimationCurve takedownMove = AnimationCurve.EaseInOut(0.15f, 0f, 0.45f, 1f);
@@ -389,6 +392,10 @@ namespace RailTracer
             if (replay != null) foreach (var cmd in replay) c.Do(cmd);
             bool resumed = replay != null && replay.Count > 0;
             replay = null;
+            // A save's replay is silent and instant (20.2): its shots and hits are never played, corpses are laid down
+            // where they lie on the first frame (FinishRestore), the broken go straight to their loop.
+            restoring = resumed;
+            c.shotsFired.Clear();
             if (phase == Phase.Play && !resumed)
             {
                 if (car.kind == CarKind.WalkThrough) WalkCard();
@@ -407,7 +414,7 @@ namespace RailTracer
             Time.timeScale = 1f;
             lastState.Clear();
             foreach (var e in c.enemies) lastState[e] = e.state;
-            lastHits = 0;
+            lastHits = c.hitsTaken; // a resumed save's hits were taken before: no blood, no red screen
             pendingAct = null;
 
             // Tile colours are transparent overlays just above whatever floor is there.
@@ -451,6 +458,7 @@ namespace RailTracer
                 look.name = "Car Look";
                 kitBuilt = onKit = true;
                 AddBoothTables(look.transform, trainKit, Map);
+                AddBoothFronts(look.transform.Find("Train Car"), trainKit, Map); // baked before the booth fronts (20.2)
                 DressBars(look.transform, trainKit, Map);
                 if (car.kind == CarKind.Baggage) // no curtains or blinds in baggage cars (19.45, 19.46; the baked hold still has them)
                     foreach (var t in look.GetComponentsInChildren<Transform>(true))
@@ -529,6 +537,8 @@ namespace RailTracer
                 var o = new AnimatorOverrideController(enemyController);
                 PickIdle(o, idleSet ? idleSet.relaxed : null);
                 PickIdle(o, idleSet ? idleSet.armed : null);
+                bool fighterStance = e.tough && idleSet && idleSet.heavy && idleSet.armedSlot;
+                if (fighterStance) o[idleSet.armedSlot] = idleSet.heavy; // heavies: fists up, no gun (20.2)
                 var a = anims[e] = Character(GuardModel(e), o);
                 if (a.parameters.Any(p => p.name == "IdleOffset")) a.SetFloat("IdleOffset", Random.value); // out of step, every time they idle
                 a.Play(0, 0, Random.value); // out of sync so they don't bob together
@@ -608,6 +618,34 @@ namespace RailTracer
         // Booth tables ('t', 19.42) came after Second and First class were baked: a baked look without them gets them
         // here, on its "Train Car" shell as BuildKitCarriage places them, and any baked prop standing on a table's tile (an
         // umbrella by the window) is hidden. Re-baking the car makes this a no-op.
+        // Booth fronts ('w', 20.2): from each divider's newel along the walled-off tiles of the row by the aisle, on the
+        // joint between that row and the aisle: Booth_Front_Start (newel to the first tile's edge), a Booth_Front_1m per
+        // tile, a Booth_Front_Post at the open end. For built and baked looks alike (skipped if the look has them).
+        static void AddBoothFronts(Transform shell, TrainKit kit, string[] map)
+        {
+            if (!shell || !kit || map.Length != 5 || map[3].IndexOf('w') < 0) return;
+            if (shell.GetComponentsInChildren<Transform>(true).Any(t => t.name.StartsWith("Booth_Front"))) return;
+            GameObject[] parts = { kit.Get("Booth_Front_Start"), kit.Get("Booth_Front_1m"), kit.Get("Booth_Front_Post") };
+            if (parts.Any(p => !p)) return;
+            const float joint = 1.5f; // between row 3 and the aisle (row 4): x = row - 2
+            void Put(int k, string name, float z)
+            {
+                var go = Instantiate(parts[k], shell);
+                go.name = name;
+                go.transform.localPosition = new Vector3(joint, 0f, z);
+                go.transform.localRotation = Quaternion.identity;
+            }
+            string row = map[3];
+            for (int x = 0; x < row.Length; x++)
+            {
+                if (row[x] != 'w' || (x > 0 && row[x - 1] == 'w')) continue; // the first tile of a front, beside its divider
+                Put(0, "Booth_Front_Start", x + 0.29f); // tile x - 1 (the divider) is centred at z = x
+                int n = x;
+                for (; n < row.Length && row[n] == 'w'; n++) Put(1, "Booth_Front_1m", n + 1f);
+                Put(2, "Booth_Front_Post", n + 0.5f);
+            }
+        }
+
         static void AddBoothTables(Transform look, TrainKit kit, string[] map)
         {
             var model = kit ? kit.Get("Table_Booth") : null;
@@ -750,6 +788,7 @@ namespace RailTracer
             }
 
             Place("EndCap_Door", 0f, 0.25f, 0f);
+            AddBoothFronts(shell, kit, map);
             Place("EndCap_Door", 0f, car.W + 0.75f, 180f);
             PlaceWalls(0, 0f, false);
             PlaceWalls(car.H - 1, 180f, cutawayNearWall);
@@ -1606,6 +1645,7 @@ namespace RailTracer
             FlickerEmbers();
             Debugging();
             Sync();
+            if (restoring) FinishRestore();
             Tags();
             Tickets();
             hud.SetEndTurn(spaceHeld >= 0f ? spaceHeld / endTurnHold : 0f, !busy && !c.Over && !walking);
@@ -1851,6 +1891,7 @@ namespace RailTracer
                 var next = c.Decide(e);
                 bool danger = next == Intent.Shoot || next == Intent.Charge || next == Intent.Melee || next == Intent.WildFire;
                 string shot = threat && swingThreats.Contains(e) ? $"Swing · Hit {pct}%" // a heavy's melee (never halved), not a shot
+                    : e.tough && e.InPlay && previewLanding.HasValue ? "Reaction N/A" // heavies carry no gun (20.2)
                     : threat ? $"Hit {pct}%" + (leaping && !(previewLanding.HasValue && c.Swings(e, previewLanding.Value)) ? $" · leap -{Mathf.RoundToInt(100 * c.t.leapHitPenalty)}" : "") : c.IntentText(e);
                 if (!seenTerror.TryGetValue(e, out int wasTerror)) seenTerror[e] = wasTerror = e.terror; // first seen: no pop
                 if (!(camming || takedownVictim != null || flipT >= 0f || hopRunning)) // not under the kill cam or mid-act
@@ -2038,11 +2079,19 @@ namespace RailTracer
                 var side = new Vector3(d.x, 0f, -d.y);
                 var seatCell = new Cell(victim.pos.x + d.x, victim.pos.y + d.y);
                 bool gram = seatCell == c.gramophone, hadGram = coverDir != null && coverCell == c.gramophone;
-                if (c.IsSeat(seatCell) && (coverDir == null || (gram && !hadGram) || (!hadGram && Vector3.Dot(side, away) > Vector3.Dot(coverDir.Value, away))))
+                if (c.IsSeat(seatCell) && !c.CoverTaken(seatCell) && (coverDir == null || (gram && !hadGram) || (!hadGram && Vector3.Dot(side, away) > Vector3.Dot(coverDir.Value, away))))
                 {
                     coverDir = side;
                     coverCell = seatCell;
                 }
+            }
+            // A brutal kill with the gramophone on any of the 8 tiles round the victim always shoves them onto it (20.2:
+            // diagonals too), unless a body is already on it.
+            if (brutal && c.gramophone is Cell gram8 && gram8 != victim.pos && Mathf.Abs(gram8.x - victim.pos.x) <= 1 && Mathf.Abs(gram8.y - victim.pos.y) <= 1
+                && !c.CoverTaken(gram8))
+            {
+                coverCell = gram8;
+                coverDir = new Vector3(gram8.x - victim.pos.x, 0f, -(gram8.y - victim.pos.y)).normalized;
             }
             // A finisher from the library (guard or heavy set, your stance), played on the "Finisher" states; else the old pair.
             // In front of the victim or behind them (by the way they face); square to it, from the side: both pools.
@@ -2063,6 +2112,7 @@ namespace RailTracer
                 playerFacing = dir.normalized;
                 // A cover finisher (shoved over a seat): the pair turns to face the seat and moves towards it.
                 bool useCover = entry != null && entry.needsCover && coverDir.HasValue;
+                if (useCover) c.Do($"shove {coverCell.x} {coverCell.y}"); // one body per cover (and a save keeps the pose)
                 if (useCover && c.gramophone == coverCell && c.Do("needle") && !walking) Achievements.Unlock(Achievements.OffTheRecord); // shoved onto the gramophone: the music stops
                 if (useCover)
                 {
@@ -2147,12 +2197,13 @@ namespace RailTracer
                 var heldAt = hold ? PairMiddle() : Vector3.zero;
                 float length = playerAnim.GetCurrentAnimatorStateInfo(0).length;
                 float length2 = 0f;
-                bool second = false, bled = false;
+                bool second = false, bled = false, screamed = false;
+                bool ownScream = brutal && entry != null && entry.screamAt >= 0f;
                 var struck = new HashSet<int>(); // extra blood points already fired
                 // Handing back to idle: once the last clip starts blending out, your hips stay where the finisher left
                 // them (the transform follows the pose), then you slide onto the tile the rules gave you.
                 var playerHips = playerAnim.GetBoneTransform(HumanBodyBones.Hips);
-                Vector3? anchor = null;
+                Vector3? anchor = null, victimPinned = null;
                 for (float time = 0f; ; time += Time.deltaTime)
                 {
                     if (!second)
@@ -2173,11 +2224,17 @@ namespace RailTracer
                     if ((!chained || second) && !bled && t >= bloodAt)
                     {
                         Sfx(brutal ? "HeadStomp" : "KnifeSlice", Wound(va) ?? at);
-                        KillBlood(victim, act, playerFacing, Wound(va), entry != null && entry.gore);
+                        KillBlood(victim, act, playerFacing, Wound(va), entry != null && entry.gore, !ownScream);
                         Soak(va, brutal);
                         if (entry != null && entry.headOff) HeadOff(va);
                         HitSlowMo();
                         bled = true;
+                    }
+                    // The entry's own Scream At (20.2), over the whole takedown: a brutal kill's scream timed to end on the blow.
+                    if (ownScream && !screamed && entry.Overall(second, t) >= entry.screamAt)
+                    {
+                        Sfx("Scream", (Chest(va) ?? at) + Vector3.up * FigureHeight * 0.3f);
+                        screamed = true;
                     }
                     if (entry != null && blood)
                     {
@@ -2215,6 +2272,16 @@ namespace RailTracer
                         playerShown -= drift;
                         va.transform.localPosition -= drift;
                     }
+                    // The victim's hips stay where the clip killed them through its tail and as you hand back to idle
+                    // (the hold above stops once you're anchored, and the end blend moves only you): no drift away (20.2).
+                    if (!useCover && victimHips && (!chained || second) && (anchor.HasValue || t >= 1f - victimPinTail))
+                    {
+                        var vh = root.InverseTransformPoint(victimHips.position);
+                        victimPinned ??= vh;
+                        var d = victimPinned.Value - vh;
+                        d.y = 0f;
+                        va.transform.localPosition += d;
+                    }
                     if (entry != null && playerHips && (anchor.HasValue || ((!chained || second) && t > 0.3f && playerAnim.IsInTransition(0))))
                     {
                         var h = root.InverseTransformPoint(playerHips.position) - playerShown;
@@ -2226,7 +2293,7 @@ namespace RailTracer
                 }
                 if (!bled)
                 {
-                    KillBlood(victim, act, playerFacing, Chest(va), entry != null && entry.gore);
+                    KillBlood(victim, act, playerFacing, Chest(va), entry != null && entry.gore, !ownScream);
                     Soak(va, brutal);
                     if (entry != null && entry.headOff) HeadOff(va);
                 }
@@ -2484,7 +2551,7 @@ namespace RailTracer
 
         void ShotEffect(Enemy e)
         {
-            if (!shown.ContainsKey(e)) return;
+            if (restoring || !shown.ContainsKey(e)) return;
             var face = new Vector3(e.facing.x, 0f, -e.facing.y);
             if (anims.TryGetValue(e, out var a) && a.HasState(0, Animator.StringToHash("Shoot"))) a.Play("Shoot", 0, 0f);
             var hand = a ? a.GetBoneTransform(HumanBodyBones.RightHand) : null;
@@ -2537,12 +2604,12 @@ namespace RailTracer
 
         // `how` null = shot by someone else's gun. `dir` points from the killer through the victim. `chestAt`: the victim's
         // chest where a finisher has carried it (root space); else above its tile.
-        void KillBlood(Enemy e, Act? how, Vector3 dir, Vector3? chestAt = null, bool gore = false)
+        void KillBlood(Enemy e, Act? how, Vector3 dir, Vector3? chestAt = null, bool gore = false, bool scream = true)
         {
             Sfx("BloodStab", chestAt ?? World(e.pos) + Vector3.up * FigureHeight * 0.6f);
             // A loud death: the victim of a brutal kill or a rail grab screams (Resources/Audio/Sfx "Scream*", one at
             // random). Quiet kills and anyone shot stay silent; so does a witness, unless it breaks them (DetectBlood).
-            if (how == Act.BrutalKill || how == Act.RailGrab) Sfx("Scream", chestAt ?? World(e.pos) + Vector3.up * FigureHeight * 0.9f);
+            if (scream && (how == Act.BrutalKill || how == Act.RailGrab)) Sfx("Scream", chestAt ?? World(e.pos) + Vector3.up * FigureHeight * 0.9f);
             if (!blood) return;
             var at = chestAt.HasValue ? new Vector3(chestAt.Value.x, 0f, chestAt.Value.z) : World(e.pos);
             var chest = chestAt ?? at + Vector3.up * FigureHeight * 0.6f;
@@ -2946,7 +3013,9 @@ namespace RailTracer
                     var m = tiles[x, y].material;
                     bool under = hover == cell;
                     if (under)
-                        col = c.enemies.Exists(e => c.WillReact(e) && c.CanSee(e, cell)) ? ReactCol
+                        col = (leaping || hopping) && preview != null // a leap or hop: its own shooters (anyone it startles holds fire)
+                            ? (preview.Exists(p => p.shooter != null) ? ReactCol : preview[preview.Count - 1].seen ? SightCol : Bone)
+                            : c.enemies.Exists(e => c.WillReact(e) && c.CanSee(e, cell)) ? ReactCol
                             : c.SeenByAnyone(cell) ? SightCol : Bone;
                     m.color = col;
                     m.SetFloat("_Width", under ? 0.15f : 0.1f);
@@ -3991,9 +4060,13 @@ namespace RailTracer
             // Broken: down on their knees to beg ("BegStart", then the "Beg" loop), or the old cower without those states.
             bool broken = e.state == EnemyState.Broken && !e.fleeing;
             if (!a.HasState(0, Animator.StringToHash("BegStart"))) a.SetBool("Broken", broken);
-            else if (broken && begging.Add(e)) a.CrossFade("BegStart", 0.25f, 0, 0f);
+            else if (broken && begging.Add(e))
+            {
+                if (restoring && a.HasState(0, Animator.StringToHash("Beg"))) a.Play("Beg", 0, Random.value); // a loaded save: already down
+                else a.CrossFade("BegStart", 0.25f, 0, 0f);
+            }
             var aware = HeldStartle(e) ?? e.awareness; // a startle waits for your act to finish
-            if (armed.Contains(a)) a.SetBool("Armed", aware != Awareness.Unaware); // holstered only while unaware
+            if (armed.Contains(a)) a.SetBool("Armed", aware != Awareness.Unaware && (!e.tough || HeavyStance)); // holstered only while unaware; heavies: their fighter stance if there is one (20.2)
             if (guns.TryGetValue(e, out var held))
             {
                 held.t.gameObject.SetActive(e.state == EnemyState.Active && aware != Awareness.Unaware); // holstered; dropped when broken
@@ -4006,10 +4079,13 @@ namespace RailTracer
             var step = pos - before;
             t.localRotation = Quaternion.LookRotation(moving && step.sqrMagnitude > 1e-8f ? step : new Vector3(e.facing.x, 0, -e.facing.y));
             if (aware == Awareness.Startled) t.localRotation *= Quaternion.Euler(-14f, 0f, 0f); // recoils
-            lookYaw[a] = !moving && aware == Awareness.Unaware ? IdleLook(e) : 0f; // a glance turns the upper body, the feet stay planted
+            // A glance turns the upper body, the feet stay planted. A searching heavy (no gun, so no armed idle) keeps
+            // glancing round: its look-around stance until it has a clip of its own (20.2).
+            lookYaw[a] = !moving && (aware == Awareness.Unaware || (e.tough && aware == Awareness.Searching)) ? IdleLook(e) : 0f;
             t.localScale = Vector3.one * characterScale * (e.tough ? HeavyScale : 1f);
             Tint(a, SuitColor(e));
         }
+        bool HeavyStance => idleSet && idleSet.heavy && idleSet.armedSlot;
         const float HeavyScale = 1.15f * 0.9f; // a heavy beside a guard (19.65: 10% smaller)
 
         // The idle glance, after the animator: spread up the spine to the head (feet and hips stay on the pose).
@@ -4059,6 +4135,16 @@ namespace RailTracer
                 t.localRotation = Quaternion.LookRotation(new Vector3(e.facing.x, 0, -e.facing.y));
                 t.localScale = Vector3.one * characterScale * (e.tough ? HeavyScale : 1f);
                 Tint(a, SuitColor(e));
+            }
+            var lies = c.bodies.Find(b => b.who == e);
+            if (restoring)
+            {
+                // A loaded save: down where it lies at once, no slide or fall to watch.
+                if (hung.Contains(e)) HangOut(e, a);
+                else if (lies?.cover is Cell on && PoseOnCover(e, a, lies, on)) { }
+                else if (HasRagdoll(a)) { a.enabled = false; SetLimp(a, true); restoredLimp.Add((e, a)); }
+                else Fall(a.transform, shown[e] - playerShown);
+                return;
             }
             if (hung.Contains(e)) HangOut(e, a);
             else if (HasRagdoll(a)) StartCoroutine(Ragdoll(e, a, c.bodies.Find(b => b.who == e)?.pos ?? e.pos));
@@ -4146,6 +4232,54 @@ namespace RailTracer
                 if (!a) yield break; // restarted mid-fall
             }
             SetLimp(a, false); // frozen where it fell (the animator stays off)
+        }
+
+        // Topple's end pose at once (a loaded save).
+        static void Fall(Transform t, Vector3 away)
+        {
+            t.GetComponent<Animator>().enabled = false;
+            away.y = 0;
+            var axis = Vector3.Cross(Vector3.up, away.sqrMagnitude > 1e-4f ? away.normalized : t.forward);
+            t.localRotation = Quaternion.AngleAxis(88f, axis) * t.localRotation;
+        }
+
+        // A loaded save's bodies (20.2): ragdolls dropped together in a few hundred physics steps on the first frame,
+        // then frozen where they fell; the music already off if the needle was knocked off. Nothing is heard.
+        readonly List<(Enemy e, Animator a)> restoredLimp = new List<(Enemy, Animator)>();
+        bool restoring;
+        void FinishRestore()
+        {
+            restoring = false;
+            if (c.musicStopped && music) music.pitch = 0f;
+            if (restoredLimp.Count == 0) return;
+            foreach (var (e, a) in restoredLimp) bodyOffset[e] = a.transform.localPosition - World(c.bodies.Find(b => b.who == e)?.pos ?? e.pos);
+            var mode = Physics.simulationMode;
+            Physics.simulationMode = SimulationMode.Script;
+            for (int i = 0; i < 150; i++) Physics.Simulate(0.02f); // 3 s: long enough for any ragdoll to settle
+            Physics.simulationMode = mode;
+            foreach (var (_, a) in restoredLimp) if (a) SetLimp(a, false);
+            restoredLimp.Clear();
+        }
+
+        // A Shove to Table victim on a loaded save: bent over its cover in the cover finisher's last frame, placed as the
+        // live kill leaves it (the pair turned to the cover, moved Cover Shift towards it). False without a cover finisher.
+        bool PoseOnCover(Enemy e, Animator a, Body b, Cell on)
+        {
+            var entry = takedowns ? takedowns.takedowns.Find(t => t.needsCover && t.victim) : null;
+            if (entry == null || !a.HasState(0, Animator.StringToHash("Finisher"))) return false;
+            var dir = new Vector3(on.x - b.pos.x, 0f, -(on.y - b.pos.y)).normalized;
+            var t = a.transform;
+            t.localPosition = World(b.pos) + dir * entry.coverShift * characterScale + (Map[on.y][on.x] == 'B' ? Vector3.up * barShoveLift : Vector3.zero);
+            t.localRotation = Quaternion.LookRotation(dir) * Quaternion.Euler(0f, entry.victimYaw, 0f);
+            bool chained = entry.victim2 && a.HasState(0, Animator.StringToHash("Finisher2"));
+            Override(a, "Finisher Victim", entry.victim);
+            if (chained) Override(a, "Finisher Victim 2", entry.victim2);
+            a.Play(chained ? "Finisher2" : "Finisher", 0, 1f);
+            a.Update(0f);
+            a.enabled = false; // held in that pose
+            posedBodies.Add(e);
+            pairedKills.Add(e);
+            return true;
         }
 
         IEnumerator Topple(Transform t, Vector3 away)

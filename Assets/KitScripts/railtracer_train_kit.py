@@ -1374,7 +1374,31 @@ def booth_divider(S):
     S.vertical = False
     S.rect(-1.57, -1.39, -0.09, 0.09, 2.61, 2.64, SLOT_BRASS)                        # brass cap
 
-PARTS = [module("Partition_Door", partition), module("Booth_Divider", booth_divider)]
+def booth_front(S, L):
+    """Booth front stub (20.2): a length L of booth-divider wall at right angles to the dividers, centred at the origin and
+    running along y (the car), 8 cm thick round x = 0, the divider's build: wood to the chair rail, wallpaper above,
+    baseboard and chair rail on both faces (square ends), a capping rail. Game stands it on the joint between a booth
+    and the aisle, from the divider's newel along the booth's walled-off front tiles ('w'); the pieces butt end to end."""
+    T, TOPZ, H = 0.04, 2.58, L / 2
+    S.rect(-T, T, -H, H, 0.0, DADO_Z, SLOT_WOOD)
+    S.rect(-T, T, -H, H, DADO_Z, TOPZ - 0.05, SLOT_WALLPAPER)
+    S.rect(-0.06, 0.06, -H, H, TOPZ - 0.05, TOPZ, SLOT_TRIM)                        # capping rail
+    for f in (1, -1):
+        for prof in (BASE, DADO):
+            moulding(S, prof, (f * T, 0.0, 0.0), (0, 1, 0), (f, 0, 0), (0, 0, 1), -H, H, 0, 0)
+
+def booth_post(S):
+    """The newel at a booth front's open end (20.2): the divider's own newel (plinth, post, brass cap), centred at the origin."""
+    S.rect(-0.09, 0.09, -0.09, 0.09, 0.0, 0.20, SLOT_TRIM)
+    S.vertical = True
+    S.rect(-0.08, 0.08, -0.08, 0.08, 0.19, 2.62, SLOT_TRIM)
+    S.vertical = False
+    S.rect(-0.09, 0.09, -0.09, 0.09, 2.61, 2.64, SLOT_BRASS)
+
+PARTS = [module("Partition_Door", partition), module("Booth_Divider", booth_divider),
+         module("Booth_Front_1m", lambda S: booth_front(S, 1.0)),
+         module("Booth_Front_Start", lambda S: booth_front(S, 0.42)),   # divider newel face (0.09) to the first tile's edge (0.5), into the newel by 1 cm
+         module("Booth_Front_Post", booth_post)]
 
 
 # ---------------------------------------------------------------- seat
