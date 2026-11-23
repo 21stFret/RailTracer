@@ -651,7 +651,10 @@ namespace RailTracer
                 if (e.reacted.Contains(s)) continue;
                 int best = -1;
                 for (int i = 0; i < s.tiles.Count; i++)
-                    if (Sees(e, s.tiles[i], true) && (best < 0 || Dist2(e.pos, s.tiles[i]) < Dist2(e.pos, s.tiles[best]))) best = i;
+                    if (s.tiles[i] != e.pos && Sees(e, s.tiles[i], true) && (best < 0 || Dist2(e.pos, s.tiles[i]) < Dist2(e.pos, s.tiles[best]))) best = i;
+                // Standing in it: they look to where it came from (a kill's stain starts at the kill), not their own feet,
+                // which left a guard beside a brutal kill searching his own tile and never turning (20.5).
+                if (best < 0 && !s.trail && s.tiles.Contains(e.pos) && s.tiles[0] != e.pos) best = 0;
                 if (best < 0) continue;
                 e.reacted.Add(s);
                 if (s.trail) FollowTrail(e, s, best, Clue.Blood);

@@ -196,6 +196,19 @@ namespace RailTracer
             c.player = new Cell(6, 4);
             Check(!c.CanHopTo(new Cell(8, 4)), "level with a divider: no hop");
 
+            // 20.5: a guard beside a brutal kill, looking away, blood splashed onto his own tile: he goes for the kill spot
+            // (you), turns and fights, rather than searching his own feet.
+            c = new Carriage(new[] { "........", "........", "........" }, t, 1);
+            c.player = new Cell(1, 1);
+            var bkVictim = c.Spawn(2, 1, 1, 0, 0);
+            var beside = c.Spawn(3, 1, 1, 0, 0);
+            c.Spawn(7, 0, 1, 0, 0);
+            c.legend = Unlock(t, SkillId.Brutal);
+            Check(c.Do($"act BrutalKill {bkVictim.id}") && beside.awareness == Awareness.Searching, "set-up: he hears it, looking away");
+            c.Do("end");
+            c.Do($"enemy {beside.id}");
+            Check(beside.facing == new Cell(-1, 0) && beside.awareness == Awareness.Combat, "blood under his feet: he turns to the kill and finds you");
+
             // One body per piece of cover (20.2): a second shove onto the same seat is refused; dragged off, it's free.
             c = new Carriage(new[] { "P.S..", "....." }, t, 1);
             c.Spawn(4, 1, 1, 0, 0); // someone left standing (looking away), or the car's already won

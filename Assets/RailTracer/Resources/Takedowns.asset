@@ -43,7 +43,7 @@ MonoBehaviour:
     camLook: {x: 0.3034169, y: -0.2875536, z: 0.6651601}
   - name: Duck and Back Stab
     kind: 1
-    target: 1
+    target: 2
     stance: 0
     facing: 0
     attacker: {fileID: 8993902097722301239, guid: d87b0ae9e930fd943818ed1e8a4ddadf, type: 3}
