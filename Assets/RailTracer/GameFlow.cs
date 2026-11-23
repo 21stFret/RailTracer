@@ -737,6 +737,7 @@ namespace RailTracer
         {
             phase = Phase.Entering;
             hud.ShowMenu(false);
+            if (menuTrain) menuTrain.SetActive(false); // the other cars go as soon as a level is picked; only the live car is dived into
             var rot = Quaternion.Euler(55f, 0f, 0f);
             focus = playerShown;
             camDistance = 12f;
