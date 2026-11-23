@@ -66,6 +66,7 @@ namespace RailTracer
             }
             cam = Camera.main;
             if (!cam) { cam = new GameObject("Camera").AddComponent<Camera>(); cam.tag = "MainCamera"; }
+            if (!FindAnyObjectByType<AudioListener>()) cam.gameObject.AddComponent<AudioListener>(); // to hear the takedown's sounds (20.4)
             cam.clearFlags = CameraClearFlags.SolidColor;
             cam.backgroundColor = new Color(0.12f, 0.12f, 0.14f);
             cam.fieldOfView = 50f;
@@ -242,7 +243,7 @@ namespace RailTracer
                         victim.transform.position += d;
                     }
                     if (!bled && clock >= bloodTime) { Bleed(t); bled = true; }
-                    if (!screamed && t.screamAt >= 0f && clock >= t.screamAt * total) { screamFlash = Time.time; screamed = true; }
+                    if (!screamed && t.screamAt >= 0f && clock >= t.screamAt * total) { Scream(t); screamed = true; }
                     for (int s = 0; s < t.extraBlood.Count; s++)
                         if (!struck.Contains(s) && clock >= t.extraBlood[s] * total) { struck.Add(s); Strike(t); }
                 }
@@ -290,10 +291,33 @@ namespace RailTracer
                     $"   cam offset {t.camOffset}";
         }
 
+        // The game's sound effects (Resources/Audio/Sfx, a clip at random by name), at the victim's chest; none while a
+        // seek runs through (20.4). The SCREAM flash shows either way.
+        AudioClip[] sfxClips;
+        void Sfx(string name)
+        {
+            if (seekTo >= 0f) return;
+            sfxClips ??= Resources.LoadAll<AudioClip>("Audio/Sfx");
+            var pick = System.Array.FindAll(sfxClips, c => c.name.StartsWith(name));
+            if (pick.Length == 0) return;
+            var bone = victim.GetBoneTransform(HumanBodyBones.Chest);
+            AudioSource.PlayClipAtPoint(pick[Random.Range(0, pick.Length)], bone ? bone.position : victim.transform.position + Vector3.up, 0.8f);
+        }
+
+        void Scream(Takedown t)
+        {
+            screamFlash = Time.time;
+            Sfx("Scream");
+        }
+
         // The game's kill blood (Game.KillBlood): the splash from the victim's chest, then straight-cast stains.
         void Bleed(Takedown t)
         {
             bloodFlash = Time.time;
+            bool brutal = t.kind == KillKind.Brutal;
+            Sfx(brutal ? "HeadStomp" : "KnifeSlice");
+            Sfx("BloodStab");
+            if (brutal && t.screamAt < 0f) Scream(t); // no Scream At: with the blood, as in the game
             if (!blood) return;
             var bone = victim.GetBoneTransform(HumanBodyBones.Chest);
             var body = bone ? bone.position : victim.transform.position + Vector3.up * 1.1f;
@@ -302,7 +326,6 @@ namespace RailTracer
             var dir = victim.transform.position - attacker.transform.position;
             dir.y = 0f;
             dir = dir.sqrMagnitude > 1e-4f ? dir.normalized : Vector3.forward;
-            bool brutal = t.kind == KillKind.Brutal;
             blood.Splash(bloodRoot, chest, dir, brutal || t.gore);
             if (t.headOff)
             {
