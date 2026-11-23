@@ -17,3 +17,5 @@ MonoBehaviour:
   - {fileID: -3100369314251171874, guid: 12e52e465ed793a4d801955e9f964a82, type: 3}
   armed:
   - {fileID: -203655887218126122, guid: 8c79d4725ec545b4cbe0389c383dd663, type: 3}
+  heavy: {fileID: 7400000, guid: d0d3809b813aa0b4f90429d5587583f0, type: 3}
+  armedSlot: {fileID: -203655887218126122, guid: 8c79d4725ec545b4cbe0389c383dd663, type: 3}

@@ -198,6 +198,23 @@ namespace RailTracer
             return (map, spawns.ToArray(), patrols);
         }
 
+        // Which way a seat bank in column x faces, as the view turns it (the FBX's back at local +Z): 180 = facing +x (up the
+        // car), 0 = facing -x. Columns pair up along the whole car, so a bank whose partner is across a partition would
+        // face the partition's wall: it faces away from it instead (20.3, the Guards' coach).
+        public static float SeatRot(string[] m, int x)
+        {
+            int h = m.Length, w = m[0].Length;
+            bool Seat(int c) => Enumerable.Range(0, h).Any(y => m[y][c] == 'S');
+            bool Partition(int c) => Enumerable.Range(0, h).All(y => y == h / 2 ? m[y][c] != 'W' : m[y][c] == 'W');
+            var cols = Enumerable.Range(0, w).Where(Seat).ToList();
+            int i = cols.IndexOf(x);
+            if (i < 0) return 0f;
+            int partner = i % 2 == 0 ? (i + 1 < cols.Count ? cols[i + 1] : -1) : cols[i - 1];
+            if (partner >= 0 && Enumerable.Range(Math.Min(x, partner) + 1, Math.Abs(partner - x) - 1).Any(Partition))
+                return partner > x ? 0f : 180f; // its partner beyond a partition: face away from it
+            return i % 2 == 0 ? 180f : 0f;
+        }
+
         static IEnumerable<(int x, int y)> Tiles(char[,] g, Func<int, int, bool> ok)
         {
             for (int x = 0; x < W; x++)

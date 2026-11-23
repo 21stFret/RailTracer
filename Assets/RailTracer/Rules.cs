@@ -109,6 +109,7 @@ namespace RailTracer
         public Cell? lastKnown;  // what they're hunting: where they saw, heard or found something
         public List<Cell> route; // patrollers: waypoints walked in a loop; null = stationary guard
         public int routeIndex, lookIndex, guardTimer;
+        public bool wasUnaware; // unaware as this enemy turn began (EndPlayerTurn): no attack this turn
         public List<Cell> looks; // a guard's facings, turned through every few turns
         public Stain trail; public int trailIndex; // the drag trail being followed
         public readonly HashSet<Body> found = new HashSet<Body>();
@@ -232,13 +233,13 @@ namespace RailTracer
 
         public string Name(Enemy e) => e.name ?? $"{(e.tough ? "Brute" : "Gunman")} {e.id}";
 
-        // Mob families, hired guns and drifters you'd meet on a 1930s express.
+        // 1950s British hard men and Teddy boys (20.3; made up, none of them real).
         public static readonly string[] NamePool =
         {
-            "Mazio Fratelli", "Sal Bruno", "Carmine Lucchese", "Vito Rizzo", "Enzo Morello", "Dom Gallo",
-            "Frankie Doyle", "Mickey Flanagan", "Tommy Rourke", "Eddie Malone", "Jack Kearney", "Pat Dunne",
-            "Lou Kaminsky", "Benny Roth", "Abe Greenbaum", "Hank Bauer", "Otto Klein", "Karl Weber",
-            "Ivan Sokolov", "Yuri Petrov", "Gus Petrakis", "Ray Callahan", "Joe Mercer", "Wes Pruitt",
+            "Alfie Moss", "Billy Hatch", "Dennis Crane", "Eddie Slade", "Frankie Box", "Georgie Platt",
+            "Harry Lyle", "Jackie Rook", "Johnny Dace", "Kenny Marsh", "Lenny Coker", "Micky Burr",
+            "Nobby Clegg", "Ozzie Finch", "Percy Gault", "Ray Hollis", "Sid Rourke", "Stan Pike",
+            "Tommy Fenn", "Vic Mallory", "Wally Stokes", "Dickie Bone", "Charlie Tanner", "Archie Vale",
         };
 
         // A name each from the pool, no repeats in the carriage (numbered fallbacks past 24).
@@ -525,7 +526,7 @@ namespace RailTracer
             if (after != Stage.Panicked) return;
             if (!e.tough) { e.panicNext = true; return; } // the next turn is a panic turn
             e.berserk = true;
-            e.awareness = Awareness.Combat;
+            if (e.awareness != Awareness.Startled) e.awareness = Awareness.Combat; // a startled heavy still loses its next turn (20.3)
             Log($"{Name(e)} goes berserk!");
         }
 
@@ -1012,24 +1013,29 @@ namespace RailTracer
         {
             if (!CanMove || hopped || held != null || !IsWindow(player) || !IsWindow(c) || c.y != player.y || Occupied(c)) return false; // once a turn
             if (!Bloodied(SkillId.Hop) && movesLeft < t.moveRange) return false;
-            var mine = Booth(player);
+            var here = Booth(player, 0);
+            if (!here.HasValue) return false; // level with a divider: not in a booth
+            var mine = here.Value;
             int dir = Math.Sign(c.x - player.x);
             var next = Booth(new Cell((dir > 0 ? mine.x1 : mine.x0) + dir, player.y), dir);
             return next.HasValue && c.x >= next.Value.x0 && c.x <= next.Value.x1;
         }
 
         // The run of window tiles containing (or, searching `dir`, first found from) `c` in its row.
-        (int x0, int x1) Booth(Cell c) => Booth(c, 0).Value;
+        // A booth coach's aisle side is one long run of windows: its booths there are split at the dividers' columns
+        // (a divider stops short of that row, but the hop still counts its own booth), so you can hop along it (20.3).
         (int x0, int x1)? Booth(Cell c, int dir)
         {
+            bool Win(int x) => IsWindow(new Cell(x, c.y)) && !Divider(x);
             int x = c.x;
-            while (dir != 0 && x >= 0 && x < W && !IsWindow(new Cell(x, c.y))) x += dir;
-            if (x < 0 || x >= W || !IsWindow(new Cell(x, c.y))) return null;
+            while (dir != 0 && x >= 0 && x < W && !Win(x)) x += dir;
+            if (x < 0 || x >= W || !Win(x)) return null;
             int x0 = x, x1 = x;
-            while (IsWindow(new Cell(x0 - 1, c.y))) x0--;
-            while (IsWindow(new Cell(x1 + 1, c.y))) x1++;
+            while (x0 - 1 >= 0 && Win(x0 - 1)) x0--;
+            while (x1 + 1 < W && Win(x1 + 1)) x1++;
             return (x0, x1);
         }
+        bool Divider(int x) => wall[x, 0] && !wall[x, H - 1]; // a booth divider's column (a partition's has no windows anyway)
 
         public bool Hop(Cell c)
         {
@@ -1362,7 +1368,13 @@ namespace RailTracer
             return true;
         }
 
-        public void EndPlayerTurn() => turnOver = true;
+        // Who was unaware as the enemy turn began: anyone alerted during it (a shout, gunfire) only turns and aims or
+        // closes in this turn, no free shot or swing (20.3).
+        public void EndPlayerTurn()
+        {
+            turnOver = true;
+            foreach (var e in enemies) e.wasUnaware = e.awareness == Awareness.Unaware;
+        }
 
         // ---- Commands: everything that changes the carriage, as text, so a save can replay it ----
 
@@ -1681,6 +1693,7 @@ namespace RailTracer
             if (!e.InPlay) return;
             if (e.awareness == Awareness.Startled)
             {
+                if (e.berserk) { e.awareness = Awareness.Combat; Log($"{Name(e)} is startled and loses the turn."); return; } // berserk: charges from next turn
                 Searching(e, Clue.Movement); // then hunts where they saw you
                 e.hunt = Hunt.Go;
                 e.searchLeft = t.searchTurns;
@@ -1709,16 +1722,18 @@ namespace RailTracer
                     break;
                 case Intent.Shoot:
                     Face(e, player);
+                    if (e.wasUnaware) { Log($"{Name(e)} turns and takes aim."); break; } // alerted this enemy turn: no free shot (20.3)
                     Shoot(e, "fires");
                     break;
                 case Intent.Melee:
+                    if (e.wasUnaware) { Face(e, player); Log($"{Name(e)} squares up to you."); break; } // alerted this enemy turn (20.3)
                     Swing(e);
                     break;
                 case Intent.Charge:
                     // Berserk: straight for your real tile. Otherwise for where it saw you. Arriving beside you
                     // (still seeing you), it swings at once; that ends its turn.
                     Walk(e, t.enemyMoveRange, () => StepToward(e, e.berserk ? player : e.lastKnown ?? player));
-                    if (!Over && e.InPlay && Adjacent(e.pos, player) && (e.berserk || CanSee(e, player))) Swing(e);
+                    if (!Over && e.InPlay && !e.wasUnaware && Adjacent(e.pos, player) && (e.berserk || CanSee(e, player))) Swing(e);
                     break;
                 case Intent.Investigate:
                 {

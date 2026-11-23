@@ -155,6 +155,47 @@ namespace RailTracer
             Check(c.LeapPreview(new Cell(3, 1)).TrueForAll(p => p.shooter == null), "startle leap: the preview marks no shooter");
             Check(c.Leap(new Cell(3, 1)) && startled.awareness == Awareness.Startled && startled.reactionReady && c.hp == t.maxHp, "startle leap: startled, not shot");
 
+            // 20.3: a guard unaware as the enemy turn began, alerted by a shout during it, only turns and aims: no free shot.
+            c = new Carriage(new[] { "P.....L...", ".........." }, t, 1);
+            var shouter3 = c.Spawn(3, 0, -1, 0, 0);
+            var alerted = c.Spawn(4, 1, 1, 0, 0); // looking away, within earshot
+            shouter3.awareness = Awareness.Unaware;
+            c.EndPlayerTurn();
+            shouter3.awareness = Awareness.Combat; // it saw you this turn and shouted
+            c.EnemyAct(alerted);
+            Check(c.hp == t.maxHp, "set-up: the alerted was unaware");
+            alerted.awareness = Awareness.Searching;
+            alerted.facing = new Cell(-1, 0);
+            c.EnemyAct(alerted);
+            Check(c.hp == t.maxHp && alerted.awareness == Awareness.Combat && alerted.facing == new Cell(-1, 0) && c.log.Exists(l => l.Contains("takes aim")),
+                "alerted during the enemy turn: turns and aims, no shot");
+            c.EndPlayerTurn();
+            c.StartPlayerTurn();
+            c.EndPlayerTurn();
+            c.EnemyAct(alerted);
+            Check(c.hp == t.maxHp - t.shotDamage, "the next enemy turn it fires");
+
+            // 20.3: a startled heavy that goes berserk on what it saw still loses its next turn.
+            c = new Carriage(new[] { "P.....", "......" }, t, 1);
+            var hv = c.Spawn(3, 0, -1, 0, 0, tough: true);
+            c.Spawn(5, 1, 1, 0, 0);
+            hv.awareness = Awareness.Startled;
+            hv.terror = t.panickedAt - 1;
+            hv.hasSeen = true;
+            typeof(Carriage).GetMethod("AddTerror", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).Invoke(c, new object[] { hv, 5 });
+            Check(hv.berserk && hv.awareness == Awareness.Startled, "startled heavy gone berserk: still startled");
+            c.EndPlayerTurn();
+            c.EnemyAct(hv);
+            Check(hv.pos == new Cell(3, 0) && c.hp == t.maxHp && hv.awareness == Awareness.Combat, "it loses the turn, then charges");
+
+            // 20.3: a booth coach's aisle side is one run of windows; the hop goes booth to booth there, split at the dividers.
+            c = new Carriage(new[] { "..V...V...", "..V...V...", "..V...V...", "..V...V...", "P........." }, t, 1);
+            c.Spawn(9, 0, -1, 0, 0);
+            c.player = new Cell(4, 4);
+            Check(c.CanHopTo(new Cell(8, 4)) && !c.CanHopTo(new Cell(5, 4)) && !c.CanHopTo(new Cell(6, 4)), "booth coach: hop to the next booth along the aisle side");
+            c.player = new Cell(6, 4);
+            Check(!c.CanHopTo(new Cell(8, 4)), "level with a divider: no hop");
+
             // One body per piece of cover (20.2): a second shove onto the same seat is refused; dragged off, it's free.
             c = new Carriage(new[] { "P.S..", "....." }, t, 1);
             c.Spawn(4, 1, 1, 0, 0); // someone left standing (looking away), or the car's already won
@@ -731,10 +772,19 @@ namespace RailTracer
             if (i != 1 && i != 4 && !booths) // the generated cars may skip a bank column; booths are their own width
                 for (int k = 0; k + 1 < seatCols.Count; k++)
                     Check(seatCols[k + 1] - seatCols[k] == 3 || parts.Any(p => seatCols[k] < p && p < seatCols[k + 1]), where + $": seat banks every third column ({seatCols[k]}, {seatCols[k + 1]})");
+            // Booths: the free columns a bank faces until the next bank or wall (TrainGen.SeatRot: pairs, and a bank beside a
+            // partition faces away from it, 20.3).
+            var boothCols = new HashSet<int>();
+            foreach (int sc in seatCols)
+            {
+                int dir = TrainGen.SeatRot(m, sc) == 180f ? 1 : -1;
+                for (int x = sc + dir; x >= 0 && x < W && !seatCols.Contains(x) && At(x, 0) != 'W' && At(x, H - 1) != 'W'; x += dir)
+                    if (seatCols.Contains(x + dir) && TrainGen.SeatRot(m, x + dir) == (dir > 0 ? 0f : 180f) || Math.Abs(x - sc) <= 2) boothCols.Add(x);
+            }
             for (int k = 0; k + 1 < seatCols.Count; k += 2)
                 for (int x = seatCols[k] + 1; x < seatCols[k + 1]; x++)
-                    Check("Ll".IndexOf(At(x, 0)) < 0 && "Ll".IndexOf(At(x, H - 1)) < 0, where + $": no luggage in the booth at {x}");
-            var boothCols = Enumerable.Range(0, seatCols.Count / 2).SelectMany(k => Enumerable.Range(seatCols[2 * k] + 1, seatCols[2 * k + 1] - seatCols[2 * k] - 1)).ToHashSet();
+                    if (TrainGen.SeatRot(m, seatCols[k]) == 180f && TrainGen.SeatRot(m, seatCols[k + 1]) == 0f) // a facing pair
+                        Check("Ll".IndexOf(At(x, 0)) < 0 && "Ll".IndexOf(At(x, H - 1)) < 0, where + $": no luggage in the booth at {x}");
             for (int x = 0; x < W; x++)
                 for (int y = 0; y < H; y++)
                     if (At(x, y) == 't') Check((y == 0 || y == H - 1) && boothCols.Contains(x), where + $": table at {x},{y} on a window row in a booth");

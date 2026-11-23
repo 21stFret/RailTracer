@@ -90,8 +90,8 @@ namespace RailTracer
         // How fast the enemy turn plays (Options): the pauses between enemies shorter, their walks quicker.
         float EnemyPace => EnemyPaces[Mathf.Clamp(save.settings.enemySpeed, 0, EnemyPaces.Length - 1)];
         bool KillCamOn => save.settings.killCam;
-        // Whether this kill gets the kill cam: on, and the Options chance comes up.
-        bool RollKillCam() => KillCamOn && Random.value < save.settings.killCamChance;
+        // The kill that clears the car always gets the kill cam (20.3), even with it switched off; other kills roll for it.
+        bool RollKillCam() => c.Won || (KillCamOn && Random.value < save.settings.killCamChance);
         public const int MaxHpCarry = 30;
 
         // ---- Saves ----
@@ -336,7 +336,7 @@ namespace RailTracer
             for (float time = 0f; time < thanksDelay; time += Time.deltaTime) yield return null;
             hud.ShowTutorial("Thanks for playing", null,
                 "Thanks for playing the demo! If you enjoyed it, please leave a review and join our Discord.\n\nTry the Endless mode for more fun!",
-                Pad.Active ? "Press any button" : "Click or press any key");
+                Pad.Active ? "Press any button" : "Click or press any key", skippable: false); // not a tutorial card: shown even if the tutorial was skipped
             hud.SetTutorialTargets(new List<Rect>());
             thanksUp = true;
         }
@@ -483,7 +483,6 @@ namespace RailTracer
         Vector3 menuCamPos; Quaternion menuCamRot;
         readonly List<(Transform car, float x)> menuCars = new List<(Transform, float)>();
         readonly List<List<Light>> statusLamps = new List<List<Light>>();
-        readonly List<Light> settingLamps = new List<Light>();
 
         // The train the menu train shows (Journey picks it; otherwise the live car's).
         int shownTrain;
@@ -507,7 +506,6 @@ namespace RailTracer
             if (menuTrain) Destroy(menuTrain);
             menuCars.Clear();
             statusLamps.Clear();
-            settingLamps.Clear();
             allRows = rows;
             anchorRow = !walking && !endless ? Train.TrainOf(Mathf.Min(carIndex, Train.Cars - 1)) : shownTrain;
             menuRows.Clear();
@@ -543,18 +541,7 @@ namespace RailTracer
                     lit.Add(l);
                 }
             }
-            // The Options car: a lamp per setting, down the car in menu order (SyncSettingLamps).
-            for (int i = 0; i < 9; i++)
-            {
-                var l = new GameObject("Setting Lamp " + (i + 1)).AddComponent<Light>();
-                l.transform.SetParent(menuTrain.transform, false);
-                l.transform.localPosition = new Vector3(OptionsX + 2f + i * 2.8f, 2.1f, -2f);
-                l.type = LightType.Point;
-                l.color = new Color(1f, 0.9f, 0.75f);
-                l.range = 7f;
-                l.shadows = LightShadows.None;
-                settingLamps.Add(l);
-            }
+            BuildSettingsCar(kit);
         }
 
         // Each train's row under its own object, so the other trains can be hidden outside Journey.
@@ -581,21 +568,64 @@ namespace RailTracer
             if (!allRows || !menuTrain) BuildMenuTrain(true); // every row, once; then stepping only moves the camera
         }
 
-        // Where the Options screen looks: the car after the live one (before it, from the last).
-        float OptionsX => (LiveSlot >= 0 ? SlotX(LiveSlot) : 0f) + (LiveSlot == Train.TrainCars - 1 ? -Pitch : Pitch);
+        // ---- The settings carriage (20.3): the Options screens look into a car of its own, below the menu train ----
+        // Three rooms split by partitions: audio (two gramophones, music on the left, sound effects on the right, a spot
+        // over each dimmed to its volume; the room's lamps are the master volume), graphics (the large painting on the far
+        // wall) and gameplay (a seat booth with its table, a dining table with its lamp). Clicking a setting (not hovering)
+        // turns the camera to its room.
+        static readonly string[] SettingsMap =
+        {
+            "..G..G..W.._.....W.St.S...",
+            "........W........W.S..S...",
+            "P.........................",
+            "........W........W...T....",
+            "........W........W........",
+        };
+        static readonly float[] RoomMid = { 3.5f, 12.5f, 21.5f }; // audio, graphics, gameplay (tile x)
+        const float SettingsDrop = 40f; // metres under the menu train: out of every other screen's view
+        static Vector3 SettingsAt => new Vector3(0f, -SettingsDrop, 0f);
+        int optionsRoom = -1; // the room the camera looks into (-1: the whole car)
+        Light musicSpot, sfxSpot;
+        readonly List<Light> audioLamps = new List<Light>();
 
-        // On the Options screens the car's lamps are the settings: off when a setting is off, a slider's value as
-        // the brightness (the volumes, kill cam chance and slow motion, enemy speed). Its progress lamps go out.
-        void SyncSettingLamps(bool showing)
+        void BuildSettingsCar(TrainKit kit)
+        {
+            audioLamps.Clear();
+            var t = new GameObject("Settings Car").transform;
+            t.SetParent(menuTrain.transform, false);
+            t.localPosition = SettingsAt;
+            if (kit) BuildKitCarriage(kit, new Carriage(SettingsMap, tuning, 1), SettingsMap, CarKind.Dining, t, false, 0, "Settings");
+            Light Lamp(string name, Vector3 at, LightType type, float range)
+            {
+                var l = new GameObject(name).AddComponent<Light>();
+                l.transform.SetParent(t, false);
+                l.transform.localPosition = at;
+                l.type = type;
+                l.range = range;
+                l.color = new Color(1f, 0.88f, 0.7f);
+                l.shadows = LightShadows.None;
+                if (type == LightType.Spot) { l.transform.localRotation = Quaternion.Euler(90f, 0f, 0f); l.spotAngle = 50f; l.innerSpotAngle = 25f; }
+                return l;
+            }
+            foreach (float x in new[] { 1.5f, 6f }) audioLamps.Add(Lamp("Audio Lamp", new Vector3(x, 2.4f, -2f), LightType.Point, 6f));
+            musicSpot = Lamp("Music Spot", new Vector3(2f, 2.8f, -0.2f), LightType.Spot, 4f);
+            sfxSpot = Lamp("Sound Effects Spot", new Vector3(5f, 2.8f, -0.2f), LightType.Spot, 4f);
+            Lamp("Graphics Lamp", new Vector3(12.5f, 2.4f, -2f), LightType.Point, 7f).intensity = 2.2f;
+            var picture = Lamp("Picture Spot", new Vector3(11f, 2.6f, -1.4f), LightType.Spot, 4f);
+            picture.transform.localRotation = Quaternion.LookRotation(new Vector3(0f, -0.6f, 1f));
+            picture.intensity = 3f;
+            Lamp("Gameplay Lamp", new Vector3(21.5f, 2.4f, -2f), LightType.Point, 7f).intensity = 1.6f;
+            Lamp("Table Lamp", new Vector3(21f, 1.1f, -3f), LightType.Point, 3f).intensity = 1.5f;
+        }
+
+        // The settings carriage's lights show the levels: the audio room's lamps the master volume, the spot over each
+        // gramophone its volume (music, sound effects).
+        void SyncSettingLamps()
         {
             var s = save.settings;
-            float[] level = { s.masterVolume, s.musicVolume, s.sfxVolume, s.killCam ? 1f : 0f, s.killCam ? s.killCamChance : 0f, s.killCamSlowMo, 0.35f + 0.325f * Mathf.Clamp(s.enemySpeed, 0, 2), 1f, 1f }; // master, music, sfx, kill cam, chance, slow motion, enemy speed, window mode, resolution
-            for (int i = 0; i < settingLamps.Count; i++) settingLamps[i].intensity = showing ? 2.8f * level[i] : 0f;
-            for (int k = 0; k < menuCars.Count; k++)
-            {
-                bool here = Mathf.Abs(menuCars[k].x - OptionsX) < 1f;
-                foreach (var l in statusLamps[k]) l.enabled = !(showing && here);
-            }
+            foreach (var l in audioLamps) if (l) l.intensity = 2.6f * s.masterVolume;
+            if (musicSpot) musicSpot.intensity = 7f * s.musicVolume;
+            if (sfxSpot) sfxSpot.intensity = 7f * s.sfxVolume;
         }
 
         void OpenMenu()
@@ -627,9 +657,16 @@ namespace RailTracer
                 var pos = new Vector3(mid + drift * back / 95f, 7f * back / 95f + 1f + y, -2f - back);
                 return (pos, Quaternion.LookRotation(look - pos));
             }
+            if (screen == MenuScreen.Options || screen == MenuScreen.Controls || screen == MenuScreen.ResetData)
+            {
+                // The settings carriage: the whole car, or the room of the setting last clicked, closer in.
+                bool room = optionsRoom >= 0 && screen == MenuScreen.Options;
+                var at = SettingsAt + new Vector3(room ? RoomMid[optionsRoom] : (SettingsMap[0].Length - 1) / 2f + drift, 0.4f, -2f);
+                var look = Quaternion.Euler(room ? 38f : 50f, 0f, 0f);
+                return (at - look * Vector3.forward * (room ? 9f : 24f), look);
+            }
             int slot = LiveSlot >= 0 ? LiveSlot : -1;
             float x = slot >= 0 ? SlotX(slot) : 0f; // the live car (an endless or walk-through car sits at 0)
-            if (screen == MenuScreen.Options || screen == MenuScreen.Controls || screen == MenuScreen.ResetData) x = OptionsX;
             var focusAt = new Vector3(x + (Map[0].Length - 1) / 2f + drift, 0f, -2f);
             var rot = Quaternion.Euler(50f, 0f, 0f);
             return (focusAt - rot * Vector3.forward * 24f, rot);
@@ -703,7 +740,8 @@ namespace RailTracer
         {
             MenuCamera();
             ShowRows(screen == MenuScreen.Journey); // the other trains only in Journey
-            SyncSettingLamps(screen == MenuScreen.Options || screen == MenuScreen.Controls || screen == MenuScreen.ResetData);
+            SyncSettingLamps();
+            if (screen != MenuScreen.Options && screen != MenuScreen.Controls && screen != MenuScreen.ResetData) optionsRoom = -1; // the whole car next time
             var at = mouse != null ? mouse.pos : Vector2.zero;
             bool click = mouse != null && mouse.click;
             bool back = (kb != null && kb.escapeKey.wasPressedThisFrame) || Pad.Down(GamepadButton.East);
@@ -786,14 +824,17 @@ namespace RailTracer
                     if (!windowed) (w, h) = (Display.main.systemWidth, Display.main.systemHeight); // fullscreen: the desktop's own
                     var items = new[]
                     {
+                        // By room (20.3): audio, graphics, gameplay.
                         $"Master volume\t{Mathf.RoundToInt(100 * s.masterVolume)}%", $"Music volume\t{Mathf.RoundToInt(100 * s.musicVolume)}%", $"Sound effects\t{Mathf.RoundToInt(100 * s.sfxVolume)}%",
+                        $"Window\t{modeName}", windowed ? $"Resolution\t{w} x {h}" : $"Resolution\t{w} x {h} (screen)",
                         $"Kill cam\t{(s.killCam ? "On" : "Off")}", $"Kill cam chance\t{Mathf.RoundToInt(100 * s.killCamChance)}%",
                         $"Kill cam slow motion\t{s.killCamSlowMo:0.##}x", $"Enemy turn speed\t{EnemySpeeds[Mathf.Clamp(s.enemySpeed, 0, 2)]}",
-                        $"Window\t{modeName}", windowed ? $"Resolution\t{w} x {h}" : $"Resolution\t{w} x {h} (screen)", "Controls", "Back",
+                        "Controls", "Back",
                     };
                     int hit = hud.RefreshMenu(false, "Options", items, null, Pad.Active ? "Volumes: right to turn up, left to turn down." : "Volumes: click to turn up, right-click to turn down.", at, held, -1, "Reset data");
                     if (click && hit == -3) { screen = MenuScreen.ResetData; break; }
                     if (back || (click && (hit == 10))) { screen = MenuScreen.Start; break; }
+                    if ((click || down) && hit >= 0 && hit <= 8) optionsRoom = hit <= 2 ? 0 : hit <= 4 ? 1 : 2; // the camera turns to its room
                     if ((click || down) && hit >= 0 && hit <= 2) // 10% steps, wrapping round
                     {
                         float Step(float v) => Mathf.Repeat(Mathf.Round(v * 10f) + (down ? -1f : 1f), 11f) / 10f;
@@ -804,11 +845,11 @@ namespace RailTracer
                         break;
                     }
                     if (!click) break;
-                    if (hit == 3) s.killCam = !s.killCam;
-                    else if (hit == 4) s.killCamChance = Chances[(System.Array.IndexOf(Chances, s.killCamChance) + 1) % Chances.Length];
-                    else if (hit == 5) s.killCamSlowMo = SlowMos[(System.Array.IndexOf(SlowMos, s.killCamSlowMo) + 1) % SlowMos.Length];
-                    else if (hit == 6) s.enemySpeed = (s.enemySpeed + 1) % EnemySpeeds.Length;
-                    else if (hit == 7)
+                    if (hit == 5) s.killCam = !s.killCam;
+                    else if (hit == 6) s.killCamChance = Chances[(System.Array.IndexOf(Chances, s.killCamChance) + 1) % Chances.Length];
+                    else if (hit == 7) s.killCamSlowMo = SlowMos[(System.Array.IndexOf(SlowMos, s.killCamSlowMo) + 1) % SlowMos.Length];
+                    else if (hit == 8) s.enemySpeed = (s.enemySpeed + 1) % EnemySpeeds.Length;
+                    else if (hit == 3)
                     {
                         s.windowMode = (int)(windowed ? FullScreenMode.FullScreenWindow : FullScreenMode.Windowed);
                         if (!windowed && (s.width <= 0 || s.width >= Display.main.systemWidth)) // first window: the biggest that fits
@@ -818,7 +859,7 @@ namespace RailTracer
                             if (fit.width > 0) (s.width, s.height) = (fit.width, fit.height);
                         }
                     }
-                    else if (hit == 8)
+                    else if (hit == 4)
                     {
                         if (!windowed) break; // fullscreen always uses the screen's own resolution
                         var sizes = Screen.resolutions.Select(r => (r.width, r.height)).Distinct()

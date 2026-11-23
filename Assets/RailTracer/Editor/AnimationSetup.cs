@@ -172,14 +172,18 @@ namespace RailTracer
             var armed = mixamo.Where(f => Path.GetFileName(f).StartsWith("Pistol Idle")).Select(f => MixamoClip(f, true, inPlace: false))
                 .Where(c => c).ToArray();
             const string HeavyIdle = "Assets/ExplosiveLLC/Heavy Fighter Mecanim Animation Pack/Animations/Heavy@Idle.FBX";
-            var heavy = File.Exists(HeavyIdle) ? Clip(HeavyIdle) : null; // the pack imports Humanoid already
+            var heavy = File.Exists(HeavyIdle) ? BakeInPose(HeavyIdle) : null; // the pack imports Humanoid already
+            var beg = File.Exists(Dir + "Terrified.fbx") ? Clip(Dir + "Terrified.fbx") : null;
+            var begAlt = File.Exists(Mixamo + "PrayingLoop.fbx") ? Clip(Mixamo + "PrayingLoop.fbx") : null;
             var ac = AssetDatabase.LoadAssetAtPath<AnimatorController>(Dir + "Enemy.controller");
             var slot = ac ? ac.layers[0].stateMachine.states.Select(s => s.state).FirstOrDefault(s => s.name == "Idle")?.motion as AnimationClip : null;
-            if (set.relaxed.SequenceEqual(relaxed) && set.armed.SequenceEqual(armed) && set.heavy == heavy && set.armedSlot == slot) return;
+            if (set.relaxed.SequenceEqual(relaxed) && set.armed.SequenceEqual(armed) && set.heavy == heavy && set.armedSlot == slot && set.beg == beg && set.begAlt == begAlt) return;
             set.relaxed = relaxed;
             set.armed = armed;
             set.heavy = heavy;
             set.armedSlot = slot;
+            set.beg = beg;
+            set.begAlt = begAlt;
             EditorUtility.SetDirty(set);
             AssetDatabase.SaveAssets();
             Debug.Log($"Rail Tracer: IdleSet has {relaxed.Length} relaxed and {armed.Length} armed idles.");
@@ -456,6 +460,29 @@ namespace RailTracer
             Finish(State(sm, "BegStart", down), State(sm, "Beg", loop));
             EditorUtility.SetDirty(ac);
             return true;
+        }
+
+        // A store pack's clip kept exactly in place (20.3): root rotation, height and XZ travel all baked into the pose (as
+        // authored), so nothing is left as root motion for the game to drop, which slid the heavies' feet. Its avatar and
+        // rig settings are left alone.
+        static AnimationClip BakeInPose(string path)
+        {
+            if (!(AssetImporter.GetAtPath(path) is ModelImporter mi)) return null;
+            var clips = mi.clipAnimations.Length > 0 ? mi.clipAnimations : mi.defaultClipAnimations;
+            bool dirty = false;
+            foreach (var c in clips)
+            {
+                dirty |= !c.lockRootRotation || !c.lockRootHeightY || !c.lockRootPositionXZ || !c.keepOriginalOrientation || !c.keepOriginalPositionY || !c.keepOriginalPositionXZ;
+                c.lockRootRotation = c.lockRootHeightY = c.lockRootPositionXZ = true;
+                c.keepOriginalOrientation = c.keepOriginalPositionY = c.keepOriginalPositionXZ = true;
+            }
+            if (dirty)
+            {
+                mi.clipAnimations = clips;
+                mi.SaveAndReimport();
+                Debug.Log("Rail Tracer: " + Path.GetFileName(path) + " now keeps its root in the pose (no root motion).");
+            }
+            return Clip(path);
         }
 
         // Swaps an existing state's clip. False if it's missing or already that clip.

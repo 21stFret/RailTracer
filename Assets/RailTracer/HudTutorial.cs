@@ -346,8 +346,10 @@ namespace RailTracer
         public bool TutorialUp => tut.gameObject.activeSelf;
 
         // Shows a tutorial card. number: "5 / 7" or null. The highlight follows SetTutorialTargets.
-        public void ShowTutorial(string heading, string number, string text, string tip)
+        // skippable: false for a card that isn't part of the tutorial (the end-of-game thank-you): no Skip tutorial.
+        public void ShowTutorial(string heading, string number, string text, string tip, bool skippable = true)
         {
+            tutSkip.gameObject.SetActive(skippable);
             // The Legend card introduces the legend icon: "LEGEND" and the icon together (19.30).
             bool legend = string.Equals(heading, "Legend", System.StringComparison.OrdinalIgnoreCase);
             tutTitle.text = legend ? $"{heading}<space={28f + 2f * IconGap}>" : heading;

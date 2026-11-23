@@ -127,7 +127,7 @@ namespace RailTracer
         // the window, no drag from your own tile, the slide fright only out of sight, the Restaurant car's bars, the
         // baggage hold's double window, First class's heavy swapped; First class and the Night coach at beam 20).
         // Rerun it after changing a car.
-        static readonly int[] Targets = { 9, 8, 8, 8, 13, 10, 10, 11, 10, 10, 10, 8, 10, 10, 13 }; // 20.2: the solver (seed 1; First class and the Night coach at beam 20)
+        static readonly int[] Targets = { 9, 8, 8, 8, 13, 10, 10, 11, 9, 9, 10, 8, 10, 10, 13 }; // 20.3: the solver (seed 1; First class and the Night coach at beam 20)
 
         static CarDef MakeDemo(int i)
         {
@@ -273,14 +273,16 @@ namespace RailTracer
             new[] { 23, 3, -1, 0, 1 },
         }, new[] { new[] { 0, 7, 2, 13, 2 }, new[] { 9, 21, 2, 16, 2 } });
 
-        // Guards' coach: the partition early (column 10), every bank but two filled, luggage in the gaps.
+        // Guards' coach: the partition early (column 10), every bank but two filled, luggage in the gaps. 20.3: booth
+        // tables ('t'), one in front of the bank just past the partition (where a rack stood; that bank faces away from
+        // the partition now, TrainGen.SeatRot).
         static readonly string[] GuardsMap =
         {
-            "..S..S.LS.WSL.S..___S..SL.",
+            "..St.S.LS.WSt.S..___St.SL.",
             "..S..S..S.WS..S.....S..G..",
             "P.........................",
             "..S..S....WS..S..S..S..S..",
-            "..S..SL___WS..S..S.LS..S__",
+            "..S.tSL___WS..S.tS.LS.tS__",
         };
         static readonly (int[][], int[][]) Guards = (new[] // 9 guards, 3 heavies
         {

@@ -368,6 +368,7 @@ namespace RailTracer
             gaits.Clear();
             busy = false;
             flipT = -1f;
+            hopRunning = hopMoving = exiting = false; // a walk-out or hop cut short by a restart or the menu
             wasLeaped = wasHopped = false;
             marks.Clear();
             sashes.Clear();
@@ -387,6 +388,8 @@ namespace RailTracer
             toFloor.Clear();
             takedownVictim = null;
             selected = null;
+            playerFacing = Vector3.right; // into the car from its first door: not the last car's walk-out or takedown angle (20.3)
+            flipT = -1f;
             // The car fresh, or a save's turn replayed onto it (the same dice, so nothing rerolls).
             c = Train.Make(car, tuning, rulesSeed, startHp);
             if (replay != null) foreach (var cmd in replay) c.Do(cmd);
@@ -457,6 +460,7 @@ namespace RailTracer
                 var look = Instantiate(baked, root);
                 look.name = "Car Look";
                 kitBuilt = onKit = true;
+                FixBakedSeats(look.transform.Find("Train Car"), Map);
                 AddBoothTables(look.transform, trainKit, Map);
                 AddBoothFronts(look.transform.Find("Train Car"), trainKit, Map); // baked before the booth fronts (20.2)
                 DressBars(look.transform, trainKit, Map);
@@ -539,6 +543,7 @@ namespace RailTracer
                 PickIdle(o, idleSet ? idleSet.armed : null);
                 bool fighterStance = e.tough && idleSet && idleSet.heavy && idleSet.armedSlot;
                 if (fighterStance) o[idleSet.armedSlot] = idleSet.heavy; // heavies: fists up, no gun (20.2)
+                if (idleSet && idleSet.beg && idleSet.begAlt && Random.value < 0.5f) o[idleSet.beg] = idleSet.begAlt; // terrified or praying (20.3)
                 var a = anims[e] = Character(GuardModel(e), o);
                 if (a.parameters.Any(p => p.name == "IdleOffset")) a.SetFloat("IdleOffset", Random.value); // out of step, every time they idle
                 a.Play(0, 0, Random.value); // out of sync so they don't bob together
@@ -643,6 +648,23 @@ namespace RailTracer
                 int n = x;
                 for (; n < row.Length && row[n] == 'w'; n++) Put(1, "Booth_Front_1m", n + 1f);
                 Put(2, "Booth_Front_Post", n + 0.5f);
+            }
+        }
+
+        // A baked look made before 20.3: seat banks turned as TrainGen.SeatRot says now (one beside a partition faced its
+        // wall), and luggage racks gone from tiles that aren't luggage any more (a booth table took the Guards' coach's).
+        static void FixBakedSeats(Transform shell, string[] map)
+        {
+            if (!shell || map.Length != 5) return;
+            foreach (Transform t in shell)
+            {
+                var p = t.localPosition;
+                int x = Mathf.RoundToInt(p.z - 1f), y = Mathf.RoundToInt(p.x + 2f);
+                if (x < 0 || x >= map[0].Length) continue;
+                if (t.name.StartsWith("Seat_Double") || t.name.StartsWith("Seat_Single"))
+                    t.localRotation = Quaternion.Euler(0f, TrainGen.SeatRot(map, x), 0f);
+                else if (t.name.StartsWith("LuggageRack_") && y >= 0 && y < map.Length && "LlW".IndexOf(map[y][x]) < 0)
+                    t.gameObject.SetActive(false);
             }
         }
 
@@ -913,8 +935,9 @@ namespace RailTracer
                 }
                 int pair = seatColumns.IndexOf(x);
                 if (pair < 0) continue;
-                // Seat banks two rows wide, facing each other in pairs of columns (back at the FBX's local +Z).
-                float rot = pair % 2 == 0 ? 180f : 0f;
+                // Seat banks two rows wide, facing each other in pairs of columns (back at the FBX's local +Z); one whose
+                // partner is across a partition faces away from it (20.3).
+                float rot = TrainGen.SeatRot(map, x);
                 if (booths) { if (At(x, 0) == 'S') BoothSeat(z, rot); continue; }
                 // A window seat on its own (its aisle place taken by a 1x1 prop): Seat_Single.
                 if (At(x, 0) == 'S' && At(x, 1) == 'S') { seats.Add(Place("Seat_Double", -1.45f, z, rot).transform); Lamp(x, true); }
@@ -1665,7 +1688,7 @@ namespace RailTracer
                     RecordClear();
                     AchievementsForClear();
                     string title = TrainEnd ? $"{Train.TrainNames[Train.TrainOf(carIndex)]} complete" : $"{CarLabel()} cleared";
-                    hud.ShowCard(title, "The assassin washes up", "and steps out as the ticket inspector.",
+                    hud.ShowCard(title, "The inspector wipes his hands,", "straightens his cap and walks on.",
                         Pad.Active ? "A hold to walk on  /  Y to ride again  /  X look around" : "Hold Space / click to walk on  /  R to ride again  /  V look around", 0f, false, TicketStates());
                     hud.SetCardHold(0f);
                 }
@@ -1810,6 +1833,8 @@ namespace RailTracer
             if (Mode() != null) tut.Once("targeting", () => new[] { hud.BannerRect }, null);
         }
 
+        [Tooltip("The mouse wheel's speed in the full log (L). 20.3: 4x the old 0.25.")]
+        public float logWheel = 1f;
         // The full log (L): the game is paused while it's open; the wheel or arrow keys scroll it, L or Esc closes it.
         bool LogStep(Keyboard kb, Pointer mouse)
         {
@@ -1821,7 +1846,7 @@ namespace RailTracer
                 Time.timeScale = 1f;
                 return true;
             }
-            float scroll = mouse != null ? mouse.scroll * 0.25f : 0f;
+            float scroll = mouse != null ? mouse.scroll * logWheel : 0f;
             if (kb != null) scroll += (kb.upArrowKey.isPressed || kb.wKey.isPressed ? 1f : kb.downArrowKey.isPressed || kb.sKey.isPressed ? -1f : 0f) * 600f * Time.unscaledDeltaTime
                 + (kb.pageUpKey.wasPressedThisFrame ? 300f : kb.pageDownKey.wasPressedThisFrame ? -300f : 0f)
                 + Pad.LeftStickY * 600f * Time.unscaledDeltaTime;
@@ -1882,7 +1907,7 @@ namespace RailTracer
                     : c.Swings(e, at) ? "charge" // a heavy that will reach you and swing (3 steps to arrive, 1 to swing)
                     : c.WillShoot(e, at) ? "crosshair" : null;
                 int plate = e.tough && !broken ? (c.StageOf(e) >= Stage.Shaken ? 2 : 1) : 0; // cracked once they can be killed
-                bool notYet = KillMode.HasValue && plate == 1;
+                bool notYet = KillMode.HasValue && plate == 1 && hover == e.pos; // only on the heavy you're pointing at (20.3)
                 // Targeting a kill on them: the legend it gives, on the legend bar (its "+30 legend" is in the skill's
                 // tooltip; an unshaken tough shows "Not yet" instead).
                 if (KillMode.HasValue && hover == e.pos && !busy && !notYet && c.KillOutcome(KillMode.Value, e).HasValue)

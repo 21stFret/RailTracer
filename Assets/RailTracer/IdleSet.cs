@@ -12,5 +12,7 @@ namespace RailTracer
         // 20.2: heavies carry no gun, so when not unaware they take `heavy` (the Heavy Fighter pack's Heavy@Idle, a fists-up
         // stance) in place of the enemy controller's armed idle (`armedSlot`, its "Idle" state's clip). Empty: no swap.
         public AnimationClip heavy, armedSlot;
+        // 20.3: the begging loop ("Beg" state: `beg`, Alex's Terrified) or the old praying loop (`begAlt`), half and half.
+        public AnimationClip beg, begAlt;
     }
 }
