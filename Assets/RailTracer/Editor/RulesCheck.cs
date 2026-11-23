@@ -209,6 +209,21 @@ namespace RailTracer
             c.Do($"enemy {beside.id}");
             Check(beside.facing == new Cell(-1, 0) && beside.awareness == Awareness.Combat, "blood under his feet: he turns to the kill and finds you");
 
+            // ...and the same beside a rail grab (its stain starts at the window, 20.5).
+            foreach (var (gx, gy, fx, fy) in new[] { (3, 0, 1, 0), (3, 1, 1, 0), (2, 1, 0, 1) })
+            {
+                c = new Carriage(new[] { "........", "........", "........" }, t, 1);
+                c.player = new Cell(1, 0);
+                var railVictim = c.Spawn(2, 0, 1, 0, 0);
+                var railBeside = c.Spawn(gx, gy, fx, fy, 0);
+                c.Spawn(7, 2, 1, 0, 0);
+                c.legend = Unlock(t, SkillId.Rail);
+                Check(c.Do($"act RailGrab {railVictim.id}") && c.player == new Cell(2, 0) && railBeside.awareness == Awareness.Searching, $"rail set-up ({gx},{gy}): he hears it");
+                c.Do("end");
+                c.Do($"enemy {railBeside.id}");
+                Check(railBeside.awareness == Awareness.Combat, $"beside a rail grab ({gx},{gy}): he turns to the window and finds you");
+            }
+
             // One body per piece of cover (20.2): a second shove onto the same seat is refused; dragged off, it's free.
             c = new Carriage(new[] { "P.S..", "....." }, t, 1);
             c.Spawn(4, 1, 1, 0, 0); // someone left standing (looking away), or the car's already won

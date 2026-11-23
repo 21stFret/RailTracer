@@ -652,9 +652,12 @@ namespace RailTracer
                 int best = -1;
                 for (int i = 0; i < s.tiles.Count; i++)
                     if (s.tiles[i] != e.pos && Sees(e, s.tiles[i], true) && (best < 0 || Dist2(e.pos, s.tiles[i]) < Dist2(e.pos, s.tiles[best]))) best = i;
-                // Standing in it: they look to where it came from (a kill's stain starts at the kill), not their own feet,
-                // which left a guard beside a brutal kill searching his own tile and never turning (20.5).
-                if (best < 0 && !s.trail && s.tiles.Contains(e.pos) && s.tiles[0] != e.pos) best = 0;
+                // Standing in it, or already going to it (they heard that kill): they go to where it started (a kill's stain
+                // starts at the kill), not the nearest splash or their own feet, which left a guard beside a brutal kill or a
+                // rail grab searching where he stood and never turning (20.5).
+                bool ours = !s.trail && s.tiles[0] != e.pos
+                    && (s.tiles.Contains(e.pos) || (e.awareness == Awareness.Searching && e.lastKnown.HasValue && s.tiles.Contains(e.lastKnown.Value)));
+                if (ours && (best >= 0 || s.tiles.Contains(e.pos))) best = 0;
                 if (best < 0) continue;
                 e.reacted.Add(s);
                 if (s.trail) FollowTrail(e, s, best, Clue.Blood);
@@ -1282,11 +1285,12 @@ namespace RailTracer
                     player = at; // you end at the window you put them out of
                     body.hung = true;
                     var s = new Stain();
+                    s.tiles.Add(at); // the window first: where the stain started (Notice sends the blood-soaked there, 20.5)
                     for (int dx = -1; dx <= 1; dx++)
                         for (int dy = -1; dy <= 1; dy++)
                         {
                             var n = new Cell(at.x + dx, at.y + dy);
-                            if (!Blocked(n)) s.tiles.Add(n);
+                            if (n != at && !Blocked(n)) s.tiles.Add(n);
                         }
                     stains.Add(s);
                     Witness(at, body, boost ? (int)(t.largeTerror * t.railBoost) : t.largeTerror, boost ? t.mediumTerror : t.smallTerror, t.railHeard, false);
