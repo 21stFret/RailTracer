@@ -585,17 +585,25 @@ namespace RailTracer
         const float SettingsDrop = 40f; // metres under the menu train: out of every other screen's view
         static Vector3 SettingsAt => new Vector3(0f, -SettingsDrop, 0f);
         int optionsRoom = -1; // the room the camera looks into (-1: the whole car)
-        Light musicSpot, sfxSpot;
-        readonly List<Light> audioLamps = new List<Light>();
+        Transform settingsCar;
+        // One light per setting, its brightness the setting's level (0-1) times its own maximum (20.3).
+        readonly List<(Light light, System.Func<float> level, float max)> settingLights = new List<(Light, System.Func<float>, float)>();
 
         void BuildSettingsCar(TrainKit kit)
         {
-            audioLamps.Clear();
-            var t = new GameObject("Settings Car").transform;
+            settingLights.Clear();
+            var t = settingsCar = new GameObject("Settings Car").transform;
             t.SetParent(menuTrain.transform, false);
             t.localPosition = SettingsAt;
             if (kit) BuildKitCarriage(kit, new Carriage(SettingsMap, tuning, 1), SettingsMap, CarKind.Dining, t, false, 0, "Settings");
-            Light Lamp(string name, Vector3 at, LightType type, float range)
+            // An ashtray on the booth table (tile 20, 0; the table's top 0.721 m up).
+            if (kit && kit.Get("Prop_Ashtray_Cigar") is GameObject ashtray)
+            {
+                var a = Instantiate(ashtray, t, false);
+                a.transform.localPosition = new Vector3(20f, 0.722f, -0.05f);
+                a.transform.localRotation = Quaternion.Euler(0f, 30f, 0f);
+            }
+            Light Lamp(string name, Vector3 at, LightType type, float range, System.Func<float> level, float max, Vector3? aim = null)
             {
                 var l = new GameObject(name).AddComponent<Light>();
                 l.transform.SetParent(t, false);
@@ -604,28 +612,48 @@ namespace RailTracer
                 l.range = range;
                 l.color = new Color(1f, 0.88f, 0.7f);
                 l.shadows = LightShadows.None;
-                if (type == LightType.Spot) { l.transform.localRotation = Quaternion.Euler(90f, 0f, 0f); l.spotAngle = 50f; l.innerSpotAngle = 25f; }
+                if (type == LightType.Spot)
+                {
+                    l.transform.localRotation = Quaternion.LookRotation(aim ?? Vector3.down);
+                    l.spotAngle = 50f;
+                    l.innerSpotAngle = 25f;
+                }
+                settingLights.Add((l, level, max));
                 return l;
             }
-            foreach (float x in new[] { 1.5f, 6f }) audioLamps.Add(Lamp("Audio Lamp", new Vector3(x, 2.4f, -2f), LightType.Point, 6f));
-            musicSpot = Lamp("Music Spot", new Vector3(2f, 2.8f, -0.2f), LightType.Spot, 4f);
-            sfxSpot = Lamp("Sound Effects Spot", new Vector3(5f, 2.8f, -0.2f), LightType.Spot, 4f);
-            Lamp("Graphics Lamp", new Vector3(12.5f, 2.4f, -2f), LightType.Point, 7f).intensity = 2.2f;
-            var picture = Lamp("Picture Spot", new Vector3(11f, 2.6f, -1.4f), LightType.Spot, 4f);
-            picture.transform.localRotation = Quaternion.LookRotation(new Vector3(0f, -0.6f, 1f));
-            picture.intensity = 3f;
-            Lamp("Gameplay Lamp", new Vector3(21.5f, 2.4f, -2f), LightType.Point, 7f).intensity = 1.6f;
-            Lamp("Table Lamp", new Vector3(21f, 1.1f, -3f), LightType.Point, 3f).intensity = 1.5f;
+            // Audio: the room's two lamps are the master volume; a spot over each gramophone its volume.
+            Lamp("Master Volume Lamp", new Vector3(1.5f, 2.4f, -2f), LightType.Point, 6f, () => save.settings.masterVolume, 2.6f);
+            Lamp("Master Volume Lamp", new Vector3(6f, 2.4f, -2f), LightType.Point, 6f, () => save.settings.masterVolume, 2.6f);
+            Lamp("Music Spot", new Vector3(2f, 2.8f, -0.2f), LightType.Spot, 4f, () => save.settings.musicVolume, 7f);
+            Lamp("Sound Effects Spot", new Vector3(5f, 2.8f, -0.2f), LightType.Spot, 4f, () => save.settings.sfxVolume, 7f);
+            // Graphics: the picture's spot is the window mode (bright fullscreen, dim windowed); the room lamp the resolution.
+            Lamp("Window Mode Spot", new Vector3(11f, 2.6f, -1.4f), LightType.Spot, 4f, () => Windowed(save.settings) ? 0.35f : 1f, 3f, new Vector3(0f, -0.6f, 1f));
+            Lamp("Resolution Lamp", new Vector3(12.5f, 2.4f, -2.5f), LightType.Point, 7f, ResolutionLevel, 2.2f);
+            // Gameplay: the dining table's lamp is the kill cam (on / off), a spot over the booth table the kill cam chance,
+            // the room lamp the slow motion (slower = brighter), a lamp by the far door the enemy turn speed.
+            Lamp("Kill Cam Table Lamp", new Vector3(21f, 1.05f, -3f), LightType.Point, 2f, () => save.settings.killCam ? 1f : 0f, 0.35f);
+            Lamp("Kill Cam Chance Spot", new Vector3(20f, 2.6f, -0.6f), LightType.Spot, 3.5f, () => save.settings.killCam ? save.settings.killCamChance : 0f, 4f);
+            Lamp("Slow Motion Lamp", new Vector3(20.5f, 2.4f, -2f), LightType.Point, 6f, () => 1f - save.settings.killCamSlowMo + 0.25f, 1.6f);
+            Lamp("Enemy Speed Lamp", new Vector3(24.5f, 2.4f, -2f), LightType.Point, 4f, () => (Mathf.Clamp(save.settings.enemySpeed, 0, 2) + 1) / 3f, 1.8f);
         }
 
-        // The settings carriage's lights show the levels: the audio room's lamps the master volume, the spot over each
-        // gramophone its volume (music, sound effects).
-        void SyncSettingLamps()
+        // The window's size among the ones it can take (0-1; fullscreen: 1).
+        float ResolutionLevel()
         {
             var s = save.settings;
-            foreach (var l in audioLamps) if (l) l.intensity = 2.6f * s.masterVolume;
-            if (musicSpot) musicSpot.intensity = 7f * s.musicVolume;
-            if (sfxSpot) sfxSpot.intensity = 7f * s.sfxVolume;
+            if (!Windowed(s)) return 1f;
+            var sizes = Screen.resolutions.Select(r => (r.width, r.height)).Distinct()
+                .Where(r => r.width < Display.main.systemWidth && r.height < Display.main.systemHeight).ToList();
+            int i = sizes.IndexOf((s.width, s.height));
+            return sizes.Count == 0 || i < 0 ? 1f : (i + 1f) / sizes.Count;
+        }
+
+        // The settings carriage's lights show the levels, one light per setting; the car is only there on the Options screens.
+        void SyncSettingLamps(bool showing)
+        {
+            if (settingsCar) settingsCar.gameObject.SetActive(showing);
+            if (!showing) return;
+            foreach (var (light, level, max) in settingLights) if (light) light.intensity = max * Mathf.Clamp01(level());
         }
 
         void OpenMenu()
@@ -740,7 +768,7 @@ namespace RailTracer
         {
             MenuCamera();
             ShowRows(screen == MenuScreen.Journey); // the other trains only in Journey
-            SyncSettingLamps();
+            SyncSettingLamps(screen == MenuScreen.Options || screen == MenuScreen.Controls || screen == MenuScreen.ResetData);
             if (screen != MenuScreen.Options && screen != MenuScreen.Controls && screen != MenuScreen.ResetData) optionsRoom = -1; // the whole car next time
             var at = mouse != null ? mouse.pos : Vector2.zero;
             bool click = mouse != null && mouse.click;
