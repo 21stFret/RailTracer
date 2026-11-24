@@ -1471,6 +1471,12 @@ namespace RailTracer
         readonly Dictionary<Enemy, Awareness> preAct = new Dictionary<Enemy, Awareness>();
         bool ActPlaying => busy || flipT >= 0f || hopRunning || takedownVictim != null;
 
+        // Your act has played out on screen: no walk, leap, hop or takedown still going (the rules finish them at once).
+        // A leap or hop the rules have done but whose animation only starts later this frame isn't settled (the ghost
+        // was being frozen on the take-off tile; the fleers ran during your leap).
+        bool PlayerSettled => playerRoute.Count == 0 && flipT < 0f && !hopRunning && takedownVictim == null
+            && !(c.leaped && !wasLeaped) && !(c.hopped && !wasHopped);
+
         // Startled by an act that's still playing: what to show instead (null: show them as they are).
         Awareness? HeldStartle(Enemy e) =>
             e.awareness == Awareness.Startled && ActPlaying && preAct.TryGetValue(e, out var was) && was != Awareness.Startled ? was : (Awareness?)null;
@@ -1509,7 +1515,7 @@ namespace RailTracer
                 kb = null;
                 mouse = null;
             }
-            if (phase == Phase.Play && ThanksStep(kb, mouse)) return; // the end-of-demo card
+            if (phase == Phase.Play && EndCardStep(kb, mouse)) return; // the train-complete and thank-you cards
             // Debug (editor and development builds only, not the Steam build): F9 forgets all tutorial progress and
             // restarts the carriage, as on a new save; N on a won car's card goes straight out; B blood tile outlines.
             if (Debug.isDebugBuild && kb != null && kb.f9Key.wasPressedThisFrame) { Tutorial.ResetAll(); RestartCar(); }
@@ -1681,9 +1687,10 @@ namespace RailTracer
             hud.SetQuiet(walking); // the walk-through car: only the menu and controls hints
             hud.Refresh(c, selected ?? (leaping ? SkillId.Leap : hopping ? SkillId.Hop : (SkillId?)null), hudSlot, mode?.name, mode?.hint,
                 c.log.Skip(Mathf.Max(0, c.log.Count - 8)).ToList());
-            // The level is won the moment nobody is left fighting; anyone broken and fleeing still runs out first.
-            if (c.Won && !busy && !endShown && c.enemies.Exists(e => e.state == EnemyState.Broken && e.fleeing)) StartCoroutine(FleersOut());
-            if (c.Over && !busy && !endShown && !tut.Active && phase == Phase.Play)
+            // The level is won the moment nobody is left fighting; once your act has played out, anyone broken and
+            // fleeing runs out, then the card.
+            if (c.Won && !busy && !endShown && PlayerSettled && c.enemies.Exists(e => e.state == EnemyState.Broken && e.fleeing)) StartCoroutine(FleersOut());
+            if (c.Over && !busy && !endShown && (c.Lost || PlayerSettled) && !tut.Active && phase == Phase.Play)
             {
                 endShown = true;
                 winHeld = 0f;
@@ -1691,8 +1698,7 @@ namespace RailTracer
                 {
                     RecordClear();
                     AchievementsForClear();
-                    string title = TrainEnd ? $"{Train.TrainNames[Train.TrainOf(carIndex)]} complete" : $"{CarLabel()} cleared";
-                    hud.ShowCard(title, "The inspector wipes his hands,", "straightens his cap and walks on.",
+                    hud.ShowCard($"{CarLabel()} cleared", "The inspector wipes his hands,", "straightens his cap and walks on.",
                         Pad.Active ? "A hold to walk on  /  Y to ride again  /  X look around" : "Hold Space / click to walk on  /  R to ride again  /  V look around", 0f, false, TicketStates());
                     hud.SetCardHold(0f);
                 }
@@ -3122,11 +3128,7 @@ namespace RailTracer
                 var at = World(pendingGhost.Value);
                 var flat = new Vector3(playerShown.x, 0f, playerShown.z);
                 bool there = (flat - at).sqrMagnitude < 0.35f * 0.35f;
-                // A leap or hop the rules have done but whose animation only starts later this frame isn't settled
-                // (the ghost was being frozen on the take-off tile).
-                bool starting = (c.leaped && !wasLeaped) || (c.hopped && !wasHopped);
-                bool settled = !starting && playerRoute.Count == 0 && flipT < 0f && !hopRunning && takedownVictim == null;
-                if (there || settled)
+                if (there || PlayerSettled)
                 {
                     SnapshotGhost(at, there);
                     ghostCell = pendingGhost;

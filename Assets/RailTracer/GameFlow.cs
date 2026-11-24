@@ -173,7 +173,7 @@ namespace RailTracer
         {
             endless = endlessRun;
             walking = false;
-            thanksUp = false;
+            cardThen = null;
             carIndex = index;
             if (endless && newLayout) carSeed = Random.Range(1, int.MaxValue);
             car = CurrentDef();
@@ -263,10 +263,12 @@ namespace RailTracer
 
         static string Ticket(BestTicket b) => b == null || !b.set ? "No ticket yet" : $"{b.killed} killed, {b.broken} broken, {b.turns} turns";
 
-        // Off the cleared car: walk out of the far door, then the walk-through car (or the demo's end).
+        // Off the cleared car: walk out of the far door, then the walk-through car, or on a train's last car the
+        // train-complete card.
         IEnumerator ExitCar()
         {
             busy = true;
+            bool trainEnd = TrainEnd;
             // Triumphant: on your feet first, then out of the far door at the normal pace (a confident walk clip later).
             if (c.crouched)
             {
@@ -296,6 +298,7 @@ namespace RailTracer
             hopMoving = false;
             hopRunning = exiting = false;
             busy = false;
+            if (trainEnd) { StartCoroutine(TrainCompleteCard()); yield break; }
             int hp = c.hp;
             walking = true;
             carIndex++;
@@ -306,19 +309,15 @@ namespace RailTracer
             AutoSave();
         }
 
-        // A train's last car (Journey): no walk out. The win card reads "<train> complete"; walking on goes back to the
-        // menu, on Journey with the next train's car 1 picked (after train 3: the thank-you card first, then Journey on
-        // its last car). The finished run leaves the save: nothing to continue.
+        // A train's last car (Journey): you walk out as from any car, then the "<train> complete" card; any key or click
+        // goes back to the menu, on Journey with the next train's car 1 picked (after train 3: the thank-you card first,
+        // then Journey on its last car). The finished run leaves the save: nothing to continue.
         bool TrainEnd => !endless && !walking && carIndex % Train.TrainCars == Train.TrainCars - 1;
 
         void WalkOn()
         {
             hud.HideCard();
-            if (!TrainEnd) { StartCoroutine(ExitCar()); return; }
-            save.run = null;
-            WriteSave();
-            if (carIndex == Train.Cars - 1) StartCoroutine(ThanksCard());
-            else JourneyAt(carIndex + 1);
+            StartCoroutine(ExitCar());
         }
 
         void JourneyAt(int g)
@@ -329,29 +328,47 @@ namespace RailTracer
             journeyPick = g % Train.TrainCars;
         }
 
-        // The end of the game, over the cleared car: a card like the tutorial's; any key or click, then Journey.
-        bool thanksUp;
-        public float thanksDelay = 1.2f;
-        IEnumerator ThanksCard()
+        // Out of a train's last car: the run is over, and after a moment the train-complete card.
+        public float thanksDelay = 1.2f; // before the train-complete card
+        IEnumerator TrainCompleteCard()
         {
+            save.run = null;
+            WriteSave();
             for (float time = 0f; time < thanksDelay; time += Time.deltaTime) yield return null;
-            hud.ShowTutorial("Thanks for playing", null,
-                "Thanks for playing the demo! If you enjoyed it, please leave a review and join our Discord.\n\nTry the Endless mode for more fun!",
-                Pad.Active ? "Press any button" : "Click or press any key", skippable: false); // not a tutorial card: shown even if the tutorial was skipped
-            hud.SetTutorialTargets(new List<Rect>());
-            thanksUp = true;
+            int g = carIndex;
+            EndCard($"{Train.TrainNames[Train.TrainOf(g)]} complete",
+                "The inspector has collected every ticket on this train.",
+                () =>
+                {
+                    if (g == Train.Cars - 1)
+                        EndCard("Thanks for playing",
+                            "Thanks for playing the demo! If you enjoyed it, please leave a review and join our Discord.\n\nTry the Endless mode for more fun!",
+                            () => JourneyAt(Train.Cars - 1));
+                    else JourneyAt(g + 1);
+                });
         }
 
-        // True while the thank-you card is up (it takes the input).
-        bool ThanksStep(Keyboard kb, Pointer mouse)
+        // A card like the tutorial's over the car (not a tutorial card: shown even if the tutorial was skipped); any key
+        // or click runs `then`.
+        System.Action cardThen;
+        void EndCard(string title, string body, System.Action then)
         {
-            if (!thanksUp) return false;
+            hud.ShowTutorial(title, null, body, Pad.Active ? "Press any button" : "Click or press any key", skippable: false);
+            hud.SetTutorialTargets(new List<Rect>());
+            cardThen = then;
+        }
+
+        // True while an end card is up (it takes the input).
+        bool EndCardStep(Keyboard kb, Pointer mouse)
+        {
+            if (cardThen == null) return false;
             bool any = (kb != null && kb.anyKey.wasPressedThisFrame) || Pad.AnyDown || (mouse != null && (mouse.click || mouse.rclick));
             if (any)
             {
-                thanksUp = false;
+                var then = cardThen;
+                cardThen = null;
                 hud.HideTutorial();
-                JourneyAt(Train.Cars - 1);
+                then();
             }
             return true;
         }
