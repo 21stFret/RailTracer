@@ -1,6 +1,6 @@
-"""Rail Tracer player model (Update 20.6): Alex's RedLineMainChar_v2_resized on the NYC1950 pack skeleton.
+"""Rail Tracer player model (Update 20.6): Alex's CH04 on the NYC1950 pack skeleton.
 
-  Characters/RedLineMainChar_v2_resized.fbx  one static mesh, no bones (a CH04 from the NYC1950 series), already in
+  Characters/Char_v2_lean.fbx (20.6.1; 20.6 was RedLineMainChar_v2_resized.fbx, the same mesh a little broader)  one static mesh, no bones (a CH04 from the NYC1950 series), already in
       metres in CH02's A-pose and place (bounds within 2 cm of SK_CH02_FullClothes).
   -> Characters/SK_Inspector.fbx  the same mesh on CH02's unchanged 67-bone skeleton, its weights copied from CH02's
       skinned mesh (nearest surface, interpolated), in our materials so it dresses like the guards:
@@ -9,14 +9,14 @@
       and their wet film Chr_Eye, mouth Chr_Mouth.
   Editor/CharacterPackSetup.cs imports it Humanoid and makes Resources/Anim/Inspector.prefab (ragdoll and all).
 
-Run:  blender -b --factory-startup --python railtracer_player.py [-- --render <dir>]
+Run:  blender -b --factory-startup --python railtracer_player.py [-- --render <dir>] [--src <fbx>]
 """
 import bpy, bmesh, math, os, sys
 from mathutils import Vector
 
 # >>> CONFIG
 ASSETS = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-SRC = os.path.join(ASSETS, "RailTracer", "Characters", "RedLineMainChar_v2_resized.fbx")
+SRC = os.path.join(ASSETS, "RailTracer", "Characters", "Char_v2_lean.fbx")
 RIG = os.path.join(ASSETS, "NYC1950_CH02", "Meshes", "SK_CH02_FullClothes.fbx")
 OUT = os.path.join(ASSETS, "RailTracer", "Characters", "SK_Inspector.fbx")
 SHOE_TOP = 0.16    # metres: loose parts of the trouser material that stay below this are shoes
@@ -26,6 +26,7 @@ MATS = [("lacrimal", "Chr_Eye"), ("Eye", "Chr_Eye"), ("Mouth", "Chr_Mouth"), ("H
 
 argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 RENDER = argv[argv.index("--render") + 1] if "--render" in argv else None
+SRC = argv[argv.index("--src") + 1] if "--src" in argv else SRC
 
 
 def ours(name):
