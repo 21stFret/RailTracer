@@ -3172,16 +3172,19 @@ namespace RailTracer
             return g;
         }
 
+        // By name, not by order: you carry things the ghost doesn't (the knife in your hand), which would shift every
+        // bone after them onto the wrong one.
         void CopyPose(Transform g)
         {
-            var from = playerAnim.GetComponentsInChildren<Transform>(true);
-            var to = g.GetComponentsInChildren<Transform>(true);
-            for (int i = 1; i < from.Length && i < to.Length; i++)
-            {
-                to[i].localPosition = from[i].localPosition;
-                to[i].localRotation = from[i].localRotation;
-                to[i].localScale = from[i].localScale;
-            }
+            var to = new Dictionary<string, Transform>();
+            foreach (var t in g.GetComponentsInChildren<Transform>(true)) if (t != g) to.TryAdd(t.name, t);
+            foreach (var f in playerAnim.GetComponentsInChildren<Transform>(true))
+                if (f != playerAnim.transform && to.TryGetValue(f.name, out var t))
+                {
+                    t.localPosition = f.localPosition;
+                    t.localRotation = f.localRotation;
+                    t.localScale = f.localScale;
+                }
         }
 
         // The aimed move or leap as a line along the floor, a segment per tile: bone where nobody will see you, red
