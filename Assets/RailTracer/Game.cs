@@ -157,7 +157,9 @@ namespace RailTracer
         bool stylishFlip;
         float flipTime;
         readonly HashSet<Enemy> begging = new HashSet<Enemy>(); // broken enemies who have dropped to their knees
-        GameObject characterModel;
+        GameObject characterModel, inspectorModel;
+        // You: Resources/Anim/Inspector (RedLineMainChar on the guards' skeleton, Editor/CharacterPackSetup.cs), else the Mixamo character.
+        GameObject PlayerModel => inspectorModel ? inspectorModel : characterModel;
         // The guards' models (Editor/CharacterPackSetup.cs): Resources/Anim/Guard (the Teddy Boy: drape coat, drainpipes,
         // quiff) for guards and Guard_CH02 (CH02's double-breasted suit and a flat cap) for heavies, so their red covers a
         // whole suit. Whichever is missing falls back to the other, then to the Mixamo character.
@@ -292,6 +294,7 @@ namespace RailTracer
         void Start()
         {
             characterModel = Resources.Load<GameObject>("Anim/Character");
+            inspectorModel = Resources.Load<GameObject>("Anim/Inspector");
             guardModel = Resources.Load<GameObject>("Anim/Guard");
             suitModel = Resources.Load<GameObject>("Anim/Guard_CH02");
             enemyController = Resources.Load<RuntimeAnimatorController>("Anim/Enemy");
@@ -527,7 +530,7 @@ namespace RailTracer
             foreach (var e in c.enemies) if (e.state == EnemyState.Fled) gone.Add(e);
             if (!HasModels) return;
             playerBody.enabled = false;
-            playerAnim = Character(characterModel, new AnimatorOverrideController(playerController)); // its "Finisher" takes each takedown's clip
+            playerAnim = Character(PlayerModel, new AnimatorOverrideController(playerController)); // its "Finisher" takes each takedown's clip
             playerAnim.cullingMode = AnimatorCullingMode.AlwaysAnimate; // keeps going while hidden outside on a window hop
             Colour(playerAnim, tintedParts, conductorSuitColor);
             AddBloodOverlay(playerAnim);
@@ -3155,7 +3158,7 @@ namespace RailTracer
             Transform g;
             if (HasModels)
             {
-                var a = Character(characterModel, playerController);
+                var a = Character(PlayerModel, playerController);
                 a.enabled = false;
                 g = a.transform;
             }

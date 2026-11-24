@@ -19,6 +19,8 @@ namespace RailTracer
     // trousers and jacket Chr_Suit (Fabric.mat copies: our weave, tinted), shoes Chr_Shoes, glasses Chr_Glasses, skin
     // Chr_Skin, beards, brows and hair Chr_Hair, eyes Chr_Eye, mouths Chr_Mouth (flat, the game's own tones). The static
     // parts' UCX_ collision hulls are dropped.
+    // The player: SK_Inspector.fbx (Assets/RailTracer/Characters), Alex's RedLineMainChar_v2_resized put on CH02's skeleton
+    // in our materials by Assets/KitScripts/railtracer_player.py; Resources/Anim/Inspector.prefab is made from it like the guards.
     // The Chr_ materials and the prefabs are made once (never overwritten: tune them freely; delete to rebuild).
     // Runs before KitModelPostprocessor, so that finds every material by name.
     class CharacterPackSetup : AssetPostprocessor
@@ -29,6 +31,7 @@ namespace RailTracer
         {
             ("Assets/NYC1950_CH01/Meshes/SK_CH01_TeddyBoy.fbx", "Assets/RailTracer/Resources/Anim/Guard.prefab"),
             ("Assets/NYC1950_CH02/Meshes/SK_CH02_FlatCap.fbx", "Assets/RailTracer/Resources/Anim/Guard_CH02.prefab"),
+            ("Assets/RailTracer/Characters/SK_Inspector.fbx", "Assets/RailTracer/Resources/Anim/Inspector.prefab"),
         };
 
         public override int GetPostprocessOrder() => -10;
@@ -150,7 +153,7 @@ namespace RailTracer
 
         void OnPostprocessModel(GameObject root)
         {
-            if (!assetPath.StartsWith(Packs)) return;
+            if (!assetPath.StartsWith(Packs) && !Rigged.Any(r => r.model == assetPath)) return;
             foreach (var t in root.GetComponentsInChildren<Transform>(true).Where(t => t.name.StartsWith("UCX_")).ToList())
                 Object.DestroyImmediate(t.gameObject, true); // Unreal collision hulls
             string file = Path.GetFileNameWithoutExtension(assetPath);

@@ -57,6 +57,7 @@ namespace RailTracer
             blood = Resources.Load<BloodKit>("Blood/BloodKit");
             bloodRoot = new GameObject("Blood").transform;
             var model = Resources.Load<GameObject>("Anim/Character");
+            var you = Resources.Load<GameObject>("Anim/Inspector") ?? model; // the player's model, if it's set up
             var playerController = Resources.Load<RuntimeAnimatorController>("Anim/Player");
             var enemyController = Resources.Load<RuntimeAnimatorController>("Anim/Enemy");
             if (!library || !model || !playerController || !enemyController)
@@ -90,7 +91,7 @@ namespace RailTracer
             coverTable.transform.localScale = new Vector3(0.9f, 0.76f, 0.9f);
             coverTable.GetComponent<Renderer>().material.color = new Color(0.86f, 0.83f, 0.76f);
             coverTable.SetActive(false);
-            attacker = Spawn(model, playerController, "Attacker");
+            attacker = Spawn(you, playerController, "Attacker");
             var kit = Resources.Load<TrainKit>("Kit/TrainKit");
             knife = Game.HoldKnife(attacker, kit ? kit.Get("Prop_Knife") : null, 1f);
             victim = Spawn(model, enemyController, "Victim");

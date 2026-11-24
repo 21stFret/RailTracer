@@ -12,7 +12,7 @@ namespace RailTracer
     static class RagdollSetup
     {
         static readonly string[] Prefabs = { "Assets/RailTracer/Resources/Anim/Character.prefab", "Assets/RailTracer/Resources/Anim/Guard.prefab",
-            "Assets/RailTracer/Resources/Anim/Guard_CH02.prefab" };
+            "Assets/RailTracer/Resources/Anim/Guard_CH02.prefab", "Assets/RailTracer/Resources/Anim/Inspector.prefab" };
         const float Mass = 70f;
 
         [InitializeOnLoadMethod]
