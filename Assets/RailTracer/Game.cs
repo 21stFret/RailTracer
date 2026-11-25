@@ -4236,7 +4236,13 @@ namespace RailTracer
                 if (hung.Contains(e)) HangOut(e, a);
                 else if (lies?.cover is Cell on && PoseOnCover(e, a, lies, on)) { }
                 else if (HasRagdoll(a)) { a.enabled = false; SetLimp(a, true); restoredLimp.Add((e, a)); }
-                else Fall(a.transform, shown[e] - playerShown);
+                else
+                {
+                    // A lying finisher's last frame, hips over its tile (20.9.6). It never animated, so tipping it over
+                    // (Fall) laid it down in its bind pose: a T-pose on the floor.
+                    FloorPose(e, a);
+                    if (bodyOffset.TryGetValue(e, out var off)) a.transform.localPosition = World(lies?.pos ?? e.pos) + off;
+                }
                 return;
             }
             if (hung.Contains(e)) HangOut(e, a);
@@ -4325,15 +4331,6 @@ namespace RailTracer
                 if (!a) yield break; // restarted mid-fall
             }
             SetLimp(a, false); // frozen where it fell (the animator stays off)
-        }
-
-        // Topple's end pose at once (a loaded save).
-        static void Fall(Transform t, Vector3 away)
-        {
-            t.GetComponent<Animator>().enabled = false;
-            away.y = 0;
-            var axis = Vector3.Cross(Vector3.up, away.sqrMagnitude > 1e-4f ? away.normalized : t.forward);
-            t.localRotation = Quaternion.AngleAxis(88f, axis) * t.localRotation;
         }
 
         // A loaded save's bodies (20.2): ragdolls dropped together in a few hundred physics steps on the first frame,
