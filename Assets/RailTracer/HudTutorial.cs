@@ -358,7 +358,11 @@ namespace RailTracer
             tutTip.text = tip ?? "";
             tutTip.gameObject.SetActive(!string.IsNullOrEmpty(tip));
             tut.gameObject.SetActive(true);
-            tutUnderline.sizeDelta = new Vector2(tutTitle.GetPreferredValues(tutTitle.text).x, 3);
+            // A long heading ("The Midlands Night Train complete") shrinks to fit the card rather than overhang it.
+            tutTitle.fontSize = 28f;
+            float room = tutCard.sizeDelta.x - 82f, wide = tutTitle.GetPreferredValues(tutTitle.text).x; // the column's padding
+            if (wide > room) { tutTitle.fontSize = Mathf.Max(16f, 28f * room / wide); wide = tutTitle.GetPreferredValues(tutTitle.text).x; }
+            tutUnderline.sizeDelta = new Vector2(Mathf.Min(wide, room), 3);
             tutUnderline.anchoredPosition = new Vector2(0, 1);
             LayoutRebuilder.ForceRebuildLayoutImmediate(tutCard);
             if (legend) Pin(tutTitleIcon, tutTitle, 28f, heading.Length - 1); else tutTitleIcon.enabled = false;

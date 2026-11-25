@@ -17,6 +17,7 @@ namespace RailTracer
         public bool played;                                  // boarded at least once: Journey and Endless show on the start screen
         public bool[] cleared = new bool[Train.Cars];        // Journey cars (all three trains) cleared at least once
         public BestTicket[] best = new BestTicket[Train.Cars];
+        public int[] fewestTurns = new int[Train.Cars];       // Journey cars: the fewest turns any clear took (0 = none; 20.9, older saves take their best ticket's)
         public Settings settings = new Settings();
         public List<string> tutorial = new List<string>();   // the tutorial cards had or skipped (Tutorial)
         public int endlessCleared;                           // endless cars cleared, ever (ENDLESS_10); old saves read 0
@@ -104,6 +105,8 @@ namespace RailTracer
             System.Array.Resize(ref save.cleared, Train.Cars);
             System.Array.Resize(ref save.best, Train.Cars);
             for (int i = 0; i < save.best.Length; i++) save.best[i] ??= new BestTicket();
+            System.Array.Resize(ref save.fewestTurns, Train.Cars);
+            for (int i = 0; i < Train.Cars; i++) if (save.fewestTurns[i] == 0 && save.best[i].set) save.fewestTurns[i] = save.best[i].turns; // before 20.9
             save.settings ??= new Settings();
             save.tutorial ??= new List<string>();
             Tutorial.Use(save.tutorial, WriteSave);
@@ -247,8 +250,13 @@ namespace RailTracer
             };
             save.cleared[carIndex] = true;
             if (t.Beats(save.best[carIndex])) save.best[carIndex] = t;
+            if (save.fewestTurns[carIndex] == 0 || c.Round < save.fewestTurns[carIndex]) save.fewestTurns[carIndex] = c.Round;
             WriteSave();
         }
+
+        // A Journey car cleared within its target turns, ever (the Journey screen's stamp; the _TARGET achievements).
+        bool InTarget(int g) => save.fewestTurns[g] > 0 && save.fewestTurns[g] <= Train.Demo(g).targetTurns;
+        bool TrainInTarget(int train) => Enumerable.Range(train * Train.TrainCars, Train.TrainCars).All(InTarget);
 
         // The win card is up: the Steam achievements this clear earns (a Journey or endless car).
         void AchievementsForClear()
@@ -259,6 +267,10 @@ namespace RailTracer
             if (endless) { if (save.endlessCleared >= 10) Achievements.Unlock(Achievements.Endless10); return; } // lifetime (RecordClear)
             if (carIndex % Train.TrainCars == Train.TrainCars - 1)
                 Achievements.Unlock(new[] { Achievements.Train1, Achievements.Train2, Achievements.Train3 }[Train.TrainOf(carIndex)]);
+            // Every car of a train within its target, in any order, over any runs (after RecordClear: this clear counts).
+            int train = Train.TrainOf(carIndex);
+            if (TrainInTarget(train)) Achievements.Unlock(new[] { Achievements.Train1Target, Achievements.Train2Target, Achievements.Train3Target }[train]);
+            if (Enumerable.Range(0, Train.Trains).All(TrainInTarget)) Achievements.Unlock(Achievements.AllTarget);
         }
 
         static string Ticket(BestTicket b) => b == null || !b.set ? "No ticket yet" : $"{b.killed} killed, {b.broken} broken, {b.turns} turns";
@@ -296,9 +308,11 @@ namespace RailTracer
                 }
             }
             hopMoving = false;
-            hopRunning = exiting = false;
             busy = false;
+            // Out of a train's last car you stay out there (still "walking out", so the view doesn't walk you back to
+            // the rules' tile) until the menu rebuilds the scene.
             if (trainEnd) { StartCoroutine(TrainCompleteCard()); yield break; }
+            hopRunning = exiting = false;
             int hp = c.hp;
             walking = true;
             carIndex++;
@@ -852,7 +866,16 @@ namespace RailTracer
                         var p = cam.WorldToScreenPoint(new Vector3(SlotX(k) + 12.5f, -0.6f + RowY(shownTrain), -4.6f));
                         return new Vector2(p.x, p.y);
                     }).ToArray();
-                    int over = hud.RefreshJourney(screenAt, names, states, journeyPick, at);
+                    // Under each name its fewest turns against the target; the stamp over each car done within it (20.9).
+                    var bests = Enumerable.Range(0, Train.TrainCars).Select(k =>
+                        (save.fewestTurns[first + k] > 0 ? $"Best {save.fewestTurns[first + k]} turns" : "No run yet") + $"  ·  target {Train.Demo(first + k).targetTurns}").ToArray();
+                    var stamps = Enumerable.Range(0, Train.TrainCars).Select(k =>
+                    {
+                        if (!InTarget(first + k)) return (Vector2?)null;
+                        var p = cam.WorldToScreenPoint(new Vector3(SlotX(k) + 12.5f, 3f + RowY(shownTrain), -2f)); // over the roof's middle
+                        return p.z > 0f ? new Vector2(p.x, p.y) : (Vector2?)null;
+                    }).ToArray();
+                    int over = hud.RefreshJourney(screenAt, names, states, journeyPick, at, bests, stamps);
                     bool again = click && over >= 0 && over == journeyPick; // clicking the picked car plays it, like a double click
                     if (click && over >= 0) journeyPick = over;
                     int pickAt = first + journeyPick;

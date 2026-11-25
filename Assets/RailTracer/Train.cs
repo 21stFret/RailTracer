@@ -126,8 +126,10 @@ namespace RailTracer
         // as a booth coach in 19.48, still 9 at beam 20; seed 1). All fifteen rerun in 19.65 (the rail grab leaves you at
         // the window, no drag from your own tile, the slide fright only out of sight, the Restaurant car's bars, the
         // baggage hold's double window, First class's heavy swapped; First class and the Night coach at beam 20).
-        // Rerun it after changing a car.
-        static readonly int[] Targets = { 9, 9, 8, 8, 12, 10, 12, 9, 9, 9, 12, 8, 10, 11, 15 }; // 20.5.3: the solver (seed 1; First class and the Night coach at beam 20)
+        // Rerun it after changing a car. 20.9: rerun after 20.8 (heavies swing as you pass) and each target is the
+        // solver's count + 1 (it plays the enemy turn perfectly; Alex found that too hard to match). Solver: 9, 9, 8, 8,
+        // 13 / 10, 12, 10, 9, 9 / 10, 8, 13, 11, 15.
+        static readonly int[] Targets = { 10, 10, 9, 9, 14, 11, 13, 11, 10, 10, 11, 9, 14, 12, 16 }; // 20.9: the solver (seed 1; First class and the Night coach at beam 20) + 1
 
         static CarDef MakeDemo(int i)
         {

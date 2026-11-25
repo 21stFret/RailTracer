@@ -3675,17 +3675,34 @@ namespace RailTracer
         {
             var head = a.GetBoneTransform(HumanBodyBones.Head);
             var lash = a.GetComponentsInChildren<SkinnedMeshRenderer>().FirstOrDefault(r => r.name.IndexOf("Eyelash", System.StringComparison.OrdinalIgnoreCase) >= 0);
-            if (!lash) { Colour(a, new[] { "Chr_Eye" }, iris); return null; } // the guard model has real eyes: colour them
+            // No lashes (the CH04 inspector, the guards): the eyeballs are the Chr_Eye part of the mesh. The guards just
+            // have them coloured; you get irises on their fronts (20.9: the glow and trails came back).
+            var balls = lash ? null : a.GetComponentsInChildren<SkinnedMeshRenderer>().FirstOrDefault(r => r.sharedMaterials.Any(m => m && m.name.StartsWith("Chr_Eye")));
+            if (!lash && (!tracer || !balls)) { Colour(a, new[] { "Chr_Eye" }, iris); return null; } // the guard model has real eyes: colour them
             if (!head) return null;
+            var skin = lash ? lash : balls;
             var mesh = new Mesh();
-            lash.BakeMesh(mesh, true);
-            var lt = lash.transform;
-            var pts = mesh.vertices.Select(v => head.InverseTransformPoint(lt.position + lt.rotation * v)).ToList();
+            skin.BakeMesh(mesh, true);
+            var lt = skin.transform;
+            IEnumerable<Vector3> verts = mesh.vertices;
+            if (!lash)
+            {
+                int sub = System.Array.FindIndex(skin.sharedMaterials, m => m && m.name.StartsWith("Chr_Eye"));
+                var vs = mesh.vertices;
+                verts = mesh.GetTriangles(sub).Distinct().Select(i => vs[i]);
+                Colour(a, new[] { "Chr_Eye" }, iris);
+            }
+            var pts = verts.Select(v => head.InverseTransformPoint(lt.position + lt.rotation * v)).ToList();
             Destroy(mesh);
             if (pts.Count < 4) return null;
             var right = head.InverseTransformDirection(a.transform.right).normalized;
             var up = head.InverseTransformDirection(a.transform.up).normalized;
             var fwd = head.InverseTransformDirection(a.transform.forward).normalized;
+            // Eyeballs: each half's centre is the ball's centre; the iris goes on its front.
+            if (!lash)
+                pts = pts.GroupBy(p => Vector3.Dot(p - pts.Aggregate(Vector3.zero, (s, q) => s + q) / pts.Count, right) > 0f)
+                    .SelectMany(g => { var c0 = g.Aggregate(Vector3.zero, (s, q) => s + q) / g.Count(); float front = g.Max(q => Vector3.Dot(q - c0, fwd)); return new[] { c0 + fwd * front }; })
+                    .ToList();
             var mid = pts.Aggregate(Vector3.zero, (s, p) => s + p) / pts.Count;
             float unit = 1f / Mathf.Max(1e-4f, head.lossyScale.x);
             var shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");

@@ -23,6 +23,8 @@ namespace RailTracer
         readonly List<MenuLine> menuItems = new List<MenuLine>();
         readonly List<MenuLine> journeyNames = new List<MenuLine>();
         readonly List<Image> journeyLinks = new List<Image>();
+        readonly List<TMP_Text> journeyBests = new List<TMP_Text>(); // under each car's name: its best run (20.9)
+        readonly List<Image> journeyStamps = new List<Image>();     // over each car cleared within its target (20.9)
         MenuLine menuCorner; // a line on its own in the bottom-right corner (Options: Reset data)
 
         public void BuildMenu()
@@ -92,6 +94,18 @@ namespace RailTracer
                 var n = Line(root, 22, 14, 3f, i + 2);
                 n.rt.anchorMin = n.rt.anchorMax = Vector2.zero;
                 journeyNames.Add(n);
+                var best = SketchLabel(root, "", 13, LockedText);
+                best.alignment = TextAlignmentOptions.Center;
+                best.characterSpacing = 2f;
+                best.rectTransform.anchorMin = best.rectTransform.anchorMax = Vector2.zero;
+                best.rectTransform.sizeDelta = new Vector2(320, 20);
+                best.raycastTarget = false;
+                journeyBests.Add(best);
+                var stamp = Icon(root, "stamp", 72, 72);
+                stamp.rectTransform.anchorMin = stamp.rectTransform.anchorMax = Vector2.zero;
+                stamp.rectTransform.localRotation = Quaternion.Euler(0f, 0f, -14f + 7f * (i % 3)); // stamped by hand: never quite straight
+                stamp.color = new Color(Blood.r, Blood.g, Blood.b, 0.92f);
+                journeyStamps.Add(stamp);
             }
             ShowMenu(false);
         }
@@ -203,9 +217,20 @@ namespace RailTracer
         }
 
         // Journey: each car's name under it on screen (`at`, screen pixels), red cleared (2), white next (1), grey
-        // ahead (0); the picked one keeps its hover; short links between neighbours. Returns the car under the mouse.
-        public int RefreshJourney(Vector2[] at, string[] names, int[] states, int picked, Vector2 screen)
+        // ahead (0); the picked one keeps its hover; short links between neighbours. Under each name its best run
+        // (`bests`), and over a car cleared within its target the stamp (`stampAt`: on screen, null for none).
+        // Returns the car under the mouse.
+        public int RefreshJourney(Vector2[] at, string[] names, int[] states, int picked, Vector2 screen, string[] bests, Vector2?[] stampAt)
         {
+            float k = menuCanvas.scaleFactor;
+            for (int i = 0; i < journeyBests.Count; i++)
+            {
+                journeyBests[i].gameObject.SetActive(true);
+                journeyBests[i].text = bests[i];
+                journeyBests[i].rectTransform.position = at[i] + Vector2.down * 24f * k;
+                journeyStamps[i].gameObject.SetActive(stampAt[i].HasValue);
+                if (stampAt[i].HasValue) journeyStamps[i].rectTransform.position = stampAt[i].Value;
+            }
             int hit = -1;
             for (int i = 0; i < journeyNames.Count; i++)
             {
@@ -232,6 +257,8 @@ namespace RailTracer
         {
             foreach (var n in journeyNames) n.gameObject.SetActive(false);
             foreach (var l in journeyLinks) l.gameObject.SetActive(false);
+            foreach (var b in journeyBests) b.gameObject.SetActive(false);
+            foreach (var s in journeyStamps) s.gameObject.SetActive(false);
         }
     }
 }
