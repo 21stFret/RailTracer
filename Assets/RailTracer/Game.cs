@@ -623,7 +623,9 @@ namespace RailTracer
                 var smr = r as SkinnedMeshRenderer;
                 var mf = smr ? null : r.GetComponent<MeshFilter>();
                 var mesh = smr ? smr.sharedMesh : mf ? mf.sharedMesh : null;
-                if (mesh && mesh.subMeshCount > 1)
+                if (mesh && mesh.subMeshCount > 1 && !mesh.isReadable)
+                    Debug.LogWarning($"Rail Tracer: {mesh.name} isn't Read/Write, so the blood shows on its last part only (CharacterPackSetup sets it for SK_Inspector: reimport it).");
+                else if (mesh && mesh.subMeshCount > 1) // never a copy of an unreadable mesh: it comes out broken (the eyes were placed off it)
                 {
                     mesh = Instantiate(mesh);
                     int n = mesh.subMeshCount;
