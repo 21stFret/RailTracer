@@ -2081,8 +2081,11 @@ namespace RailTracer
         }
 
         // WASD / arrows pan, right-drag pans, scroll zooms.
+        [Tooltip("Pan speed while looking around from the win card (V), as a share of the normal camera's.")]
+        public float lookPanScale = 0.6f; // 20.9.9: the free look was too quick
         void MoveCamera(Keyboard kb, Pointer mouse)
         {
+            float k = looking ? lookPanScale : 1f;
             var pan = Vector2.zero;
             if (kb != null)
             {
@@ -2099,10 +2102,10 @@ namespace RailTracer
                 else pan += rs;
             }
             if (pan != Vector2.zero || (mouse != null && mouse.rheld)) camTarget = null; // you took the camera
-            pan *= panSpeed * camDistance * Time.deltaTime;
+            pan *= panSpeed * camDistance * Time.deltaTime * k;
             if (mouse != null)
             {
-                if (mouse.rheld) pan -= mouse.delta * camDistance * 0.002f;
+                if (mouse.rheld) pan -= mouse.delta * camDistance * 0.002f * k;
                 camDistance = Mathf.Clamp(camDistance - mouse.scroll * zoomSpeed * camDistance, 4f, 30f);
             }
             if (camTarget.HasValue)
