@@ -1311,6 +1311,12 @@ namespace RailTracer
             var beside = c.MovePreview(new Cell(3, 0));
             Check(beside.Count(p => p.shooter == h) == 1 && beside.Last().shooter == h, "beside a heavy: its swing in the preview, on that tile only");
             Check(c.Move(new Cell(3, 0)) && !h.reactionReady && c.shotsFired.Count == 1 && c.log.Exists(l => l.Contains("swings as you pass")), "a step beside a heavy: one reaction swing");
+            // ...but never at a leap (20.9.5), landing beside it or not.
+            c = new Carriage(new[] { "P.....", "......" }, t, 1);
+            h = c.Spawn(4, 0, -1, 0, 0, tough: true);
+            h.awareness = Awareness.Combat;
+            Check(c.LeapPreview(new Cell(3, 0)).TrueForAll(p => p.shooter == null), "a leap beside a heavy: no swing in the preview");
+            Check(c.Leap(new Cell(3, 0)) && h.reactionReady && c.shotsFired.Count == 0 && c.hp == t.maxHp, "a leap beside a heavy: no reaction swing");
             // ...and see only 1 tile straight out to the sides (20.4).
             c = new Carriage(new[] { "......", "......", "......", "......", "......", "......", "......" }, t, 1);
             h = c.Spawn(0, 3, 1, 0, 0, tough: true);

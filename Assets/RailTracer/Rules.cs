@@ -981,18 +981,19 @@ namespace RailTracer
                 int risk = 0;
                 foreach (var tile in a)
                     foreach (var e in enemies)
-                        if (Sees(e, tile, false)) risk += watching.Contains(e) && Reacts(e, tile, false) ? 100 : 1;
+                        if (Sees(e, tile, false)) risk += watching.Contains(e) && !e.tough && Reacts(e, tile, false) ? 100 : 1; // heavies don't swing at a leap
                 return risk;
             }
             if (Seen(back) < Seen(arc)) arc = back;
             return arc;
         }
 
-        // Who fires on a leap along `arc`: ready guns that see any of it, except anyone the landing startles.
+        // Who fires on a leap along `arc`: ready guns that see any of it, except anyone the landing startles. Never a
+        // heavy (20.9.5): its reaction swing is only for a step past it, not a leap over or down beside it.
         public List<Enemy> LeapShooters(List<Cell> arc)
         {
             var land = arc[arc.Count - 1];
-            return enemies.FindAll(e => WillReact(e) && e.reactionReady && !(!e.hasSeen && Sees(e, land, false))
+            return enemies.FindAll(e => WillReact(e) && !e.tough && e.reactionReady && !(!e.hasSeen && Sees(e, land, false))
                 && arc.Exists(tile => Reacts(e, tile, false)));
         }
 
