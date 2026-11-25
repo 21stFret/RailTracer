@@ -3573,7 +3573,7 @@ namespace RailTracer
             // Soaks up as the legend fills, washes back when you're hurt; eased so a kill spreads rather than pops.
             // The walk-through car: every legend effect fully off.
             shownBlood = c.freeWalk ? 0f : Mathf.MoveTowards(shownBlood, c.legend / (float)tuning.maxLegend, bloodSpreadSpeed * Time.deltaTime);
-            if (bloodOverlay) bloodOverlay.SetFloat("_Amount", shownBlood);
+            Shader.SetGlobalFloat("_PlayerBlood", shownBlood); // a global: the eyes' Colour (Renderer.materials) copies the overlay material (20.9.3)
             if (auraHolder)
             {
                 var hipsNow = playerAnim.GetBoneTransform(HumanBodyBones.Hips);

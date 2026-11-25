@@ -1,13 +1,13 @@
 // Blood soaking over a character's own materials. Added as an extra material on each renderer, it draws the
 // mesh again and MULTIPLIES a blood pattern onto what's already there, so the lighting underneath is kept.
-// _Amount 0 = clean, 1 = soaked; the pattern grows from the darkest noise spots outward (UV space, so it
+// _PlayerBlood (a global, set by Game each frame, 20.9.3: a material copy, e.g. Renderer.materials, can't lose it)
+// 0 = clean, 1 = soaked; the pattern grows from the darkest noise spots outward (UV space, so it
 // sticks to the skin while the character animates).
 Shader "RailTracer/BloodOverlay"
 {
     Properties
     {
         _BloodColor ("Blood (multiplied)", Color) = (0.45, 0.03, 0.03, 1)
-        _Amount ("Amount", Range(0, 1)) = 0
         _Scale ("Pattern scale", Float) = 6
         _Edge ("Edge softness", Range(0.001, 0.3)) = 0.06
     }
@@ -31,10 +31,10 @@ Shader "RailTracer/BloodOverlay"
 
             CBUFFER_START(UnityPerMaterial)
                 half4 _BloodColor;
-                half _Amount;
                 float _Scale;
                 half _Edge;
             CBUFFER_END
+            half _PlayerBlood; // global (Shader.SetGlobalFloat)
 
             struct Attributes { float4 positionOS : POSITION; float2 uv : TEXCOORD0; };
             struct Varyings { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; };
@@ -61,8 +61,8 @@ Shader "RailTracer/BloodOverlay"
             {
                 float2 p = i.uv * _Scale;
                 float n = Noise(p) * 0.6 + Noise(p * 2.7 + 7.3) * 0.3 + Noise(p * 7.1 + 3.1) * 0.1;
-                float threshold = 1.0 - _Amount;
-                half mask = smoothstep(threshold - _Edge, threshold + _Edge, n) * step(0.001, _Amount);
+                float threshold = 1.0 - _PlayerBlood;
+                half mask = smoothstep(threshold - _Edge, threshold + _Edge, n) * step(0.001, _PlayerBlood);
                 return half4(lerp(half3(1, 1, 1), _BloodColor.rgb, mask), 1);
             }
             ENDHLSL
