@@ -3682,20 +3682,28 @@ namespace RailTracer
             var balls = lash ? null : a.GetComponentsInChildren<SkinnedMeshRenderer>().FirstOrDefault(r => r.sharedMaterials.Any(m => m && m.name.StartsWith("Chr_Eye")));
             if (!lash && (!tracer || !balls)) { Colour(a, new[] { "Chr_Eye" }, iris); return null; } // the guard model has real eyes: colour them
             if (!head) return null;
-            var skin = lash ? lash : balls;
-            var mesh = new Mesh();
-            skin.BakeMesh(mesh, true);
-            var lt = skin.transform;
-            IEnumerable<Vector3> verts = mesh.vertices;
-            if (!lash)
+            List<Vector3> pts;
+            if (lash)
             {
-                int sub = System.Array.FindIndex(skin.sharedMaterials, m => m && m.name.StartsWith("Chr_Eye"));
-                var vs = mesh.vertices;
-                verts = mesh.GetTriangles(sub).Distinct().Select(i => vs[i]);
-                Colour(a, new[] { "Chr_Eye" }, iris);
+                var mesh = new Mesh();
+                lash.BakeMesh(mesh, true);
+                var lt = lash.transform;
+                pts = mesh.vertices.Select(v => head.InverseTransformPoint(lt.position + lt.rotation * v)).ToList();
+                Destroy(mesh);
             }
-            var pts = verts.Select(v => head.InverseTransformPoint(lt.position + lt.rotation * v)).ToList();
-            Destroy(mesh);
+            else
+            {
+                // Straight from the bind pose, in the head bone's space (no bake: baking the just-made model gave
+                // nothing, and the irises ended up at your feet, 20.9.2). Needs the mesh Read/Write (SK_Inspector is).
+                Colour(a, new[] { "Chr_Eye" }, iris);
+                var m = balls.sharedMesh;
+                int hb = System.Array.IndexOf(balls.bones, head);
+                int sub = System.Array.FindIndex(balls.sharedMaterials, x => x && x.name.StartsWith("Chr_Eye"));
+                if (!m || !m.isReadable || hb < 0 || sub < 0 || sub >= m.subMeshCount) return null;
+                var bp = m.bindposes[hb];
+                var vs = m.vertices;
+                pts = m.GetTriangles(sub).Distinct().Select(i => bp.MultiplyPoint3x4(vs[i])).ToList();
+            }
             if (pts.Count < 4) return null;
             var right = head.InverseTransformDirection(a.transform.right).normalized;
             var up = head.InverseTransformDirection(a.transform.up).normalized;
