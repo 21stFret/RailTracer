@@ -3472,14 +3472,23 @@ namespace RailTracer
             var lying = takedowns ? takedowns.takedowns.Find(k => k.victim && !k.needsCover && !k.victimFallsAfter && !(k.attacker2 && k.victim2)) : null;
             if (lying == null || !a.HasState(0, hash)) { StartCoroutine(Topple(a.transform, a.transform.forward)); return; }
             Override(a, "Finisher Victim", lying.victim);
-            a.enabled = true;
-            a.Play(hash, 0, 1f);
-            a.Update(0f);
-            a.enabled = false;
+            HoldLastFrame(a, "Finisher");
             var hips = a.GetBoneTransform(HumanBodyBones.Hips);
             var d = hips ? a.transform.localPosition - root.InverseTransformPoint(hips.position) : Vector3.zero;
             d.y = 0f;
             bodyOffset[e] = d;
+        }
+
+        // `state`'s last frame at once, then frozen there. A character made this frame (a loaded save's bodies) hasn't
+        // initialized its Animator yet, and Update(0) does nothing until it has: it stayed in its bind pose, a T-pose on
+        // the floor or upright by the table (20.9.7). Rebind initializes it.
+        static void HoldLastFrame(Animator a, string state)
+        {
+            a.enabled = true;
+            if (!a.isInitialized) a.Rebind();
+            a.Play(state, 0, 1f);
+            a.Update(0f);
+            a.enabled = false;
         }
 
         // Corpses follow their bodies: dragged a tile at a time (smearing the trail), or thrown (a splash where they land).
@@ -4364,9 +4373,7 @@ namespace RailTracer
             bool chained = entry.victim2 && a.HasState(0, Animator.StringToHash("Finisher2"));
             Override(a, "Finisher Victim", entry.victim);
             if (chained) Override(a, "Finisher Victim 2", entry.victim2);
-            a.Play(chained ? "Finisher2" : "Finisher", 0, 1f);
-            a.Update(0f);
-            a.enabled = false; // held in that pose
+            HoldLastFrame(a, chained ? "Finisher2" : "Finisher"); // held in that pose
             posedBodies.Add(e);
             pairedKills.Add(e);
             return true;
