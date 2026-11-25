@@ -3743,11 +3743,11 @@ namespace RailTracer
                 trail.minVertexDistance = 0.01f;
                 trail.widthMultiplier = eyeTrailWidth;
                 trail.widthCurve = AnimationCurve.Linear(0f, 1f, 1f, 0f);
-                // Drawn over everything (no depth test, the overlay queue): it would otherwise hide behind the head
-                // and only show where it pokes out at the sides.
+                // Depth tested (20.9.4): the head hides the part of the trail behind it. Drawn over everything (as it
+                // was), a trail left behind showed across your face, as if streaming out of the eyes ahead of you.
                 var trailMat = new Material(Shader.Find("UI/Default") ?? Shader.Find("Sprites/Default"));
-                if (trailMat.HasProperty("unity_GUIZTestMode")) trailMat.SetInt("unity_GUIZTestMode", (int)CompareFunction.Always);
-                trailMat.renderQueue = (int)RenderQueue.Overlay;
+                if (trailMat.HasProperty("unity_GUIZTestMode")) trailMat.SetInt("unity_GUIZTestMode", (int)CompareFunction.LessEqual);
+                trailMat.renderQueue = (int)RenderQueue.Transparent;
                 trail.material = trailMat;
                 trail.shadowCastingMode = ShadowCastingMode.Off;
                 trail.emitting = false;
