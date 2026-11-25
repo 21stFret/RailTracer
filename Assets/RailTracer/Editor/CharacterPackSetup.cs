@@ -133,6 +133,7 @@ namespace RailTracer
             mi.avatarSetup = ModelImporterAvatarSetup.CreateFromThisModel;
             mi.autoGenerateAvatarMappingIfUnspecified = true;
             mi.importAnimation = false;
+            if (assetPath.EndsWith("SK_Inspector.fbx")) mi.isReadable = true; // the player's blood overlay copies the mesh (Game.AddBloodOverlay)
         }
 
         // Which of our materials a part wears: already ours (the rigged model), else by file first (the shared

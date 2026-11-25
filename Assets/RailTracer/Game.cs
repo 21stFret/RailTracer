@@ -617,7 +617,23 @@ namespace RailTracer
             bloodOverlay.SetColor("_BloodColor", bloodOverlayColor);
             bloodOverlay.SetFloat("_Scale", bloodPatternScale);
             foreach (var r in a.GetComponentsInChildren<Renderer>())
+            {
+                // An extra material only draws over the LAST submesh: on a mesh with several materials (the CH04
+                // inspector) the overlay gets a submesh of its own holding every triangle (a copy of the mesh).
+                var smr = r as SkinnedMeshRenderer;
+                var mf = smr ? null : r.GetComponent<MeshFilter>();
+                var mesh = smr ? smr.sharedMesh : mf ? mf.sharedMesh : null;
+                if (mesh && mesh.subMeshCount > 1)
+                {
+                    mesh = Instantiate(mesh);
+                    int n = mesh.subMeshCount;
+                    var all = Enumerable.Range(0, n).SelectMany(i => mesh.GetTriangles(i)).ToArray();
+                    mesh.subMeshCount = n + 1;
+                    mesh.SetTriangles(all, n, false);
+                    if (smr) smr.sharedMesh = mesh; else mf.sharedMesh = mesh;
+                }
                 r.sharedMaterials = r.sharedMaterials.Append(bloodOverlay).ToArray();
+            }
         }
 
         // The carriage from the RailTracer train kit (Assets/RailTracer/Train Assets), laid out on the game grid the
@@ -1807,7 +1823,7 @@ namespace RailTracer
         {
             if (c == null) return;
             if (!walking && c.legend >= c.t.maxLegend) Achievements.Unlock(Achievements.Bloodied); // the legend bar full
-            if (!walking && c.brokeCount >= 3) Achievements.Unlock(Achievements.BreakThree); // the third to break, whatever became of them
+            if (!walking && c.brokeCount >= 4) Achievements.Unlock(Achievements.BreakThree); // the fourth to break, whatever became of them (20.8: was 3; the API name stays BREAK_THREE)
             if (tut.Skipped) return;
             foreach (var e in c.enemies)
             {
@@ -1927,7 +1943,7 @@ namespace RailTracer
                 var next = c.Decide(e);
                 bool danger = next == Intent.Shoot || next == Intent.Charge || next == Intent.Melee || next == Intent.WildFire;
                 string shot = threat && swingThreats.Contains(e) ? $"Swing · Hit {pct}%" // a heavy's melee (never halved), not a shot
-                    : e.tough && e.InPlay && previewLanding.HasValue ? "Reaction N/A" // heavies carry no gun (20.2)
+                    : e.tough && e.InPlay && previewLanding.HasValue ? "Reaction N/A" // no gun (20.2); it swings only if you pass right beside it (20.8)
                     : threat ? $"Hit {pct}%" + (leaping && !(previewLanding.HasValue && c.Swings(e, previewLanding.Value)) ? $" · leap -{Mathf.RoundToInt(100 * c.t.leapHitPenalty)}" : "") : c.IntentText(e);
                 if (!seenTerror.TryGetValue(e, out int wasTerror)) seenTerror[e] = wasTerror = e.terror; // first seen: no pop
                 if (!(camming || takedownVictim != null || flipT >= 0f || hopRunning)) // not under the kill cam or mid-act
@@ -2588,6 +2604,17 @@ namespace RailTracer
         void ShotEffect(Enemy e)
         {
             if (restoring || !shown.ContainsKey(e)) return;
+            if (e.tough) // a heavy's reaction is its swing as you pass (20.8): no gun, no tracer; the hit bleeds as any (DetectBlood)
+            {
+                if (anims.TryGetValue(e, out var sa) && sa.HasState(0, Animator.StringToHash("Swing")))
+                {
+                    var to = playerShown - shown[e];
+                    to.y = 0f;
+                    if (to.sqrMagnitude > 1e-4f) sa.transform.localRotation = Quaternion.LookRotation(to);
+                    sa.CrossFadeInFixedTime("Swing", 0.1f);
+                }
+                return;
+            }
             var face = new Vector3(e.facing.x, 0f, -e.facing.y);
             if (anims.TryGetValue(e, out var a) && a.HasState(0, Animator.StringToHash("Shoot"))) a.Play("Shoot", 0, 0f);
             var hand = a ? a.GetBoneTransform(HumanBodyBones.RightHand) : null;
@@ -2991,7 +3018,9 @@ namespace RailTracer
             swingThreats.Clear();
             if (preview != null)
                 foreach (var p in preview)
-                    if (p.shooter != null) threats[p.shooter] = Mathf.RoundToInt(100 * c.HitChance(p.shooter, p.tile, leaping));
+                    if (p.shooter == null) continue;
+                    else if (p.shooter.tough) { threats[p.shooter] = Mathf.RoundToInt(100 * c.t.meleeHitChance); swingThreats.Add(p.shooter); } // its reaction swing (20.8)
+                    else threats[p.shooter] = Mathf.RoundToInt(100 * c.HitChance(p.shooter, p.tile, leaping));
             previewLanding = preview != null && preview.Count > 1 ? preview[preview.Count - 1].tile : (Cell?)null;
             // A heavy that will reach the landing and swing counts like a shot.
             if (previewLanding.HasValue)
@@ -3020,7 +3049,7 @@ namespace RailTracer
                         // The whole cone faint (where they'd see you standing), strong where they'd see you as you are
                         // now (crouched behind a seat, say); red where a ready gun covers it.
                         bool Shown(Enemy e) => showAllSenses || e == hovered;
-                        bool react = c.enemies.Exists(e => Shown(e) && (c.WillReact(e) || e.awareness == Awareness.Combat) && c.Sees(e, cell, false));
+                        bool react = c.enemies.Exists(e => Shown(e) && (c.WillReact(e) || e.awareness == Awareness.Combat) && c.Reacts(e, cell, false));
                         if (c.enemies.Exists(e => Shown(e) && c.CanSee(e, cell))) col = Fill(react ? ReactCol : SightCol, 0.55f);
                         else if (c.enemies.Exists(e => Shown(e) && c.Sees(e, cell, false))) col = Fill(react ? ReactCol : SightCol, 0.07f);
                         else if (targeting && noise > 0 && Within(cell, dies, noise)) col = Fill(HearCol, 0.4f);
@@ -3052,7 +3081,7 @@ namespace RailTracer
                     if (under)
                         col = (leaping || hopping) && preview != null // a leap or hop: its own shooters (anyone it startles holds fire)
                             ? (preview.Exists(p => p.shooter != null) ? ReactCol : preview[preview.Count - 1].seen ? SightCol : Bone)
-                            : c.enemies.Exists(e => c.WillReact(e) && c.CanSee(e, cell)) ? ReactCol
+                            : c.enemies.Exists(e => c.WillReact(e) && c.Reacts(e, cell, c.crouched)) ? ReactCol
                             : c.SeenByAnyone(cell) ? SightCol : Bone;
                     m.color = col;
                     m.SetFloat("_Width", under ? 0.15f : 0.1f);
@@ -3222,7 +3251,7 @@ namespace RailTracer
                     if (n == shotMarks.Count) shotMarks.Add(FloorText(Bone));
                     var m = shotMarks[n++];
                     m.transform.localPosition = World(p.tile) + Vector3.up * 0.1f;
-                    m.text = $"{threats[p.shooter]}%" + (leaping ? $"\n<size=55%>LEAP -{Mathf.RoundToInt(100 * c.t.leapHitPenalty)}</size>" : "");
+                    m.text = $"{threats[p.shooter]}%" + (leaping && !p.shooter.tough ? $"\n<size=55%>LEAP -{Mathf.RoundToInt(100 * c.t.leapHitPenalty)}</size>" : "");
                 }
             for (int i = 0; i < shotMarks.Count; i++) shotMarks[i].gameObject.SetActive(i < n);
         }
@@ -3366,7 +3395,7 @@ namespace RailTracer
                         for (int y = 0; y < c.H; y++)
                         {
                             var cell = new Cell(x, y);
-                            if (!c.Blocked(cell) && c.Sees(e, cell, c.crouched)) watched.Add(cell);
+                            if (!c.Blocked(cell) && c.Reacts(e, cell, c.crouched)) watched.Add(cell); // a heavy's: only right beside it
                         }
                 }
             if (!dashMat)

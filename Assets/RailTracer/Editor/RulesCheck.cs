@@ -1300,10 +1300,17 @@ namespace RailTracer
             c = new Carriage(new[] { "P.....", "......" }, t, 1);
             var h = c.Spawn(4, 0, -1, 0, 0, tough: true);
             Check(c.Charges(h, c.player) && !c.WillShoot(h, c.player), "a heavy shows the charge, not the crosshair");
-            // ...nor fire reaction shots (20.2): walking and leaping across a fighting heavy's sight draws nothing.
+            // ...nor fire reaction shots (20.2): walking across a fighting heavy's sight, never beside it, draws nothing.
             h.awareness = Awareness.Combat;
-            Check(!c.WillReact(h) && c.MovePreview(new Cell(2, 1)).TrueForAll(p => p.shooter == null), "a heavy has no reaction shot, none in the preview");
+            Check(c.MovePreview(new Cell(2, 1)).TrueForAll(p => p.shooter == null), "a heavy has no reaction shot, none in the preview");
             Check(c.Move(new Cell(2, 1)) && c.hp == t.maxHp && h.reactionReady && c.shotsFired.Count == 0, "walking in a heavy's sight: no shot");
+            // ...but a step right beside it draws its reaction swing (20.8): once, 90%, in the preview as a swing.
+            c = new Carriage(new[] { "P.....", "......" }, t, 1);
+            h = c.Spawn(4, 0, -1, 0, 0, tough: true);
+            h.awareness = Awareness.Combat;
+            var beside = c.MovePreview(new Cell(3, 0));
+            Check(beside.Count(p => p.shooter == h) == 1 && beside.Last().shooter == h, "beside a heavy: its swing in the preview, on that tile only");
+            Check(c.Move(new Cell(3, 0)) && !h.reactionReady && c.shotsFired.Count == 1 && c.log.Exists(l => l.Contains("swings as you pass")), "a step beside a heavy: one reaction swing");
             // ...and see only 1 tile straight out to the sides (20.4).
             c = new Carriage(new[] { "......", "......", "......", "......", "......", "......", "......" }, t, 1);
             h = c.Spawn(0, 3, 1, 0, 0, tough: true);

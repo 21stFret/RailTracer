@@ -816,7 +816,7 @@ namespace RailTracer
         {
             int risk = 0;
             foreach (var e in enemies)
-                if (Sees(e, tile, crouched)) risk += watching.Contains(e) ? 100 : 1;
+                if (Sees(e, tile, crouched)) risk += watching.Contains(e) && Reacts(e, tile, crouched) ? 100 : 1;
             return risk;
         }
 
@@ -828,7 +828,7 @@ namespace RailTracer
             var res = new List<(Cell, bool, Enemy)>();
             foreach (var tile in tiles)
             {
-                var o = left.Find(e => Sees(e, tile, low));
+                var o = left.Find(e => Reacts(e, tile, low));
                 if (o != null) left.Remove(o);
                 res.Add((tile, enemies.Exists(e => Sees(e, tile, low)), o));
             }
@@ -864,13 +864,28 @@ namespace RailTracer
         }
 
         // Overwatch: gun out (searching or fighting), not broken, shot unspent, and not about to freeze in panic. Heavies
-        // carry no gun (20.2): they never fire, they only charge and swing.
+        // carry no gun (20.2): their reaction is a swing, on a tile right beside them (20.8; see Reacts).
         public bool WillReact(Enemy e) =>
-            e.InPlay && !e.tough && e.reactionReady && (e.awareness == Awareness.Searching || e.awareness == Awareness.Combat)
+            e.InPlay && e.reactionReady && (e.awareness == Awareness.Searching || e.awareness == Awareness.Combat)
             && !(PanicTurn(e) && e.panic == Panic.Freeze);
 
+        // A ready reactor would react to you on `tile`: a gun to any tile it sees you on, a heavy only to one right
+        // beside it (it swings as you pass).
+        public bool Reacts(Enemy e, Cell tile, bool low) => Sees(e, tile, low) && (!e.tough || Adjacent(e.pos, tile));
+
+        // Its reaction: a guard fires, a heavy swings (90% flat, like its melee: no shaken, cover or leap cut).
+        void React(Enemy e, bool leaping)
+        {
+            e.reactionReady = false;
+            if (!e.tough) { Shoot(e, "reaction fire", leaping); return; }
+            shotsFired.Add(e); // the view plays it (a swing, not a shot)
+            Face(e, player);
+            if (rng.NextDouble() < t.meleeHitChance) { Log($"{Name(e)} swings as you pass: hit!"); Damage(t.shotDamage); }
+            else Log($"{Name(e)} swings as you pass: miss.");
+        }
+
         // You are now on `tile` (seen as you stand or crouch): whoever sees it is in combat; `watching` enemies (those
-        // already searching or fighting when you set off) fire.
+        // already searching or fighting when you set off) react (Reacts).
         // True if you got shot at.
         bool StepInto(Cell tile, List<Enemy> watching, bool low)
         {
@@ -880,9 +895,8 @@ namespace RailTracer
                 if (!Sees(e, tile, low)) continue;
                 Fight(e, tile);
                 spotted = true;
-                if (Over || !watching.Contains(e) || !e.reactionReady) continue;
-                e.reactionReady = false;
-                Shoot(e, "reaction fire");
+                if (Over || !watching.Contains(e) || !e.reactionReady || !Reacts(e, tile, low)) continue;
+                React(e, false);
                 interrupted = true;
             }
             return interrupted;
@@ -967,7 +981,7 @@ namespace RailTracer
                 int risk = 0;
                 foreach (var tile in a)
                     foreach (var e in enemies)
-                        if (Sees(e, tile, false)) risk += watching.Contains(e) ? 100 : 1;
+                        if (Sees(e, tile, false)) risk += watching.Contains(e) && Reacts(e, tile, false) ? 100 : 1;
                 return risk;
             }
             if (Seen(back) < Seen(arc)) arc = back;
@@ -979,7 +993,7 @@ namespace RailTracer
         {
             var land = arc[arc.Count - 1];
             return enemies.FindAll(e => WillReact(e) && e.reactionReady && !(!e.hasSeen && Sees(e, land, false))
-                && arc.Exists(tile => Sees(e, tile, false)));
+                && arc.Exists(tile => Reacts(e, tile, false)));
         }
 
         public bool Leap(Cell c)
@@ -1006,11 +1020,7 @@ namespace RailTracer
             // Watchers who weren't startled get their reaction shot at the landing (crossing their sight counts),
             // harder to land on a leaping target.
             foreach (var e in shooters)
-                if (!Over && e.InPlay && e.awareness != Awareness.Startled)
-                {
-                    e.reactionReady = false;
-                    Shoot(e, "reaction fire", true);
-                }
+                if (!Over && e.InPlay && e.awareness != Awareness.Startled) React(e, true);
             return true;
         }
 
