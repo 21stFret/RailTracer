@@ -3466,29 +3466,42 @@ namespace RailTracer
         // A body left in a finisher's standing end (bent over a table by Shove to Table) once it's moved: the last frame
         // of a finisher whose victim ends on the floor, its hips over the body's tile.
         readonly HashSet<Enemy> toFloor = new HashSet<Enemy>(); // thrown posed bodies: laid down where they land
-        void FloorPose(Enemy e, Animator a)
+        // lay: put it there, hips over the tile, once posed (a loaded save's body, a thrown one landing).
+        void FloorPose(Enemy e, Animator a, Cell? lay = null)
         {
             int hash = Animator.StringToHash("Finisher");
             var lying = takedowns ? takedowns.takedowns.Find(k => k.victim && !k.needsCover && !k.victimFallsAfter && !(k.attacker2 && k.victim2)) : null;
             if (lying == null || !a.HasState(0, hash)) { StartCoroutine(Topple(a.transform, a.transform.forward)); return; }
             Override(a, "Finisher Victim", lying.victim);
-            HoldLastFrame(a, "Finisher");
-            var hips = a.GetBoneTransform(HumanBodyBones.Hips);
-            var d = hips ? a.transform.localPosition - root.InverseTransformPoint(hips.position) : Vector3.zero;
-            d.y = 0f;
-            bodyOffset[e] = d;
+            StartCoroutine(HoldLastFrame(a, "Finisher", () =>
+            {
+                var hips = a.GetBoneTransform(HumanBodyBones.Hips);
+                var d = hips ? a.transform.localPosition - root.InverseTransformPoint(hips.position) : Vector3.zero;
+                d.y = 0f;
+                bodyOffset[e] = d;
+                if (lay is Cell at) a.transform.localPosition = World(at) + d;
+            }));
         }
 
-        // `state`'s last frame at once, then frozen there. A character made this frame (a loaded save's bodies) hasn't
-        // initialized its Animator yet, and Update(0) does nothing until it has: it stayed in its bind pose, a T-pose on
-        // the floor or upright by the table (20.9.7). Rebind initializes it.
-        static void HoldLastFrame(Animator a, string state)
+        // `state`'s last frame, then frozen there, then `then`. The Animator runs one real frame on it: a manual
+        // Update(0) alone left a character made that same frame (a loaded save's bodies) in its bind pose, a T-pose on
+        // the floor or stood up by its table (20.9.6-20.9.8).
+        // Culling off meanwhile: a body made on a load has never been drawn, so it counts as unseen, and a culling
+        // Animator doesn't evaluate an unseen character at all (live bodies are on screen: they always posed).
+        IEnumerator HoldLastFrame(Animator a, string state, System.Action then = null)
         {
+            var culling = a.cullingMode;
+            a.cullingMode = AnimatorCullingMode.AlwaysAnimate;
             a.enabled = true;
-            if (!a.isInitialized) a.Rebind();
+            a.Play(state, 0, 1f);
+            a.Update(0f);      // at once where it can (a live body)...
+            yield return null; // ...and surely once the Animator has evaluated a frame
+            if (!a) yield break; // restarted meanwhile
             a.Play(state, 0, 1f);
             a.Update(0f);
             a.enabled = false;
+            a.cullingMode = culling;
+            then?.Invoke();
         }
 
         // Corpses follow their bodies: dragged a tile at a time (smearing the trail), or thrown (a splash where they land).
@@ -3521,7 +3534,7 @@ namespace RailTracer
                 {
                     // Landed: the gore splash (a short effect) and the pools and spatter that stay.
                     flying.Remove(b);
-                    if (toFloor.Remove(b.who)) { FloorPose(b.who, a); t.localPosition = World(b.pos) + bodyOffset[b.who]; }
+                    if (toFloor.Remove(b.who)) FloorPose(b.who, a, b.pos);
                     Sfx("HeadStomp", World(b.pos));
                     if (!blood) continue;
                     var land = World(b.pos);
@@ -4249,8 +4262,7 @@ namespace RailTracer
                 {
                     // A lying finisher's last frame, hips over its tile (20.9.6). It never animated, so tipping it over
                     // (Fall) laid it down in its bind pose: a T-pose on the floor.
-                    FloorPose(e, a);
-                    if (bodyOffset.TryGetValue(e, out var off)) a.transform.localPosition = World(lies?.pos ?? e.pos) + off;
+                    FloorPose(e, a, lies?.pos ?? e.pos);
                 }
                 return;
             }
@@ -4373,7 +4385,7 @@ namespace RailTracer
             bool chained = entry.victim2 && a.HasState(0, Animator.StringToHash("Finisher2"));
             Override(a, "Finisher Victim", entry.victim);
             if (chained) Override(a, "Finisher Victim 2", entry.victim2);
-            HoldLastFrame(a, chained ? "Finisher2" : "Finisher"); // held in that pose
+            StartCoroutine(HoldLastFrame(a, chained ? "Finisher2" : "Finisher")); // held in that pose
             posedBodies.Add(e);
             pairedKills.Add(e);
             return true;
